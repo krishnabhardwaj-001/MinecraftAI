@@ -1,0 +1,15 @@
+{
+  "command": "data",
+  "version": "1.21.11",
+  "edition": "Java",
+  "description": "Allows the user to get, merge, modify, and remove NBT data of a block entity, entity, or command storage.",
+  "permission_level": 2,
+  "restrictions": "None",
+  "subcommands": [
+    "get",
+    "merge",
+    "modify",
+    "remove"
+  ],
+  "source": "Minecraft Wiki"
+}

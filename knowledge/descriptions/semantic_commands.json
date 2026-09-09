@@ -1,0 +1,78 @@
+{
+  "version": "1.21.11",
+  "edition": "Java",
+  "commands": [
+    {
+      "command": "execute",
+      "description": "Changes the context in which another command is executed.",
+      "purpose": [
+        "Change the executor",
+        "Change the execution position",
+        "Change the execution dimension",
+        "Change the rotation",
+        "Run commands conditionally"
+      ],
+      "important_subcommands": [
+        "as",
+        "at",
+        "positioned",
+        "rotated",
+        "facing",
+        "if",
+        "unless",
+        "in",
+        "align",
+        "anchored",
+        "run"
+      ]
+    },
+    {
+      "command": "scoreboard",
+      "description": "Manages scoreboard objectives, players, scores, and related scoreboard data.",
+      "purpose": [
+        "Store numerical values",
+        "Track player states",
+        "Create timers",
+        "Create cooldowns",
+        "Control datapack logic"
+      ],
+      "important_subcommands": [
+        "objectives",
+        "players"
+      ]
+    },
+    {
+      "command": "summon",
+      "description": "Creates an entity at a specified location with optional entity data.",
+      "purpose": [
+        "Spawn mobs",
+        "Spawn projectiles",
+        "Create custom entities",
+        "Create entities with NBT data"
+      ]
+    },
+    {
+      "command": "give",
+      "description": "Gives an item to an entity.",
+      "purpose": [
+        "Give players items",
+        "Give custom-named items",
+        "Give items with components"
+      ]
+    },
+    {
+      "command": "effect",
+      "description": "Manages status effects on entities.",
+      "purpose": [
+        "Apply effects",
+        "Remove effects",
+        "Clear effects",
+        "Create temporary buffs and debuffs"
+      ],
+      "important_subcommands": [
+        "give",
+        "clear"
+      ]
+    }
+  ]
+}

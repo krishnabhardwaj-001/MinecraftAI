@@ -1,0 +1,20 @@
+{
+  "command": "data",
+  "version": "1.21.11",
+  "edition": "Java",
+  "examples": [
+    {
+      "command": "/data get entity @s",
+      "purpose": "Reads the NBT data of the executing entity."
+    },
+    {
+      "command": "/data get entity @s Health",
+      "purpose": "Reads the Health value from the executing entity's NBT."
+    },
+    {
+      "command": "/data merge entity @s {NoGravity:1b}",
+      "purpose": "Merges NBT data into the executing entity."
+    }
+  ],
+  "source": "Minecraft Wiki"
+}
