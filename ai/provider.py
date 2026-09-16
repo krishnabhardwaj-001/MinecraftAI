@@ -89,13 +89,27 @@ class AIProvider:
             format=schema,
 
             options={
-                "temperature": 0
+                "temperature": 0,
+                "num_predict": 2048,
+                "num_ctx": 4096
             }
         )
 
         content = response.message.content
+        if not content or not content.strip():
+            raise ValueError(f"AI provider '{self.provider}' returned empty response.")
 
-        return json.loads(content)
+        try:
+            return json.loads(content)
+        except json.JSONDecodeError as e:
+            import re
+            match = re.search(r"(\{.*\})", content, re.DOTALL)
+            if match:
+                try:
+                    return json.loads(match.group(1))
+                except Exception:
+                    pass
+            raise ValueError(f"AI provider '{self.provider}' returned invalid JSON: {content[:200]}") from e
 
     def _generate_openai(
         self,

@@ -108,6 +108,8 @@ RULES:
 18. Explain why each mechanism is appropriate.
 19. Keep implementation details useful for the future Generator.
 20. Do not turn general Minecraft concepts into fake commands.
+21. Low-level JSON syntax details (like pool condition format) are handled by the generator; if the required entity and item knowledge is present, mark the plan as 'ready' rather than 'missing_knowledge'.
+22. For standard mob drop requests (e.g. 'Make every creeper drop diamonds'), default to adding the item drop to the mob loot table alongside default drops. Do not ask for clarification regarding keeping or replacing default drops unless the user explicitly mentions default drops.
 
 PLANNING VS GENERATION:
 

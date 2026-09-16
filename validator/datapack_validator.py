@@ -385,14 +385,29 @@ class DatapackValidator:
                     format_valid = False
                     format_detail = ""
 
-                    if isinstance(pack_format, int):
+                    def format_matches(val, expected: int) -> bool:
+                        if isinstance(val, int):
+                            return val == expected
+                        if isinstance(val, (list, tuple)) and len(val) >= 1:
+                            try:
+                                return int(val[0]) == expected
+                            except (ValueError, TypeError):
+                                return False
+                        return False
+
+                    if format_matches(pack_format, self.expected_pack_format):
+                        format_valid = True
                         format_detail = f"pack_format: {pack_format}"
-                        if pack_format == self.expected_pack_format:
-                            format_valid = True
-                    elif isinstance(max_format, int):
+                    elif format_matches(max_format, self.expected_pack_format):
+                        format_valid = True
                         format_detail = f"max_format: {max_format}"
-                        if max_format >= self.expected_pack_format:
-                            format_valid = True
+                    elif format_matches(min_format, self.expected_pack_format):
+                        format_valid = True
+                        format_detail = f"min_format: {min_format}"
+                    elif pack_format is not None:
+                        format_detail = f"pack_format: {pack_format}"
+                    elif max_format is not None:
+                        format_detail = f"max_format: {max_format}"
 
                     if format_valid:
                         checks.append(

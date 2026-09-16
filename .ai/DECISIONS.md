@@ -30,4 +30,14 @@ The Validator layer must remain strictly deterministic, using schema parsing, se
 ## D010 — Structured AI Repair Loop with Deterministic Generator & Validator Contract
 The AI Repair Loop (`repair/`) never writes arbitrary datapack files directly. When validation fails, the AI receives structured validator errors, original understanding requirements, previous plans, and retrieved Minecraft knowledge to output a structured `RepairPlan` (containing diagnostic reasoning and corrected planner specifications/modifications). The corrected plan is fed into the deterministic generator, and the regenerated datapack is validated again. The repair loop enforces configurable retry limits (default 3) to prevent infinite loops, records full diagnostic history for every attempt, and short-circuits immediately if initial validation succeeds.
 
+## D011 — Minecraft Java 1.21.11 Pack Format Audit & Dual Compatibility (94 / 94.1)
+An audit of authoritative Minecraft Java Edition 1.21.11 metadata (`versions/1.21.11/server-1.21.11.jar`'s `version.json` and internal vanilla `pack.mcmeta`) confirms that 1.21.11 defines `data_major: 94` and `data_minor: 1`, representing Data Pack version 94.1. The vanilla server pack specifies `pack_format: 94`, `min_format: [94, 0]`, and `max_format: [94, 1]`. To ensure full backward compatibility with integer-only parsers while strictly complying with 1.21.11 range-aware validators, `DatapackManifest` and `DatapackGenerator` generate `pack.mcmeta` with integer `pack_format: 94` alongside explicit `min_format: [94, 0]` and `max_format: [94, 1]`. The `DatapackValidator` accepts both standard integer 94 and format array representations matching `[94, 1]`.
+
+## D012 — End-to-End Pipeline Orchestration & Clarification Guardrails (Step 8)
+The pipeline orchestrator (`pipeline/`) integrates all 7 stages: Understanding → Minecraft RAG Retrieval → Planning → Deterministic Generation → Deterministic Validation → AI Repair Loop (if invalid) → Validated Datapack ZIP Output. Key architectural guardrails include:
+1. Early Exit on Clarification: If Understanding or Planner returns `status == "needs_clarification"` or specifies clarification questions, the pipeline immediately halts and returns a structured clarification result without calling the generator or writing any disk files.
+2. Repair Exclusivity: AI repair is ONLY invoked when deterministic validation fails (`val_result.is_valid == False`). Clean datapacks skip repair completely (0 attempts).
+3. Zero-Failure Delivery Guarantee: The pipeline must NEVER return an invalid datapack or ZIP as successful. If repairs are exhausted or fail, structured diagnostics and attempt history are returned under `status: "failed"`.
+4. ZIP Validation Checkpoint: When ZIP creation is enabled, the final ZIP archive is independently verified by the validator before final pipeline success is reported.
+
 

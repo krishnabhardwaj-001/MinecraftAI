@@ -20,6 +20,9 @@
 - Deterministic Datapack Generator v1 (`generator/`) operational: creates valid Java 1.21.11 datapacks (`pack_format: 94`), modifies entity loot tables while preserving original drops/conditions/random sequences, and produces reproducible JSON and ZIP files.
 - Deterministic Datapack Validator / Tester (`validator/`) operational: validates directories and ZIPs, detects corrupt/unsafe archives, enforces 1.21.11 `pack_format: 94` and singular `loot_table` paths, validates item IDs against 1.21.11 knowledge base, and checks vanilla drop preservation.
 - Automatic AI Repair Loop (`repair/`) operational: diagnoses deterministic validator errors against Minecraft knowledge, generates corrected implementation plans, feeds them into the deterministic generator, enforces configurable retry protection without infinite loops, and records comprehensive attempt histories (verified with 7 automated tests in `test_repair_loop.py`).
+- End-to-End Pipeline Orchestration (`pipeline/`) operational: public entry point `run_minecraft_pipeline()` coordinates Understanding, RAG Knowledge Retrieval, Planner, Generator, Validator, AI Repair Loop, and Final Validated Datapack ZIP. Full integration verified across 8 automated tests in `test_pipeline.py` (creeper drops diamonds, skeleton drops iron, ambiguous clarification halt, invalid pack repair recovery, permanent failure reporting with attempt history, arbitrary spider->iron_ingot drops, and ZIP tamper detection).
+- CLI entry point `run_pipeline.py` operational with stage progress indicators `[1/7]` to `[7/7]`.
+- Authoritative pack format 94 / 94.1 audit completed: generator emits `pack_format: 94`, `min_format: [94, 0]`, and `max_format: [94, 1]` for universal compatibility.
 
 ## Known issues / gaps
 - `10 times faster` is not yet interpreted reliably.
@@ -27,12 +30,12 @@
 - Generator, validator, and repair coverage currently focus on loot tables and pack structure; custom `.mcfunction` functions, recipes, and advancement pipelines will expand in future steps.
 
 ## Current priority
-Build the generic end-to-end pipeline without hardcoded request-specific behavior.
+Maintain stability of the generic end-to-end pipeline and prepare for feature expansion (functions, recipes, advancements).
 
 ## Next logical work
-1. Build Step 8: End-to-End Orchestrator (Natural Language → Understanding → RAG → Planner → Generator → Validator → Repair Loop → Final Datapack ZIP).
-2. Expand generator, validator, and repair loop to support custom `.mcfunction` functions, recipes, and advancements.
-3. Strengthen generic intent normalization and ambiguity handling.
+1. Step 9: Expand generator, validator, and repair loop to support custom `.mcfunction` functions, command triggers, recipes, and advancements.
+2. Strengthen generic numeric multiplier parsing and parameter normalization.
+3. Add web UI or interactive frontend on top of the clean pipeline API.
 4. Keep shared AI context synchronized for Antigravity and ChatGPT/Codex.
 
 ## Agent handoff rule

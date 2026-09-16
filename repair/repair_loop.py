@@ -232,11 +232,26 @@ STRICT ARCHITECTURAL RULES:
             )
 
             # 2. Invoke AI provider to generate structured repair plan
-            raw_response = self.ai.generate_structured(
-                system_prompt=system_prompt,
-                user_prompt=user_prompt,
-                schema=RepairPlan.model_json_schema()
-            )
+            try:
+                raw_response = self.ai.generate_structured(
+                    system_prompt=system_prompt,
+                    user_prompt=user_prompt,
+                    schema=RepairPlan.model_json_schema()
+                )
+            except Exception as ai_err:
+                attempt_record = RepairAttempt(
+                    attempt_number=attempt_idx,
+                    repaired_plan=RepairPlan(
+                        status="error",
+                        minecraft_version=self.version,
+                        summary=f"AI generation failed: {ai_err}",
+                        repair_reasoning=f"AI provider failed during repair: {ai_err}"
+                    ),
+                    validation_status="failed",
+                    errors=[f"AI generation error: {ai_err}"]
+                )
+                attempts.append(attempt_record)
+                continue
 
             # 3. Normalize into RepairPlan
             repair_plan = self._normalize_repair_plan(
@@ -261,13 +276,23 @@ STRICT ARCHITECTURAL RULES:
                 shutil.rmtree(target_dir, ignore_errors=True)
 
             # 5. Deterministic regeneration using existing generator
-            new_gen_result = self.generator.generate(
-                plan=repaired_plan_dict,
-                context=current_context,
-                understanding=understanding,
-                datapack_name=target_name,
-                create_zip=True
-            )
+            try:
+                new_gen_result = self.generator.generate(
+                    plan=repaired_plan_dict,
+                    context=current_context,
+                    understanding=understanding,
+                    datapack_name=target_name,
+                    create_zip=True
+                )
+            except Exception as gen_err:
+                attempt_record = RepairAttempt(
+                    attempt_number=attempt_idx,
+                    repaired_plan=repair_plan,
+                    validation_status="failed",
+                    errors=[f"Regeneration error: {gen_err}"]
+                )
+                attempts.append(attempt_record)
+                continue
 
             # 6. Re-validate generated output
             new_val_result = self.validator.validate(new_gen_result.datapack_path)

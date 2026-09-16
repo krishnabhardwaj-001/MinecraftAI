@@ -1,5 +1,6 @@
 from pathlib import Path
 from typing import Any, Dict, List, Optional
+# pyrefly: ignore [missing-import]
 from pydantic import BaseModel, ConfigDict, Field
 from validator.models import ValidationIssue, ValidationResult
 
