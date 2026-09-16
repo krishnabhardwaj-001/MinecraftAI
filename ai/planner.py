@@ -1,15 +1,22 @@
 import json
-from typing import Any, Dict, List
+from typing import Any, Dict, List, Optional
 
 from pydantic import BaseModel, Field
 
 from ai.provider import AIProvider
 from ai.context import retrieve_minecraft_context
+from generator.models import (
+    MechanismSpecification,
+    validate_mechanism_specification,
+)
 
 
-class Mechanism(BaseModel):
-    type: str
-    description: str
+
+class Mechanism(MechanismSpecification):
+    """
+    Subclass of MechanismSpecification for backward compatibility with existing Planner usages.
+    """
+    pass
 
 
 class PlanStep(BaseModel):
@@ -22,10 +29,11 @@ class PlanStep(BaseModel):
 class ImplementationPlan(BaseModel):
     requirement_index: int
     objective: str
-    mechanisms: List[Mechanism] = Field(default_factory=list)
+    mechanisms: List[MechanismSpecification] = Field(default_factory=list)
     steps: List[PlanStep] = Field(default_factory=list)
     constraints: List[str] = Field(default_factory=list)
     missing_knowledge: List[str] = Field(default_factory=list)
+
 
 
 class PlannerResult(BaseModel):
@@ -95,9 +103,9 @@ RULES:
    put it in "missing_knowledge".
 7. Do not ask unnecessary clarification questions.
 8. If the request is sufficiently clear, produce a plan.
-9. Do not output final Minecraft commands.
-10. Do not output complete JSON loot tables.
-11. Do not create datapack files.
+9. Populate structured parameters in "mechanisms" rather than vague prose.
+10. For commands inside function mechanisms, use valid Minecraft 1.21 syntax without leading slashes.
+11. Do not output complete raw JSON files; the deterministic generator creates the actual datapack files from your structured mechanism specifications.
 12. Do not include testing actions. Testing belongs to the Validator.
 13. Do not claim that a Minecraft mechanism is valid unless the supplied
     knowledge supports it.
@@ -105,32 +113,40 @@ RULES:
 15. Each implementation-plan entry must correspond to one requirement.
 16. Use requirement_index to connect a plan to the original requirement.
 17. If a requirement needs several mechanisms, include all of them.
-18. Explain why each mechanism is appropriate.
+18. Explain why each mechanism is appropriate in its "description".
 19. Keep implementation details useful for the future Generator.
 20. Do not turn general Minecraft concepts into fake commands.
 21. Low-level JSON syntax details (like pool condition format) are handled by the generator; if the required entity and item knowledge is present, mark the plan as 'ready' rather than 'missing_knowledge'.
 22. For standard mob drop requests (e.g. 'Make every creeper drop diamonds'), default to adding the item drop to the mob loot table alongside default drops. Do not ask for clarification regarding keeping or replacing default drops unless the user explicitly mentions default drops.
 
-PLANNING VS GENERATION:
+STRUCTURED MECHANISM SPECIFICATIONS:
+Each entry in "mechanisms" should specify a "type" and its structured parameters:
 
-Planning example:
+1. Loot Table Mechanism:
+   - "type": "loot_table"
+   - "target": path from knowledge (e.g. "entities/creeper.json" or "entities/zombie.json")
+   - "item": valid item ID from knowledge (e.g. "minecraft:diamond")
+   - "count": integer drop count (e.g. 1)
+   - "operation": "add_pool"
 
-User:
-"Make every zombie drop diamonds."
+2. Function Mechanism:
+   - "type": "function"
+   - "namespace": datapack namespace (e.g. "minecraft_ai")
+   - "path": function path without extension (e.g. "speed", "tick", "join")
+   - "commands": list of valid Minecraft commands from knowledge (e.g. ["effect give @a minecraft:speed 10 0 true"])
 
-Good planning:
-- identify zombie death/loot behavior
-- identify the appropriate loot-system mechanism
-- identify the relevant Minecraft resource
-- identify that the existing zombie loot behavior must be preserved if
-  replacing/modifying it
-- identify any Minecraft knowledge required to construct the final resource
+3. Function Tag Mechanism:
+   - "type": "function_tag"
+   - "namespace": "minecraft"
+   - "tag_name": tag identifier (e.g. "tick" or "load")
+   - "values": list of function IDs (e.g. ["minecraft_ai:tick"])
 
-Bad planning:
-- writing the actual /loot command
-- inventing JSON syntax
-- writing a complete loot table
-- inventing file contents
+4. Advancement Mechanism:
+   - "type": "advancement"
+   - "namespace": "minecraft_ai"
+   - "path": advancement path (e.g. "kill_zombie")
+   - "criteria": criteria triggers and conditions (e.g. {{"killed_zombie": {{"trigger": "minecraft:player_killed_entity", "conditions": {{"entity": {{"type": "minecraft:zombie"}}}}}}}})
+   - "rewards": optional rewards (e.g. {{"experience": 100, "function": "minecraft_ai:reward"}})
 
 OUTPUT:
 
@@ -441,25 +457,71 @@ Return only JSON matching the required schema.
 
                 if isinstance(mechanism, str):
                     normalized_mechanisms.append({
-                        "type": "minecraft_mechanism",
-                        "description": mechanism
+                        "type": "function",
+                        "description": mechanism,
+                        "commands": [mechanism.lstrip("/")]
                     })
 
                 elif isinstance(mechanism, dict):
-                    mechanism_type = mechanism.get(
-                        "type",
-                        "minecraft_mechanism"
-                    )
+                    mech_dict = dict(mechanism)
+                    mech_type = str(mech_dict.get("type", "generic")).strip().lower()
 
-                    description = mechanism.get(
-                        "description",
-                        ""
-                    )
+                    # Clean up common type variations
+                    if mech_type in ["loot_table_override", "loot_table_modification", "drop", "loot"]:
+                        mech_type = "loot_table"
+                    elif mech_type in ["mcfunction", "command", "function_command"]:
+                        mech_type = "function"
+                    elif mech_type in ["tag", "tick_tag", "load_tag"]:
+                        mech_type = "function_tag"
+                    elif mech_type in ["trigger"]:
+                        mech_type = "advancement"
+                    mech_dict["type"] = mech_type
 
-                    normalized_mechanisms.append({
-                        "type": str(mechanism_type),
-                        "description": str(description)
-                    })
+                    # Normalize commands (strip leading slash, ensure list of strings)
+                    raw_cmds = mech_dict.get("commands")
+                    if raw_cmds is not None:
+                        if isinstance(raw_cmds, str):
+                            raw_cmds = [raw_cmds]
+                        if isinstance(raw_cmds, list):
+                            clean_cmds = []
+                            for c in raw_cmds:
+                                c_str = str(c).strip()
+                                if c_str.startswith("/"):
+                                    c_str = c_str[1:]
+                                if c_str:
+                                    clean_cmds.append(c_str)
+                            mech_dict["commands"] = clean_cmds
+
+                    # Normalize item identifier (prefix minecraft: if bare item name)
+                    raw_item = mech_dict.get("item")
+                    if raw_item and isinstance(raw_item, str):
+                        raw_item = raw_item.strip()
+                        if not raw_item.startswith("minecraft:") and ":" not in raw_item:
+                            raw_item = f"minecraft:{raw_item}"
+                        mech_dict["item"] = raw_item
+
+                    # Normalize count (coerce to int if int-like string)
+                    raw_count = mech_dict.get("count")
+                    if raw_count is not None and not isinstance(raw_count, dict):
+                        try:
+                            mech_dict["count"] = int(raw_count)
+                        except (ValueError, TypeError):
+                            pass
+
+                    # Normalize values for function tags
+                    raw_vals = mech_dict.get("values")
+                    if raw_vals is not None:
+                        if isinstance(raw_vals, str):
+                            raw_vals = [raw_vals]
+                        if isinstance(raw_vals, list):
+                            mech_dict["values"] = [str(v).strip() for v in raw_vals if str(v).strip()]
+
+                    # Create and validate MechanismSpecification
+                    try:
+                        spec = MechanismSpecification(**mech_dict)
+                        normalized_mechanisms.append(spec.model_dump(exclude_unset=False))
+                    except Exception:
+                        normalized_mechanisms.append(mech_dict)
 
             # -----------------------------------------------------
             # Steps
@@ -660,3 +722,13 @@ def create_plan(
     )
 
     return planner.plan(understanding)
+
+
+def validate_plan_mechanisms(plan: Dict[str, Any]) -> None:
+    """
+    Validates all mechanism specifications in an implementation plan for completeness.
+    Raises ValueError if any mechanism specification is incomplete.
+    """
+    for ip in plan.get("implementation_plan", []):
+        for mech in ip.get("mechanisms", []):
+            validate_mechanism_specification(mech)

@@ -8,6 +8,8 @@ from generator.models import (
     FunctionTagDefinition,
     GenerationResult,
     LootTableModification,
+    MechanismSpecification,
+    validate_mechanism_specification,
 )
 
 __all__ = [
@@ -21,4 +23,7 @@ __all__ = [
     "FunctionDefinition",
     "FunctionTagDefinition",
     "AdvancementDefinition",
+    "MechanismSpecification",
+    "validate_mechanism_specification",
 ]
+

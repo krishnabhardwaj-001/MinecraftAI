@@ -20,6 +20,7 @@ from generator.models import (
     FunctionTagDefinition,
     GenerationResult,
     LootTableModification,
+    MechanismSpecification,
 )
 
 
@@ -232,11 +233,50 @@ class DatapackGenerator:
                     "advancements": advancements
                 }
 
-        # 1. Inspect planner implementation_plan
+        # 1. Direct consumption from structured MechanismSpecification in implementation_plan
         implementation_plan = (
             plan.get("implementation_plan", []) if plan else []
         )
 
+        for ip in implementation_plan:
+            for raw_mech in ip.get("mechanisms", []):
+                spec = raw_mech if isinstance(raw_mech, MechanismSpecification) else None
+                if spec is None and isinstance(raw_mech, dict):
+                    has_structured_fields = any(
+                        k in raw_mech for k in [
+                            "target", "item", "commands", "values", "tag_name", "criteria", "rewards"
+                        ]
+                    )
+                    if has_structured_fields:
+                        try:
+                            spec = MechanismSpecification(**raw_mech)
+                        except Exception:
+                            spec = None
+
+                if spec is not None:
+                    m_type = str(spec.type).lower()
+                    if any(t in m_type for t in ["function_tag", "tick_tag", "load_tag", "tag"]) or "tag" in m_type:
+                        if spec.values:
+                            tags.append(spec.to_tag_definition())
+                    elif any(t in m_type for t in ["function", "mcfunction", "command"]):
+                        if spec.commands:
+                            functions.append(spec.to_function_definition())
+                    elif any(t in m_type for t in ["loot", "drop", "table"]):
+                        if (spec.target or spec.path) and spec.item:
+                            loot_modifications.append(spec.to_loot_modification())
+                    elif any(t in m_type for t in ["advancement", "trigger"]):
+                        if spec.criteria:
+                            advancements.append(spec.to_advancement_definition())
+
+        if loot_modifications or functions or tags or advancements:
+            return {
+                "loot_modifications": loot_modifications,
+                "functions": functions,
+                "tags": tags,
+                "advancements": advancements
+            }
+
+        # 2. Fallback heuristic inspection for minimal or legacy plans
         has_loot_mech = False
         has_func_mech = False
         has_tick_tag_mech = False
