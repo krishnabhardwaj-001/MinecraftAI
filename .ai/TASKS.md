@@ -1,8 +1,8 @@
 # MinecraftAI Tasks
 
 ## Current
-- [ ] Support custom recipe generation (`data/<ns>/recipe/*.json`) and crafting mechanics.
 - [ ] Support custom predicates (`data/<ns>/predicate/*.json`) and advanced condition trees.
+- [ ] Support advanced scoreboard-based systems and objectives.
 - [ ] Improve generic natural-language numeric interpretation, including multiplier expressions.
 - [ ] Improve generic clarification handling for underspecified properties.
 - [ ] Keep AI context files synchronized after significant changes.
@@ -23,6 +23,7 @@
 - [x] Build user-facing web interface and direct ZIP download endpoint (Step 9 - `web/`, `run_web.py`, `test_web.py`).
 - [x] Build multi-mechanism deterministic generator & validator architecture supporting loot tables, functions, function tags, and advancements (Step 10 - `generator/mechanisms/`, `test_mechanisms.py`).
 - [x] Improve Planner → Generator boundary with structured MechanismSpecification schemas, typed parameter validation, and direct deterministic generator consumption (Step 11 - `generator/models.py`, `ai/planner.py`, `generator/datapack_generator.py`, `test_planner_boundary.py`).
+- [x] Support custom recipe generation (`data/<ns>/recipe/*.json`) across shaped crafting, shapeless crafting, and smelting with modern 1.21+ result schema and item ID validation (Step 12 - `generator/mechanisms/recipe_mech.py`, `generator/models.py`, `validator/datapack_validator.py`, `test_recipes.py`).
 
 ## Rule
 Tasks describe project work, not special cases for individual example prompts. If an example exposes a problem, fix the underlying generic capability.

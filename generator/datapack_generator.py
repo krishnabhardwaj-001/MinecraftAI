@@ -11,6 +11,7 @@ from generator.mechanisms import (
     FunctionMechanismGenerator,
     FunctionTagMechanismGenerator,
     LootTableMechanismGenerator,
+    RecipeMechanismGenerator,
 )
 from generator.models import (
     AdvancementDefinition,
@@ -21,6 +22,7 @@ from generator.models import (
     GenerationResult,
     LootTableModification,
     MechanismSpecification,
+    RecipeDefinition,
 )
 
 
@@ -58,6 +60,7 @@ class DatapackGenerator:
         self.function_mech = FunctionMechanismGenerator()
         self.tag_mech = FunctionTagMechanismGenerator()
         self.advancement_mech = AdvancementMechanismGenerator()
+        self.recipe_mech = RecipeMechanismGenerator(version=version)
 
     def extract_loot_modifications(
         self,
@@ -194,6 +197,7 @@ class DatapackGenerator:
         functions: List[FunctionDefinition] = []
         tags: List[FunctionTagDefinition] = []
         advancements: List[AdvancementDefinition] = []
+        recipes: List[RecipeDefinition] = []
 
         # 0. Check for explicit specifications directly in plan
         if plan:
@@ -225,12 +229,20 @@ class DatapackGenerator:
                     elif isinstance(raw, dict):
                         advancements.append(AdvancementDefinition(**raw))
 
-            if loot_modifications or functions or tags or advancements:
+            if plan.get("recipes"):
+                for raw in plan["recipes"]:
+                    if isinstance(raw, RecipeDefinition):
+                        recipes.append(raw)
+                    elif isinstance(raw, dict):
+                        recipes.append(RecipeDefinition(**raw))
+
+            if loot_modifications or functions or tags or advancements or recipes:
                 return {
                     "loot_modifications": loot_modifications,
                     "functions": functions,
                     "tags": tags,
-                    "advancements": advancements
+                    "advancements": advancements,
+                    "recipes": recipes
                 }
 
         # 1. Direct consumption from structured MechanismSpecification in implementation_plan
@@ -244,7 +256,8 @@ class DatapackGenerator:
                 if spec is None and isinstance(raw_mech, dict):
                     has_structured_fields = any(
                         k in raw_mech for k in [
-                            "target", "item", "commands", "values", "tag_name", "criteria", "rewards"
+                            "target", "item", "commands", "values", "tag_name", "criteria", "rewards",
+                            "result_item", "recipe_type", "ingredients", "pattern", "key"
                         ]
                     )
                     if has_structured_fields:
@@ -267,13 +280,17 @@ class DatapackGenerator:
                     elif any(t in m_type for t in ["advancement", "trigger"]):
                         if spec.criteria:
                             advancements.append(spec.to_advancement_definition())
+                    elif any(t in m_type for t in ["recipe", "crafting", "crafting_shaped", "crafting_shapeless", "smelting", "blasting", "smoking", "campfire_cooking", "stonecutting"]) or "recipe" in m_type:
+                        if spec.result_item or spec.item:
+                            recipes.append(spec.to_recipe_definition())
 
-        if loot_modifications or functions or tags or advancements:
+        if loot_modifications or functions or tags or advancements or recipes:
             return {
                 "loot_modifications": loot_modifications,
                 "functions": functions,
                 "tags": tags,
-                "advancements": advancements
+                "advancements": advancements,
+                "recipes": recipes
             }
 
         # 2. Fallback heuristic inspection for minimal or legacy plans
@@ -430,7 +447,8 @@ class DatapackGenerator:
             "loot_modifications": loot_modifications,
             "functions": functions,
             "tags": tags,
-            "advancements": advancements
+            "advancements": advancements,
+            "recipes": recipes
         }
 
     def generate(
@@ -442,6 +460,7 @@ class DatapackGenerator:
         functions: Optional[List[FunctionDefinition]] = None,
         tags: Optional[List[FunctionTagDefinition]] = None,
         advancements: Optional[List[AdvancementDefinition]] = None,
+        recipes: Optional[List[RecipeDefinition]] = None,
         datapack_name: Optional[str] = None,
         description: Optional[str] = None,
         create_zip: bool = True,
@@ -455,6 +474,7 @@ class DatapackGenerator:
         funcs: List[FunctionDefinition] = list(functions) if functions is not None else []
         tag_defs: List[FunctionTagDefinition] = list(tags) if tags is not None else []
         adv_defs: List[AdvancementDefinition] = list(advancements) if advancements is not None else []
+        rec_defs: List[RecipeDefinition] = list(recipes) if recipes is not None else []
 
         # If no explicit mechanism parameters provided, extract generically
         if (
@@ -462,6 +482,7 @@ class DatapackGenerator:
             and functions is None
             and tags is None
             and advancements is None
+            and recipes is None
         ):
             extracted = self.extract_mechanisms(
                 plan=plan,
@@ -472,8 +493,9 @@ class DatapackGenerator:
             funcs = extracted["functions"]
             tag_defs = extracted["tags"]
             adv_defs = extracted["advancements"]
+            rec_defs = extracted.get("recipes", [])
 
-        if not (loot_mods or funcs or tag_defs or adv_defs):
+        if not (loot_mods or funcs or tag_defs or adv_defs or rec_defs):
             raise ValueError(
                 "No valid modifications or mechanisms could be determined from the plan and context."
             )
@@ -495,6 +517,9 @@ class DatapackGenerator:
             elif adv_defs:
                 first_adv = adv_defs[0]
                 datapack_name = f"{first_adv.advancement_path}_datapack"
+            elif rec_defs:
+                first_rec = rec_defs[0]
+                datapack_name = f"{first_rec.recipe_path}_datapack"
             else:
                 datapack_name = "minecraft_datapack"
 
@@ -559,6 +584,10 @@ class DatapackGenerator:
         for adv in adv_defs:
             resources.extend(self.advancement_mech.generate(adv))
 
+        # Recipes
+        for rec in rec_defs:
+            resources.extend(self.recipe_mech.generate(rec))
+
         # Deterministically write all resource files
         for res in resources:
             target_file = datapack_dir / res.relative_path
@@ -612,6 +641,7 @@ def generate_datapack(
     functions: Optional[List[FunctionDefinition]] = None,
     tags: Optional[List[FunctionTagDefinition]] = None,
     advancements: Optional[List[AdvancementDefinition]] = None,
+    recipes: Optional[List[RecipeDefinition]] = None,
     output_dir: Optional[Path] = None,
     datapack_name: Optional[str] = None,
     description: Optional[str] = None,
@@ -629,6 +659,7 @@ def generate_datapack(
         functions=functions,
         tags=tags,
         advancements=advancements,
+        recipes=recipes,
         datapack_name=datapack_name,
         description=description,
         create_zip=create_zip

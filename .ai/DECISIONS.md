@@ -63,3 +63,12 @@ To establish a machine-readable boundary between the AI Planner and Deterministi
 4. Direct Generator Consumption: `DatapackGenerator.extract_mechanisms()` directly maps `MechanismSpecification` objects into deterministic mechanism definitions (`to_loot_modification()`, `to_function_definition()`, `to_tag_definition()`, `to_advancement_definition()`), eliminating heuristic regex and text scraping while maintaining backward compatibility for legacy minimal plans.
 5. Generality & Dynamic Clarification: Ambiguous requests continue to halt early at Understanding/Planner clarification without premature generation. All arbitrary mob/item/command combinations are handled generically without special-cased if/else logic.
 
+## D016 — Custom Recipe Mechanism Generation & Validation (Step 12)
+To expand deterministic datapack generation to crafting and smelting without duplicating knowledge or violating Minecraft Java 1.21.11 standards:
+1. First-Class Datapack Registry: Custom recipes are implemented as a dedicated mechanism generator (`RecipeMechanismGenerator` inheriting from `BaseMechanismGenerator`), emitting resources to `data/<namespace>/recipe/<name>.json`.
+2. 1.21.11 Format Precision: Follows the modern 1.21+ result structure (`{"id": "minecraft:<item>", "count": <int>}`), completely replacing legacy pre-1.21 `{"item": ...}` format. Strictly enforces singular `recipe/` directory paths, and the validator flags legacy `recipes/` with `OBSOLETE_PATH`.
+3. Multi-Serializer Support: Supports shaped crafting (`minecraft:crafting_shaped`), shapeless crafting (`minecraft:crafting_shapeless`), smelting (`minecraft:smelting`), blasting (`minecraft:blasting`), smoking (`minecraft:smoking`), campfire cooking (`minecraft:campfire_cooking`), and stonecutting (`minecraft:stonecutting`).
+4. Static Deterministic Validation: `DatapackValidator` verifies recipe JSON structure, checks that all pattern symbols in shaped recipes match defined keys, and deterministically validates all input ingredient item IDs and output result item IDs against the authoritative 1.21.11 item knowledge base (`valid_items`).
+5. Unified Composition: Custom recipes compose seamlessly with all existing mechanisms (loot tables, functions, function tags, advancements) in single composite datapacks with byte-for-byte reproducible ZIP archives.
+
+

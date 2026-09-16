@@ -1,0 +1,14 @@
+{
+  "pack": {
+    "pack_format": 94,
+    "min_format": [
+      94,
+      0
+    ],
+    "max_format": [
+      94,
+      1
+    ],
+    "description": "Add a shaped crafting recipe that converts a full 3×3 grid of dirt blocks into a single diamond."
+  }
+}

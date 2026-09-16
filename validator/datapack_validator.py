@@ -359,6 +359,7 @@ class DatapackValidator:
                         (ns_dir / "functions", f"data/{ns_dir.name}/function/"),
                         (ns_dir / "tags" / "functions", f"data/{ns_dir.name}/tags/function/"),
                         (ns_dir / "advancements", f"data/{ns_dir.name}/advancement/"),
+                        (ns_dir / "recipes", f"data/{ns_dir.name}/recipe/"),
                     ]
                     for obsolete_path, required_singular in obsolete_paths:
                         if obsolete_path.exists():
@@ -923,6 +924,211 @@ class DatapackValidator:
                     name="Advancement Validation",
                     passed=(adv_errors == 0),
                     message=f"Validated {len(advancement_files)} advancement file(s)"
+                )
+            )
+
+        # ---------------------------------------------------------
+        # 9. Recipe Validation (data/<ns>/recipe/*.json)
+        # ---------------------------------------------------------
+        recipe_files = [
+            f for f in json_files
+            if "recipe" in f.parts and f.name != "pack.mcmeta"
+        ]
+        recipe_errors = 0
+
+        for rec_file in recipe_files:
+            rel_path = rec_file.relative_to(dir_path).as_posix()
+            rec_data = parsed_json_cache.get(rec_file)
+
+            if not isinstance(rec_data, dict):
+                errors.append(
+                    ValidationIssue(
+                        level="error",
+                        code="MALFORMED_RECIPE",
+                        message="Recipe root must be a JSON object.",
+                        file=rel_path
+                    )
+                )
+                recipe_errors += 1
+                continue
+
+            rec_type = rec_data.get("type")
+            if not rec_type or not isinstance(rec_type, str):
+                errors.append(
+                    ValidationIssue(
+                        level="error",
+                        code="MALFORMED_RECIPE",
+                        message="Recipe missing required 'type' field.",
+                        file=rel_path
+                    )
+                )
+                recipe_errors += 1
+                continue
+
+            # Validate result object (1.21+ result structure: {"id": "...", "count": ...})
+            result = rec_data.get("result")
+            if result is None:
+                errors.append(
+                    ValidationIssue(
+                        level="error",
+                        code="MALFORMED_RECIPE",
+                        message="Recipe missing required 'result' field.",
+                        file=rel_path
+                    )
+                )
+                recipe_errors += 1
+            elif isinstance(result, str):
+                res_id = result.lower() if result.startswith("minecraft:") else f"minecraft:{result.lower()}"
+                if self.valid_items and res_id not in self.valid_items:
+                    errors.append(
+                        ValidationIssue(
+                            level="error",
+                            code="INVALID_ITEM_ID",
+                            message=f"Recipe result item ID '{result}' is not a recognized Minecraft {self.version} item.",
+                            file=rel_path
+                        )
+                    )
+                    recipe_errors += 1
+            elif isinstance(result, dict):
+                res_id = result.get("id") or result.get("item")
+                if not res_id:
+                    errors.append(
+                        ValidationIssue(
+                            level="error",
+                            code="MALFORMED_RECIPE",
+                            message="Recipe result object missing required 'id' field.",
+                            file=rel_path
+                        )
+                    )
+                    recipe_errors += 1
+                else:
+                    norm_id = res_id.lower() if res_id.startswith("minecraft:") else f"minecraft:{res_id.lower()}"
+                    if self.valid_items and norm_id not in self.valid_items:
+                        errors.append(
+                            ValidationIssue(
+                                level="error",
+                                code="INVALID_ITEM_ID",
+                                message=f"Recipe result item ID '{res_id}' is not a recognized Minecraft {self.version} item.",
+                                file=rel_path
+                            )
+                        )
+                        recipe_errors += 1
+
+            # Validate ingredients for shapeless
+            if "shapeless" in rec_type:
+                ings = rec_data.get("ingredients")
+                if ings is None or not isinstance(ings, list) or len(ings) == 0:
+                    errors.append(
+                        ValidationIssue(
+                            level="error",
+                            code="MALFORMED_RECIPE",
+                            message="Shapeless recipe missing required non-empty 'ingredients' list.",
+                            file=rel_path
+                        )
+                    )
+                    recipe_errors += 1
+                else:
+                    for ing in ings:
+                        ing_str = ing if isinstance(ing, str) else (ing.get("item") or ing.get("id") if isinstance(ing, dict) else None)
+                        if ing_str and not ing_str.startswith("#"):
+                            norm_ing = ing_str.lower() if ing_str.startswith("minecraft:") else f"minecraft:{ing_str.lower()}"
+                            if self.valid_items and norm_ing not in self.valid_items:
+                                errors.append(
+                                    ValidationIssue(
+                                        level="error",
+                                        code="INVALID_ITEM_ID",
+                                        message=f"Ingredient item ID '{ing_str}' is not a recognized Minecraft {self.version} item.",
+                                        file=rel_path
+                                    )
+                                )
+                                recipe_errors += 1
+
+            # Validate pattern & key for shaped
+            elif "shaped" in rec_type:
+                pattern = rec_data.get("pattern")
+                key = rec_data.get("key")
+                if pattern is None or not isinstance(pattern, list) or len(pattern) == 0:
+                    errors.append(
+                        ValidationIssue(
+                            level="error",
+                            code="MALFORMED_RECIPE",
+                            message="Shaped recipe missing required non-empty 'pattern' list.",
+                            file=rel_path
+                        )
+                    )
+                    recipe_errors += 1
+                if key is None or not isinstance(key, dict) or len(key) == 0:
+                    errors.append(
+                        ValidationIssue(
+                            level="error",
+                            code="MALFORMED_RECIPE",
+                            message="Shaped recipe missing required non-empty 'key' mapping.",
+                            file=rel_path
+                        )
+                    )
+                    recipe_errors += 1
+                elif pattern and isinstance(pattern, list) and isinstance(key, dict):
+                    for row in pattern:
+                        for char in str(row):
+                            if char != " " and char not in key:
+                                errors.append(
+                                    ValidationIssue(
+                                        level="error",
+                                        code="MALFORMED_RECIPE",
+                                        message=f"Pattern symbol '{char}' is not defined in recipe 'key'.",
+                                        file=rel_path
+                                    )
+                                )
+                                recipe_errors += 1
+                    for sym, k_val in key.items():
+                        k_str = k_val if isinstance(k_val, str) else (k_val.get("item") or k_val.get("id") if isinstance(k_val, dict) else None)
+                        if k_str and not k_str.startswith("#"):
+                            norm_k = k_str.lower() if k_str.startswith("minecraft:") else f"minecraft:{k_str.lower()}"
+                            if self.valid_items and norm_k not in self.valid_items:
+                                errors.append(
+                                    ValidationIssue(
+                                        level="error",
+                                        code="INVALID_ITEM_ID",
+                                        message=f"Key item ID '{k_str}' for symbol '{sym}' is not a recognized Minecraft {self.version} item.",
+                                        file=rel_path
+                                    )
+                                )
+                                recipe_errors += 1
+
+            # Validate cooking / single ingredient
+            elif any(t in rec_type for t in ["smelting", "blasting", "smoking", "campfire_cooking", "stonecutting"]):
+                ing = rec_data.get("ingredient")
+                if not ing:
+                    errors.append(
+                        ValidationIssue(
+                            level="error",
+                            code="MALFORMED_RECIPE",
+                            message=f"Recipe type '{rec_type}' missing required 'ingredient' field.",
+                            file=rel_path
+                        )
+                    )
+                    recipe_errors += 1
+                else:
+                    ing_str = ing if isinstance(ing, str) else (ing.get("item") or ing.get("id") if isinstance(ing, dict) else None)
+                    if ing_str and not ing_str.startswith("#"):
+                        norm_ing = ing_str.lower() if ing_str.startswith("minecraft:") else f"minecraft:{ing_str.lower()}"
+                        if self.valid_items and norm_ing not in self.valid_items:
+                            errors.append(
+                                ValidationIssue(
+                                    level="error",
+                                    code="INVALID_ITEM_ID",
+                                    message=f"Ingredient item ID '{ing_str}' is not a recognized Minecraft {self.version} item.",
+                                    file=rel_path
+                                )
+                            )
+                            recipe_errors += 1
+
+        if recipe_files:
+            checks.append(
+                ValidationCheck(
+                    name="Recipe Structure & Identifier Check",
+                    passed=(recipe_errors == 0),
+                    message=f"Validated {len(recipe_files)} recipe file(s)"
                 )
             )
 

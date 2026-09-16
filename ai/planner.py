@@ -148,6 +148,16 @@ Each entry in "mechanisms" should specify a "type" and its structured parameters
    - "criteria": criteria triggers and conditions (e.g. {{"killed_zombie": {{"trigger": "minecraft:player_killed_entity", "conditions": {{"entity": {{"type": "minecraft:zombie"}}}}}}}})
    - "rewards": optional rewards (e.g. {{"experience": 100, "function": "minecraft_ai:reward"}})
 
+5. Recipe Mechanism:
+   - "type": "recipe"
+   - "recipe_type": "crafting_shaped", "crafting_shapeless", "smelting", "blasting", "smoking", or "stonecutting"
+   - "path": recipe file name without extension (e.g. "diamond_from_dirt")
+   - "result_item": valid item ID from knowledge (e.g. "minecraft:diamond")
+   - "result_count": integer count (e.g. 1)
+   - "ingredients": list of ingredient item IDs for shapeless/smelting (e.g. ["minecraft:dirt"])
+   - "pattern": list of row strings for shaped (e.g. ["X", "#"])
+   - "key": dictionary mapping characters to item IDs for shaped (e.g. {{"#": "minecraft:stick", "X": "minecraft:diamond"}})
+
 OUTPUT:
 
 Return ONLY the structured JSON matching the supplied schema.
@@ -475,6 +485,8 @@ Return only JSON matching the required schema.
                         mech_type = "function_tag"
                     elif mech_type in ["trigger"]:
                         mech_type = "advancement"
+                    elif mech_type in ["crafting", "crafting_shaped", "crafting_shapeless", "smelting", "blasting", "smoking", "recipe_modification"]:
+                        mech_type = "recipe"
                     mech_dict["type"] = mech_type
 
                     # Normalize commands (strip leading slash, ensure list of strings)
@@ -515,6 +527,38 @@ Return only JSON matching the required schema.
                             raw_vals = [raw_vals]
                         if isinstance(raw_vals, list):
                             mech_dict["values"] = [str(v).strip() for v in raw_vals if str(v).strip()]
+
+                    # Normalize recipe result_item and ingredients
+                    raw_res_item = mech_dict.get("result_item") or mech_dict.get("item")
+                    if raw_res_item and isinstance(raw_res_item, str):
+                        raw_res_item = raw_res_item.strip()
+                        if not raw_res_item.startswith("minecraft:") and ":" not in raw_res_item:
+                            raw_res_item = f"minecraft:{raw_res_item}"
+                        mech_dict["result_item"] = raw_res_item
+
+                    raw_ingredients = mech_dict.get("ingredients")
+                    if raw_ingredients is not None:
+                        if isinstance(raw_ingredients, str):
+                            raw_ingredients = [raw_ingredients]
+                        if isinstance(raw_ingredients, list):
+                            clean_ings = []
+                            for ing in raw_ingredients:
+                                ing_str = str(ing).strip()
+                                if ing_str and not ing_str.startswith("#") and not ing_str.startswith("minecraft:") and ":" not in ing_str:
+                                    ing_str = f"minecraft:{ing_str}"
+                                if ing_str:
+                                    clean_ings.append(ing_str)
+                            mech_dict["ingredients"] = clean_ings
+
+                    raw_key = mech_dict.get("key")
+                    if raw_key and isinstance(raw_key, dict):
+                        clean_key = {}
+                        for sym, k_val in raw_key.items():
+                            k_str = str(k_val).strip()
+                            if k_str and not k_str.startswith("#") and not k_str.startswith("minecraft:") and ":" not in k_str:
+                                k_str = f"minecraft:{k_str}"
+                            clean_key[str(sym)] = k_str
+                        mech_dict["key"] = clean_key
 
                     # Create and validate MechanismSpecification
                     try:

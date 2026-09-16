@@ -7,6 +7,7 @@ from generator.mechanisms.loot_table_mech import LootTableMechanismGenerator
 from generator.mechanisms.function_mech import FunctionMechanismGenerator
 from generator.mechanisms.tag_mech import FunctionTagMechanismGenerator
 from generator.mechanisms.advancement_mech import AdvancementMechanismGenerator
+from generator.mechanisms.recipe_mech import RecipeMechanismGenerator
 
 __all__ = [
     "BaseMechanismGenerator",
@@ -14,4 +15,6 @@ __all__ = [
     "FunctionMechanismGenerator",
     "FunctionTagMechanismGenerator",
     "AdvancementMechanismGenerator",
+    "RecipeMechanismGenerator",
 ]
+
