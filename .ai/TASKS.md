@@ -19,6 +19,7 @@
 - [x] Build deterministic datapack validator/tester (Step 6 - `validator/`).
 - [x] Build structured AI repair loop with retry protection and diagnostic history (Step 7 - `repair/`).
 - [x] Complete end-to-end natural-language → datapack ZIP pipeline (Step 8 Orchestrator - `pipeline/`, `run_pipeline.py`, `test_pipeline.py`).
+- [x] Build user-facing web interface and direct ZIP download endpoint (Step 9 - `web/`, `run_web.py`, `test_web.py`).
 
 ## Rule
 Tasks describe project work, not special cases for individual example prompts. If an example exposes a problem, fix the underlying generic capability.

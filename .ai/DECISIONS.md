@@ -40,4 +40,12 @@ The pipeline orchestrator (`pipeline/`) integrates all 7 stages: Understanding â
 3. Zero-Failure Delivery Guarantee: The pipeline must NEVER return an invalid datapack or ZIP as successful. If repairs are exhausted or fail, structured diagnostics and attempt history are returned under `status: "failed"`.
 4. ZIP Validation Checkpoint: When ZIP creation is enabled, the final ZIP archive is independently verified by the validator before final pipeline success is reported.
 
+## D013 â€” Web Interface Decoupling & Direct Pipeline API Consumption (Step 9)
+The user-facing web interface (`web/`) is built as a clean, decoupled layer on top of the public pipeline API (`pipeline.run_minecraft_pipeline`). It does not alter, replace, or wrap internal pipeline abstractions. Key architectural rules:
+1. Complete Decoupling: Web endpoints (`/api/generate`, `/api/download/{filename}`, `/api/health`) purely consume the existing `PipelineResult` data contract and expose it via JSON to the frontend.
+2. Zero Frontend Build Overhead: The UI uses standard HTML5, Vanilla CSS (modern Obsidian & Emerald dark theme), and Vanilla JS without requiring Node.js, npm bundles, or external runtime compilers.
+3. Path Traversal Guard: Direct ZIP download is isolated to the `generated/` directory using strict regex matching (`^[a-zA-Z0-9_\-\.]+\.zip$`) and path resolution checks to prevent directory traversal.
+4. Preserved CLI Parity: The existing CLI entry point (`run_pipeline.py`) remains fully functional and independent of the web server.
+
+
 
