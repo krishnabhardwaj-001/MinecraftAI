@@ -1,0 +1,1258 @@
+[
+  {
+    "id": "minecraft:acacia_boat",
+    "name": "acacia_boat",
+    "display_name": "Acacia Boat",
+    "loot_table": null,
+    "version": "1.21.11",
+    "edition": "Java"
+  },
+  {
+    "id": "minecraft:acacia_chest_boat",
+    "name": "acacia_chest_boat",
+    "display_name": "Acacia Chest Boat",
+    "loot_table": null,
+    "version": "1.21.11",
+    "edition": "Java"
+  },
+  {
+    "id": "minecraft:allay",
+    "name": "allay",
+    "display_name": "Allay",
+    "loot_table": "entities/allay.json",
+    "version": "1.21.11",
+    "edition": "Java"
+  },
+  {
+    "id": "minecraft:area_effect_cloud",
+    "name": "area_effect_cloud",
+    "display_name": "Area Effect Cloud",
+    "loot_table": null,
+    "version": "1.21.11",
+    "edition": "Java"
+  },
+  {
+    "id": "minecraft:armadillo",
+    "name": "armadillo",
+    "display_name": "Armadillo",
+    "loot_table": "entities/armadillo.json",
+    "version": "1.21.11",
+    "edition": "Java"
+  },
+  {
+    "id": "minecraft:armor_stand",
+    "name": "armor_stand",
+    "display_name": "Armor Stand",
+    "loot_table": "entities/armor_stand.json",
+    "version": "1.21.11",
+    "edition": "Java"
+  },
+  {
+    "id": "minecraft:arrow",
+    "name": "arrow",
+    "display_name": "Arrow",
+    "loot_table": null,
+    "version": "1.21.11",
+    "edition": "Java"
+  },
+  {
+    "id": "minecraft:axolotl",
+    "name": "axolotl",
+    "display_name": "Axolotl",
+    "loot_table": "entities/axolotl.json",
+    "version": "1.21.11",
+    "edition": "Java"
+  },
+  {
+    "id": "minecraft:bamboo_chest_raft",
+    "name": "bamboo_chest_raft",
+    "display_name": "Bamboo Chest Raft",
+    "loot_table": null,
+    "version": "1.21.11",
+    "edition": "Java"
+  },
+  {
+    "id": "minecraft:bamboo_raft",
+    "name": "bamboo_raft",
+    "display_name": "Bamboo Raft",
+    "loot_table": null,
+    "version": "1.21.11",
+    "edition": "Java"
+  },
+  {
+    "id": "minecraft:bat",
+    "name": "bat",
+    "display_name": "Bat",
+    "loot_table": "entities/bat.json",
+    "version": "1.21.11",
+    "edition": "Java"
+  },
+  {
+    "id": "minecraft:bee",
+    "name": "bee",
+    "display_name": "Bee",
+    "loot_table": "entities/bee.json",
+    "version": "1.21.11",
+    "edition": "Java"
+  },
+  {
+    "id": "minecraft:birch_boat",
+    "name": "birch_boat",
+    "display_name": "Birch Boat",
+    "loot_table": null,
+    "version": "1.21.11",
+    "edition": "Java"
+  },
+  {
+    "id": "minecraft:birch_chest_boat",
+    "name": "birch_chest_boat",
+    "display_name": "Birch Chest Boat",
+    "loot_table": null,
+    "version": "1.21.11",
+    "edition": "Java"
+  },
+  {
+    "id": "minecraft:blaze",
+    "name": "blaze",
+    "display_name": "Blaze",
+    "loot_table": "entities/blaze.json",
+    "version": "1.21.11",
+    "edition": "Java"
+  },
+  {
+    "id": "minecraft:block_display",
+    "name": "block_display",
+    "display_name": "Block Display",
+    "loot_table": null,
+    "version": "1.21.11",
+    "edition": "Java"
+  },
+  {
+    "id": "minecraft:bogged",
+    "name": "bogged",
+    "display_name": "Bogged",
+    "loot_table": "entities/bogged.json",
+    "version": "1.21.11",
+    "edition": "Java"
+  },
+  {
+    "id": "minecraft:breeze",
+    "name": "breeze",
+    "display_name": "Breeze",
+    "loot_table": "entities/breeze.json",
+    "version": "1.21.11",
+    "edition": "Java"
+  },
+  {
+    "id": "minecraft:breeze_wind_charge",
+    "name": "breeze_wind_charge",
+    "display_name": "Breeze Wind Charge",
+    "loot_table": null,
+    "version": "1.21.11",
+    "edition": "Java"
+  },
+  {
+    "id": "minecraft:camel",
+    "name": "camel",
+    "display_name": "Camel",
+    "loot_table": "entities/camel.json",
+    "version": "1.21.11",
+    "edition": "Java"
+  },
+  {
+    "id": "minecraft:camel_husk",
+    "name": "camel_husk",
+    "display_name": "Camel Husk",
+    "loot_table": "entities/camel_husk.json",
+    "version": "1.21.11",
+    "edition": "Java"
+  },
+  {
+    "id": "minecraft:cat",
+    "name": "cat",
+    "display_name": "Cat",
+    "loot_table": "entities/cat.json",
+    "version": "1.21.11",
+    "edition": "Java"
+  },
+  {
+    "id": "minecraft:cave_spider",
+    "name": "cave_spider",
+    "display_name": "Cave Spider",
+    "loot_table": "entities/cave_spider.json",
+    "version": "1.21.11",
+    "edition": "Java"
+  },
+  {
+    "id": "minecraft:cherry_boat",
+    "name": "cherry_boat",
+    "display_name": "Cherry Boat",
+    "loot_table": null,
+    "version": "1.21.11",
+    "edition": "Java"
+  },
+  {
+    "id": "minecraft:cherry_chest_boat",
+    "name": "cherry_chest_boat",
+    "display_name": "Cherry Chest Boat",
+    "loot_table": null,
+    "version": "1.21.11",
+    "edition": "Java"
+  },
+  {
+    "id": "minecraft:chest_minecart",
+    "name": "chest_minecart",
+    "display_name": "Chest Minecart",
+    "loot_table": null,
+    "version": "1.21.11",
+    "edition": "Java"
+  },
+  {
+    "id": "minecraft:chicken",
+    "name": "chicken",
+    "display_name": "Chicken",
+    "loot_table": "entities/chicken.json",
+    "version": "1.21.11",
+    "edition": "Java"
+  },
+  {
+    "id": "minecraft:cod",
+    "name": "cod",
+    "display_name": "Cod",
+    "loot_table": "entities/cod.json",
+    "version": "1.21.11",
+    "edition": "Java"
+  },
+  {
+    "id": "minecraft:command_block_minecart",
+    "name": "command_block_minecart",
+    "display_name": "Command Block Minecart",
+    "loot_table": null,
+    "version": "1.21.11",
+    "edition": "Java"
+  },
+  {
+    "id": "minecraft:copper_golem",
+    "name": "copper_golem",
+    "display_name": "Copper Golem",
+    "loot_table": "entities/copper_golem.json",
+    "version": "1.21.11",
+    "edition": "Java"
+  },
+  {
+    "id": "minecraft:cow",
+    "name": "cow",
+    "display_name": "Cow",
+    "loot_table": "entities/cow.json",
+    "version": "1.21.11",
+    "edition": "Java"
+  },
+  {
+    "id": "minecraft:creaking",
+    "name": "creaking",
+    "display_name": "Creaking",
+    "loot_table": "entities/creaking.json",
+    "version": "1.21.11",
+    "edition": "Java"
+  },
+  {
+    "id": "minecraft:creeper",
+    "name": "creeper",
+    "display_name": "Creeper",
+    "loot_table": "entities/creeper.json",
+    "version": "1.21.11",
+    "edition": "Java"
+  },
+  {
+    "id": "minecraft:dark_oak_boat",
+    "name": "dark_oak_boat",
+    "display_name": "Dark Oak Boat",
+    "loot_table": null,
+    "version": "1.21.11",
+    "edition": "Java"
+  },
+  {
+    "id": "minecraft:dark_oak_chest_boat",
+    "name": "dark_oak_chest_boat",
+    "display_name": "Dark Oak Chest Boat",
+    "loot_table": null,
+    "version": "1.21.11",
+    "edition": "Java"
+  },
+  {
+    "id": "minecraft:dolphin",
+    "name": "dolphin",
+    "display_name": "Dolphin",
+    "loot_table": "entities/dolphin.json",
+    "version": "1.21.11",
+    "edition": "Java"
+  },
+  {
+    "id": "minecraft:donkey",
+    "name": "donkey",
+    "display_name": "Donkey",
+    "loot_table": "entities/donkey.json",
+    "version": "1.21.11",
+    "edition": "Java"
+  },
+  {
+    "id": "minecraft:dragon_fireball",
+    "name": "dragon_fireball",
+    "display_name": "Dragon Fireball",
+    "loot_table": null,
+    "version": "1.21.11",
+    "edition": "Java"
+  },
+  {
+    "id": "minecraft:drowned",
+    "name": "drowned",
+    "display_name": "Drowned",
+    "loot_table": "entities/drowned.json",
+    "version": "1.21.11",
+    "edition": "Java"
+  },
+  {
+    "id": "minecraft:egg",
+    "name": "egg",
+    "display_name": "Egg",
+    "loot_table": null,
+    "version": "1.21.11",
+    "edition": "Java"
+  },
+  {
+    "id": "minecraft:elder_guardian",
+    "name": "elder_guardian",
+    "display_name": "Elder Guardian",
+    "loot_table": "entities/elder_guardian.json",
+    "version": "1.21.11",
+    "edition": "Java"
+  },
+  {
+    "id": "minecraft:end_crystal",
+    "name": "end_crystal",
+    "display_name": "End Crystal",
+    "loot_table": null,
+    "version": "1.21.11",
+    "edition": "Java"
+  },
+  {
+    "id": "minecraft:ender_dragon",
+    "name": "ender_dragon",
+    "display_name": "Ender Dragon",
+    "loot_table": "entities/ender_dragon.json",
+    "version": "1.21.11",
+    "edition": "Java"
+  },
+  {
+    "id": "minecraft:ender_pearl",
+    "name": "ender_pearl",
+    "display_name": "Ender Pearl",
+    "loot_table": null,
+    "version": "1.21.11",
+    "edition": "Java"
+  },
+  {
+    "id": "minecraft:enderman",
+    "name": "enderman",
+    "display_name": "Enderman",
+    "loot_table": "entities/enderman.json",
+    "version": "1.21.11",
+    "edition": "Java"
+  },
+  {
+    "id": "minecraft:endermite",
+    "name": "endermite",
+    "display_name": "Endermite",
+    "loot_table": "entities/endermite.json",
+    "version": "1.21.11",
+    "edition": "Java"
+  },
+  {
+    "id": "minecraft:evoker",
+    "name": "evoker",
+    "display_name": "Evoker",
+    "loot_table": "entities/evoker.json",
+    "version": "1.21.11",
+    "edition": "Java"
+  },
+  {
+    "id": "minecraft:evoker_fangs",
+    "name": "evoker_fangs",
+    "display_name": "Evoker Fangs",
+    "loot_table": null,
+    "version": "1.21.11",
+    "edition": "Java"
+  },
+  {
+    "id": "minecraft:experience_bottle",
+    "name": "experience_bottle",
+    "display_name": "Experience Bottle",
+    "loot_table": null,
+    "version": "1.21.11",
+    "edition": "Java"
+  },
+  {
+    "id": "minecraft:experience_orb",
+    "name": "experience_orb",
+    "display_name": "Experience Orb",
+    "loot_table": null,
+    "version": "1.21.11",
+    "edition": "Java"
+  },
+  {
+    "id": "minecraft:eye_of_ender",
+    "name": "eye_of_ender",
+    "display_name": "Eye Of Ender",
+    "loot_table": null,
+    "version": "1.21.11",
+    "edition": "Java"
+  },
+  {
+    "id": "minecraft:falling_block",
+    "name": "falling_block",
+    "display_name": "Falling Block",
+    "loot_table": null,
+    "version": "1.21.11",
+    "edition": "Java"
+  },
+  {
+    "id": "minecraft:fireball",
+    "name": "fireball",
+    "display_name": "Fireball",
+    "loot_table": null,
+    "version": "1.21.11",
+    "edition": "Java"
+  },
+  {
+    "id": "minecraft:firework_rocket",
+    "name": "firework_rocket",
+    "display_name": "Firework Rocket",
+    "loot_table": null,
+    "version": "1.21.11",
+    "edition": "Java"
+  },
+  {
+    "id": "minecraft:fishing_bobber",
+    "name": "fishing_bobber",
+    "display_name": "Fishing Bobber",
+    "loot_table": null,
+    "version": "1.21.11",
+    "edition": "Java"
+  },
+  {
+    "id": "minecraft:fox",
+    "name": "fox",
+    "display_name": "Fox",
+    "loot_table": "entities/fox.json",
+    "version": "1.21.11",
+    "edition": "Java"
+  },
+  {
+    "id": "minecraft:frog",
+    "name": "frog",
+    "display_name": "Frog",
+    "loot_table": "entities/frog.json",
+    "version": "1.21.11",
+    "edition": "Java"
+  },
+  {
+    "id": "minecraft:furnace_minecart",
+    "name": "furnace_minecart",
+    "display_name": "Furnace Minecart",
+    "loot_table": null,
+    "version": "1.21.11",
+    "edition": "Java"
+  },
+  {
+    "id": "minecraft:ghast",
+    "name": "ghast",
+    "display_name": "Ghast",
+    "loot_table": "entities/ghast.json",
+    "version": "1.21.11",
+    "edition": "Java"
+  },
+  {
+    "id": "minecraft:giant",
+    "name": "giant",
+    "display_name": "Giant",
+    "loot_table": "entities/giant.json",
+    "version": "1.21.11",
+    "edition": "Java"
+  },
+  {
+    "id": "minecraft:glow_item_frame",
+    "name": "glow_item_frame",
+    "display_name": "Glow Item Frame",
+    "loot_table": null,
+    "version": "1.21.11",
+    "edition": "Java"
+  },
+  {
+    "id": "minecraft:glow_squid",
+    "name": "glow_squid",
+    "display_name": "Glow Squid",
+    "loot_table": "entities/glow_squid.json",
+    "version": "1.21.11",
+    "edition": "Java"
+  },
+  {
+    "id": "minecraft:goat",
+    "name": "goat",
+    "display_name": "Goat",
+    "loot_table": "entities/goat.json",
+    "version": "1.21.11",
+    "edition": "Java"
+  },
+  {
+    "id": "minecraft:guardian",
+    "name": "guardian",
+    "display_name": "Guardian",
+    "loot_table": "entities/guardian.json",
+    "version": "1.21.11",
+    "edition": "Java"
+  },
+  {
+    "id": "minecraft:happy_ghast",
+    "name": "happy_ghast",
+    "display_name": "Happy Ghast",
+    "loot_table": "entities/happy_ghast.json",
+    "version": "1.21.11",
+    "edition": "Java"
+  },
+  {
+    "id": "minecraft:hoglin",
+    "name": "hoglin",
+    "display_name": "Hoglin",
+    "loot_table": "entities/hoglin.json",
+    "version": "1.21.11",
+    "edition": "Java"
+  },
+  {
+    "id": "minecraft:hopper_minecart",
+    "name": "hopper_minecart",
+    "display_name": "Hopper Minecart",
+    "loot_table": null,
+    "version": "1.21.11",
+    "edition": "Java"
+  },
+  {
+    "id": "minecraft:horse",
+    "name": "horse",
+    "display_name": "Horse",
+    "loot_table": "entities/horse.json",
+    "version": "1.21.11",
+    "edition": "Java"
+  },
+  {
+    "id": "minecraft:husk",
+    "name": "husk",
+    "display_name": "Husk",
+    "loot_table": "entities/husk.json",
+    "version": "1.21.11",
+    "edition": "Java"
+  },
+  {
+    "id": "minecraft:illusioner",
+    "name": "illusioner",
+    "display_name": "Illusioner",
+    "loot_table": "entities/illusioner.json",
+    "version": "1.21.11",
+    "edition": "Java"
+  },
+  {
+    "id": "minecraft:interaction",
+    "name": "interaction",
+    "display_name": "Interaction",
+    "loot_table": null,
+    "version": "1.21.11",
+    "edition": "Java"
+  },
+  {
+    "id": "minecraft:iron_golem",
+    "name": "iron_golem",
+    "display_name": "Iron Golem",
+    "loot_table": "entities/iron_golem.json",
+    "version": "1.21.11",
+    "edition": "Java"
+  },
+  {
+    "id": "minecraft:item",
+    "name": "item",
+    "display_name": "Item",
+    "loot_table": null,
+    "version": "1.21.11",
+    "edition": "Java"
+  },
+  {
+    "id": "minecraft:item_display",
+    "name": "item_display",
+    "display_name": "Item Display",
+    "loot_table": null,
+    "version": "1.21.11",
+    "edition": "Java"
+  },
+  {
+    "id": "minecraft:item_frame",
+    "name": "item_frame",
+    "display_name": "Item Frame",
+    "loot_table": null,
+    "version": "1.21.11",
+    "edition": "Java"
+  },
+  {
+    "id": "minecraft:jungle_boat",
+    "name": "jungle_boat",
+    "display_name": "Jungle Boat",
+    "loot_table": null,
+    "version": "1.21.11",
+    "edition": "Java"
+  },
+  {
+    "id": "minecraft:jungle_chest_boat",
+    "name": "jungle_chest_boat",
+    "display_name": "Jungle Chest Boat",
+    "loot_table": null,
+    "version": "1.21.11",
+    "edition": "Java"
+  },
+  {
+    "id": "minecraft:leash_knot",
+    "name": "leash_knot",
+    "display_name": "Leash Knot",
+    "loot_table": null,
+    "version": "1.21.11",
+    "edition": "Java"
+  },
+  {
+    "id": "minecraft:lightning_bolt",
+    "name": "lightning_bolt",
+    "display_name": "Lightning Bolt",
+    "loot_table": null,
+    "version": "1.21.11",
+    "edition": "Java"
+  },
+  {
+    "id": "minecraft:lingering_potion",
+    "name": "lingering_potion",
+    "display_name": "Lingering Potion",
+    "loot_table": null,
+    "version": "1.21.11",
+    "edition": "Java"
+  },
+  {
+    "id": "minecraft:llama",
+    "name": "llama",
+    "display_name": "Llama",
+    "loot_table": "entities/llama.json",
+    "version": "1.21.11",
+    "edition": "Java"
+  },
+  {
+    "id": "minecraft:llama_spit",
+    "name": "llama_spit",
+    "display_name": "Llama Spit",
+    "loot_table": null,
+    "version": "1.21.11",
+    "edition": "Java"
+  },
+  {
+    "id": "minecraft:magma_cube",
+    "name": "magma_cube",
+    "display_name": "Magma Cube",
+    "loot_table": "entities/magma_cube.json",
+    "version": "1.21.11",
+    "edition": "Java"
+  },
+  {
+    "id": "minecraft:mangrove_boat",
+    "name": "mangrove_boat",
+    "display_name": "Mangrove Boat",
+    "loot_table": null,
+    "version": "1.21.11",
+    "edition": "Java"
+  },
+  {
+    "id": "minecraft:mangrove_chest_boat",
+    "name": "mangrove_chest_boat",
+    "display_name": "Mangrove Chest Boat",
+    "loot_table": null,
+    "version": "1.21.11",
+    "edition": "Java"
+  },
+  {
+    "id": "minecraft:mannequin",
+    "name": "mannequin",
+    "display_name": "Mannequin",
+    "loot_table": "entities/mannequin.json",
+    "version": "1.21.11",
+    "edition": "Java"
+  },
+  {
+    "id": "minecraft:marker",
+    "name": "marker",
+    "display_name": "Marker",
+    "loot_table": null,
+    "version": "1.21.11",
+    "edition": "Java"
+  },
+  {
+    "id": "minecraft:minecart",
+    "name": "minecart",
+    "display_name": "Minecart",
+    "loot_table": null,
+    "version": "1.21.11",
+    "edition": "Java"
+  },
+  {
+    "id": "minecraft:mooshroom",
+    "name": "mooshroom",
+    "display_name": "Mooshroom",
+    "loot_table": "entities/mooshroom.json",
+    "version": "1.21.11",
+    "edition": "Java"
+  },
+  {
+    "id": "minecraft:mule",
+    "name": "mule",
+    "display_name": "Mule",
+    "loot_table": "entities/mule.json",
+    "version": "1.21.11",
+    "edition": "Java"
+  },
+  {
+    "id": "minecraft:nautilus",
+    "name": "nautilus",
+    "display_name": "Nautilus",
+    "loot_table": "entities/nautilus.json",
+    "version": "1.21.11",
+    "edition": "Java"
+  },
+  {
+    "id": "minecraft:oak_boat",
+    "name": "oak_boat",
+    "display_name": "Oak Boat",
+    "loot_table": null,
+    "version": "1.21.11",
+    "edition": "Java"
+  },
+  {
+    "id": "minecraft:oak_chest_boat",
+    "name": "oak_chest_boat",
+    "display_name": "Oak Chest Boat",
+    "loot_table": null,
+    "version": "1.21.11",
+    "edition": "Java"
+  },
+  {
+    "id": "minecraft:ocelot",
+    "name": "ocelot",
+    "display_name": "Ocelot",
+    "loot_table": "entities/ocelot.json",
+    "version": "1.21.11",
+    "edition": "Java"
+  },
+  {
+    "id": "minecraft:ominous_item_spawner",
+    "name": "ominous_item_spawner",
+    "display_name": "Ominous Item Spawner",
+    "loot_table": null,
+    "version": "1.21.11",
+    "edition": "Java"
+  },
+  {
+    "id": "minecraft:painting",
+    "name": "painting",
+    "display_name": "Painting",
+    "loot_table": null,
+    "version": "1.21.11",
+    "edition": "Java"
+  },
+  {
+    "id": "minecraft:pale_oak_boat",
+    "name": "pale_oak_boat",
+    "display_name": "Pale Oak Boat",
+    "loot_table": null,
+    "version": "1.21.11",
+    "edition": "Java"
+  },
+  {
+    "id": "minecraft:pale_oak_chest_boat",
+    "name": "pale_oak_chest_boat",
+    "display_name": "Pale Oak Chest Boat",
+    "loot_table": null,
+    "version": "1.21.11",
+    "edition": "Java"
+  },
+  {
+    "id": "minecraft:panda",
+    "name": "panda",
+    "display_name": "Panda",
+    "loot_table": "entities/panda.json",
+    "version": "1.21.11",
+    "edition": "Java"
+  },
+  {
+    "id": "minecraft:parched",
+    "name": "parched",
+    "display_name": "Parched",
+    "loot_table": "entities/parched.json",
+    "version": "1.21.11",
+    "edition": "Java"
+  },
+  {
+    "id": "minecraft:parrot",
+    "name": "parrot",
+    "display_name": "Parrot",
+    "loot_table": "entities/parrot.json",
+    "version": "1.21.11",
+    "edition": "Java"
+  },
+  {
+    "id": "minecraft:phantom",
+    "name": "phantom",
+    "display_name": "Phantom",
+    "loot_table": "entities/phantom.json",
+    "version": "1.21.11",
+    "edition": "Java"
+  },
+  {
+    "id": "minecraft:pig",
+    "name": "pig",
+    "display_name": "Pig",
+    "loot_table": "entities/pig.json",
+    "version": "1.21.11",
+    "edition": "Java"
+  },
+  {
+    "id": "minecraft:piglin",
+    "name": "piglin",
+    "display_name": "Piglin",
+    "loot_table": "entities/piglin.json",
+    "version": "1.21.11",
+    "edition": "Java"
+  },
+  {
+    "id": "minecraft:piglin_brute",
+    "name": "piglin_brute",
+    "display_name": "Piglin Brute",
+    "loot_table": "entities/piglin_brute.json",
+    "version": "1.21.11",
+    "edition": "Java"
+  },
+  {
+    "id": "minecraft:pillager",
+    "name": "pillager",
+    "display_name": "Pillager",
+    "loot_table": "entities/pillager.json",
+    "version": "1.21.11",
+    "edition": "Java"
+  },
+  {
+    "id": "minecraft:player",
+    "name": "player",
+    "display_name": "Player",
+    "loot_table": "entities/player.json",
+    "version": "1.21.11",
+    "edition": "Java"
+  },
+  {
+    "id": "minecraft:polar_bear",
+    "name": "polar_bear",
+    "display_name": "Polar Bear",
+    "loot_table": "entities/polar_bear.json",
+    "version": "1.21.11",
+    "edition": "Java"
+  },
+  {
+    "id": "minecraft:pufferfish",
+    "name": "pufferfish",
+    "display_name": "Pufferfish",
+    "loot_table": "entities/pufferfish.json",
+    "version": "1.21.11",
+    "edition": "Java"
+  },
+  {
+    "id": "minecraft:rabbit",
+    "name": "rabbit",
+    "display_name": "Rabbit",
+    "loot_table": "entities/rabbit.json",
+    "version": "1.21.11",
+    "edition": "Java"
+  },
+  {
+    "id": "minecraft:ravager",
+    "name": "ravager",
+    "display_name": "Ravager",
+    "loot_table": "entities/ravager.json",
+    "version": "1.21.11",
+    "edition": "Java"
+  },
+  {
+    "id": "minecraft:salmon",
+    "name": "salmon",
+    "display_name": "Salmon",
+    "loot_table": "entities/salmon.json",
+    "version": "1.21.11",
+    "edition": "Java"
+  },
+  {
+    "id": "minecraft:sheep",
+    "name": "sheep",
+    "display_name": "Sheep",
+    "loot_table": "entities/sheep.json",
+    "version": "1.21.11",
+    "edition": "Java"
+  },
+  {
+    "id": "minecraft:shulker",
+    "name": "shulker",
+    "display_name": "Shulker",
+    "loot_table": "entities/shulker.json",
+    "version": "1.21.11",
+    "edition": "Java"
+  },
+  {
+    "id": "minecraft:shulker_bullet",
+    "name": "shulker_bullet",
+    "display_name": "Shulker Bullet",
+    "loot_table": null,
+    "version": "1.21.11",
+    "edition": "Java"
+  },
+  {
+    "id": "minecraft:silverfish",
+    "name": "silverfish",
+    "display_name": "Silverfish",
+    "loot_table": "entities/silverfish.json",
+    "version": "1.21.11",
+    "edition": "Java"
+  },
+  {
+    "id": "minecraft:skeleton",
+    "name": "skeleton",
+    "display_name": "Skeleton",
+    "loot_table": "entities/skeleton.json",
+    "version": "1.21.11",
+    "edition": "Java"
+  },
+  {
+    "id": "minecraft:skeleton_horse",
+    "name": "skeleton_horse",
+    "display_name": "Skeleton Horse",
+    "loot_table": "entities/skeleton_horse.json",
+    "version": "1.21.11",
+    "edition": "Java"
+  },
+  {
+    "id": "minecraft:slime",
+    "name": "slime",
+    "display_name": "Slime",
+    "loot_table": "entities/slime.json",
+    "version": "1.21.11",
+    "edition": "Java"
+  },
+  {
+    "id": "minecraft:small_fireball",
+    "name": "small_fireball",
+    "display_name": "Small Fireball",
+    "loot_table": null,
+    "version": "1.21.11",
+    "edition": "Java"
+  },
+  {
+    "id": "minecraft:sniffer",
+    "name": "sniffer",
+    "display_name": "Sniffer",
+    "loot_table": "entities/sniffer.json",
+    "version": "1.21.11",
+    "edition": "Java"
+  },
+  {
+    "id": "minecraft:snow_golem",
+    "name": "snow_golem",
+    "display_name": "Snow Golem",
+    "loot_table": "entities/snow_golem.json",
+    "version": "1.21.11",
+    "edition": "Java"
+  },
+  {
+    "id": "minecraft:snowball",
+    "name": "snowball",
+    "display_name": "Snowball",
+    "loot_table": null,
+    "version": "1.21.11",
+    "edition": "Java"
+  },
+  {
+    "id": "minecraft:spawner_minecart",
+    "name": "spawner_minecart",
+    "display_name": "Spawner Minecart",
+    "loot_table": null,
+    "version": "1.21.11",
+    "edition": "Java"
+  },
+  {
+    "id": "minecraft:spectral_arrow",
+    "name": "spectral_arrow",
+    "display_name": "Spectral Arrow",
+    "loot_table": null,
+    "version": "1.21.11",
+    "edition": "Java"
+  },
+  {
+    "id": "minecraft:spider",
+    "name": "spider",
+    "display_name": "Spider",
+    "loot_table": "entities/spider.json",
+    "version": "1.21.11",
+    "edition": "Java"
+  },
+  {
+    "id": "minecraft:splash_potion",
+    "name": "splash_potion",
+    "display_name": "Splash Potion",
+    "loot_table": null,
+    "version": "1.21.11",
+    "edition": "Java"
+  },
+  {
+    "id": "minecraft:spruce_boat",
+    "name": "spruce_boat",
+    "display_name": "Spruce Boat",
+    "loot_table": null,
+    "version": "1.21.11",
+    "edition": "Java"
+  },
+  {
+    "id": "minecraft:spruce_chest_boat",
+    "name": "spruce_chest_boat",
+    "display_name": "Spruce Chest Boat",
+    "loot_table": null,
+    "version": "1.21.11",
+    "edition": "Java"
+  },
+  {
+    "id": "minecraft:squid",
+    "name": "squid",
+    "display_name": "Squid",
+    "loot_table": "entities/squid.json",
+    "version": "1.21.11",
+    "edition": "Java"
+  },
+  {
+    "id": "minecraft:stray",
+    "name": "stray",
+    "display_name": "Stray",
+    "loot_table": "entities/stray.json",
+    "version": "1.21.11",
+    "edition": "Java"
+  },
+  {
+    "id": "minecraft:strider",
+    "name": "strider",
+    "display_name": "Strider",
+    "loot_table": "entities/strider.json",
+    "version": "1.21.11",
+    "edition": "Java"
+  },
+  {
+    "id": "minecraft:tadpole",
+    "name": "tadpole",
+    "display_name": "Tadpole",
+    "loot_table": "entities/tadpole.json",
+    "version": "1.21.11",
+    "edition": "Java"
+  },
+  {
+    "id": "minecraft:text_display",
+    "name": "text_display",
+    "display_name": "Text Display",
+    "loot_table": null,
+    "version": "1.21.11",
+    "edition": "Java"
+  },
+  {
+    "id": "minecraft:tnt",
+    "name": "tnt",
+    "display_name": "Tnt",
+    "loot_table": null,
+    "version": "1.21.11",
+    "edition": "Java"
+  },
+  {
+    "id": "minecraft:tnt_minecart",
+    "name": "tnt_minecart",
+    "display_name": "Tnt Minecart",
+    "loot_table": null,
+    "version": "1.21.11",
+    "edition": "Java"
+  },
+  {
+    "id": "minecraft:trader_llama",
+    "name": "trader_llama",
+    "display_name": "Trader Llama",
+    "loot_table": "entities/trader_llama.json",
+    "version": "1.21.11",
+    "edition": "Java"
+  },
+  {
+    "id": "minecraft:trident",
+    "name": "trident",
+    "display_name": "Trident",
+    "loot_table": null,
+    "version": "1.21.11",
+    "edition": "Java"
+  },
+  {
+    "id": "minecraft:tropical_fish",
+    "name": "tropical_fish",
+    "display_name": "Tropical Fish",
+    "loot_table": "entities/tropical_fish.json",
+    "version": "1.21.11",
+    "edition": "Java"
+  },
+  {
+    "id": "minecraft:turtle",
+    "name": "turtle",
+    "display_name": "Turtle",
+    "loot_table": "entities/turtle.json",
+    "version": "1.21.11",
+    "edition": "Java"
+  },
+  {
+    "id": "minecraft:vex",
+    "name": "vex",
+    "display_name": "Vex",
+    "loot_table": "entities/vex.json",
+    "version": "1.21.11",
+    "edition": "Java"
+  },
+  {
+    "id": "minecraft:villager",
+    "name": "villager",
+    "display_name": "Villager",
+    "loot_table": "entities/villager.json",
+    "version": "1.21.11",
+    "edition": "Java"
+  },
+  {
+    "id": "minecraft:vindicator",
+    "name": "vindicator",
+    "display_name": "Vindicator",
+    "loot_table": "entities/vindicator.json",
+    "version": "1.21.11",
+    "edition": "Java"
+  },
+  {
+    "id": "minecraft:wandering_trader",
+    "name": "wandering_trader",
+    "display_name": "Wandering Trader",
+    "loot_table": "entities/wandering_trader.json",
+    "version": "1.21.11",
+    "edition": "Java"
+  },
+  {
+    "id": "minecraft:warden",
+    "name": "warden",
+    "display_name": "Warden",
+    "loot_table": "entities/warden.json",
+    "version": "1.21.11",
+    "edition": "Java"
+  },
+  {
+    "id": "minecraft:wind_charge",
+    "name": "wind_charge",
+    "display_name": "Wind Charge",
+    "loot_table": null,
+    "version": "1.21.11",
+    "edition": "Java"
+  },
+  {
+    "id": "minecraft:witch",
+    "name": "witch",
+    "display_name": "Witch",
+    "loot_table": "entities/witch.json",
+    "version": "1.21.11",
+    "edition": "Java"
+  },
+  {
+    "id": "minecraft:wither",
+    "name": "wither",
+    "display_name": "Wither",
+    "loot_table": "entities/wither.json",
+    "version": "1.21.11",
+    "edition": "Java"
+  },
+  {
+    "id": "minecraft:wither_skeleton",
+    "name": "wither_skeleton",
+    "display_name": "Wither Skeleton",
+    "loot_table": "entities/wither_skeleton.json",
+    "version": "1.21.11",
+    "edition": "Java"
+  },
+  {
+    "id": "minecraft:wither_skull",
+    "name": "wither_skull",
+    "display_name": "Wither Skull",
+    "loot_table": null,
+    "version": "1.21.11",
+    "edition": "Java"
+  },
+  {
+    "id": "minecraft:wolf",
+    "name": "wolf",
+    "display_name": "Wolf",
+    "loot_table": "entities/wolf.json",
+    "version": "1.21.11",
+    "edition": "Java"
+  },
+  {
+    "id": "minecraft:zoglin",
+    "name": "zoglin",
+    "display_name": "Zoglin",
+    "loot_table": "entities/zoglin.json",
+    "version": "1.21.11",
+    "edition": "Java"
+  },
+  {
+    "id": "minecraft:zombie",
+    "name": "zombie",
+    "display_name": "Zombie",
+    "loot_table": "entities/zombie.json",
+    "version": "1.21.11",
+    "edition": "Java"
+  },
+  {
+    "id": "minecraft:zombie_horse",
+    "name": "zombie_horse",
+    "display_name": "Zombie Horse",
+    "loot_table": "entities/zombie_horse.json",
+    "version": "1.21.11",
+    "edition": "Java"
+  },
+  {
+    "id": "minecraft:zombie_nautilus",
+    "name": "zombie_nautilus",
+    "display_name": "Zombie Nautilus",
+    "loot_table": "entities/zombie_nautilus.json",
+    "version": "1.21.11",
+    "edition": "Java"
+  },
+  {
+    "id": "minecraft:zombie_villager",
+    "name": "zombie_villager",
+    "display_name": "Zombie Villager",
+    "loot_table": "entities/zombie_villager.json",
+    "version": "1.21.11",
+    "edition": "Java"
+  },
+  {
+    "id": "minecraft:zombified_piglin",
+    "name": "zombified_piglin",
+    "display_name": "Zombified Piglin",
+    "loot_table": "entities/zombified_piglin.json",
+    "version": "1.21.11",
+    "edition": "Java"
+  }
+]
