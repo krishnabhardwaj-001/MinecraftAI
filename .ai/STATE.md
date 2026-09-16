@@ -16,23 +16,24 @@
 - Ambiguous requests can return a clarification state instead of forcing an arbitrary interpretation.
 - `make me faster` has produced a speed effect in testing.
 - Multi-action requests can produce multiple planned actions.
+- Generic entity, item, and loot-table RAG retrieval operational for arbitrary mobs and items (verified on creepers, zombies, skeletons, spiders).
+- Deterministic Datapack Generator v1 (`generator/`) operational: creates valid Java 1.21.11 datapacks (`pack_format: 94`), modifies entity loot tables while preserving original drops/conditions/random sequences, and produces reproducible JSON and ZIP files.
+- Deterministic Datapack Validator / Tester (`validator/`) operational: validates directories and ZIPs, detects corrupt/unsafe archives, enforces 1.21.11 `pack_format: 94` and singular `loot_table` paths, validates item IDs against 1.21.11 knowledge base, and checks vanilla drop preservation.
+- Automatic AI Repair Loop (`repair/`) operational: diagnoses deterministic validator errors against Minecraft knowledge, generates corrected implementation plans, feeds them into the deterministic generator, enforces configurable retry protection without infinite loops, and records comprehensive attempt histories (verified with 7 automated tests in `test_repair_loop.py`).
 
 ## Known issues / gaps
 - `10 times faster` is not yet interpreted reliably.
 - Some combined requests still need better generic clarification when a property is underspecified, such as attack damage.
-- The full deterministic datapack generator is not yet the final completed pipeline.
-- Validator/tester and automatic AI repair loop need further implementation.
-- Knowledge coverage beyond command syntax needs expansion.
+- Generator, validator, and repair coverage currently focus on loot tables and pack structure; custom `.mcfunction` functions, recipes, and advancement pipelines will expand in future steps.
 
 ## Current priority
 Build the generic end-to-end pipeline without hardcoded request-specific behavior.
 
 ## Next logical work
-1. Strengthen generic intent normalization and ambiguity handling.
-2. Improve Minecraft knowledge retrieval and typed planning.
-3. Build deterministic datapack generation from validated plans.
-4. Add validation/testing and structured AI repair.
-5. Keep shared AI context synchronized for Antigravity and ChatGPT/Codex.
+1. Build Step 8: End-to-End Orchestrator (Natural Language → Understanding → RAG → Planner → Generator → Validator → Repair Loop → Final Datapack ZIP).
+2. Expand generator, validator, and repair loop to support custom `.mcfunction` functions, recipes, and advancements.
+3. Strengthen generic intent normalization and ambiguity handling.
+4. Keep shared AI context synchronized for Antigravity and ChatGPT/Codex.
 
 ## Agent handoff rule
 Before changing code, verify this state against the actual repository and Git history. After significant changes, update this file and the other relevant `.ai/` files.

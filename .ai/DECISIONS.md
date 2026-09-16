@@ -20,3 +20,14 @@ Generated datapacks should be validated/tested. When validation fails, structure
 
 ## D007 — Local-first model strategy
 The project should support local Ollama inference where practical, avoiding a mandatory external API key. Model/resource choices must account for the development machine's RAM limits.
+
+## D008 — Java 1.21+ datapack conventions: pack_format 94 and singular directory names
+Minecraft Java 1.21.11 uses `pack_format: 94` (verified from server release metadata). In 1.21+, data directories use singular registry names matching the registry identifier (e.g. `data/<namespace>/loot_table/` rather than `loot_tables`). Datapack generator implementations must adhere strictly to these conventions.
+
+## D009 — Deterministic validation and repair separation
+The Validator layer must remain strictly deterministic, using schema parsing, security checks, and knowledge verification without LLM calls or automated repair. Any automated fixes belong exclusively to the AI Repair Loop (Step 7) consuming structured validator output.
+
+## D010 — Structured AI Repair Loop with Deterministic Generator & Validator Contract
+The AI Repair Loop (`repair/`) never writes arbitrary datapack files directly. When validation fails, the AI receives structured validator errors, original understanding requirements, previous plans, and retrieved Minecraft knowledge to output a structured `RepairPlan` (containing diagnostic reasoning and corrected planner specifications/modifications). The corrected plan is fed into the deterministic generator, and the regenerated datapack is validated again. The repair loop enforces configurable retry limits (default 3) to prevent infinite loops, records full diagnostic history for every attempt, and short-circuits immediately if initial validation succeeds.
+
+
