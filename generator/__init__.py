@@ -1,6 +1,14 @@
 from generator.datapack_generator import DatapackGenerator, generate_datapack
 from generator.loot_table_generator import LootTableGenerator
-from generator.models import DatapackManifest, GenerationResult, LootTableModification
+from generator.models import (
+    AdvancementDefinition,
+    DatapackManifest,
+    DatapackResource,
+    FunctionDefinition,
+    FunctionTagDefinition,
+    GenerationResult,
+    LootTableModification,
+)
 
 __all__ = [
     "DatapackGenerator",
@@ -9,4 +17,8 @@ __all__ = [
     "DatapackManifest",
     "GenerationResult",
     "generate_datapack",
+    "DatapackResource",
+    "FunctionDefinition",
+    "FunctionTagDefinition",
+    "AdvancementDefinition",
 ]

@@ -47,5 +47,10 @@ The user-facing web interface (`web/`) is built as a clean, decoupled layer on t
 3. Path Traversal Guard: Direct ZIP download is isolated to the `generated/` directory using strict regex matching (`^[a-zA-Z0-9_\-\.]+\.zip$`) and path resolution checks to prevent directory traversal.
 4. Preserved CLI Parity: The existing CLI entry point (`run_pipeline.py`) remains fully functional and independent of the web server.
 
-
-
+## D014 — Multi-Mechanism Datapack Generator Architecture (Step 10)
+To expand beyond single-mechanism loot table generation while strictly preserving deterministic behavior and avoiding LLM command hallucination:
+1. Mechanism Abstraction: The generator dispatches to dedicated mechanism generators inheriting from `BaseMechanismGenerator`. Each mechanism accepts a structured definition model (`LootTableModification`, `FunctionDefinition`, `FunctionTagDefinition`, `AdvancementDefinition`) and deterministically produces `DatapackResource` objects containing relative paths and serialized content.
+2. Separation of Concerns: The Planner states WHAT mechanisms are required; the Generator's mechanism extractors and generators determine HOW to structure and serialize datapack files.
+3. 1.21.11 Path Strictness: All mechanisms conform to Java 1.21+ singular path conventions (`loot_table/`, `function/`, `tags/function/`, `advancement/`). The validator actively rejects legacy plural directories (`loot_tables/`, `functions/`, `tags/functions/`, `advancements/`) with `OBSOLETE_PATH`.
+4. Command Sanitization in Functions: Commands in `.mcfunction` files cannot have leading `/` characters; the `FunctionMechanismGenerator` automatically normalizes commands by stripping leading slashes, and `DatapackValidator` verifies this rule with `LEADING_SLASH_IN_FUNCTION`.
+5. Deterministic Composability: Multiple mechanisms can be generated together into a single unified datapack. ZIP archives are deterministically hashed using fixed timestamps and sorted directory traversal.

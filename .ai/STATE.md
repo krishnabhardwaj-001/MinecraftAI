@@ -25,18 +25,19 @@
 - Authoritative pack format 94 / 94.1 audit completed: generator emits `pack_format: 94`, `min_format: [94, 0]`, and `max_format: [94, 1]` for universal compatibility.
 - User-facing Web Interface (`web/`) operational: decoupled FastAPI backend with endpoints (`GET /`, `POST /api/generate`, `GET /api/download/{filename}`, `GET /api/health`), path-traversal protected ZIP streaming, and modern Obsidian & Emerald dark-mode single-page UI with visual 7-stage tracker, dynamic outcome cards (Success with ZIP download, Clarification with refinement prompt, and Repair diagnostics), verified with 6 automated tests in `test_web.py`.
 - Web CLI runner `run_web.py` operational (`python run_web.py --port 8000`).
+- Multi-Mechanism Datapack Generator Architecture (`generator/mechanisms/`) operational: modular mechanism generators (`LootTableMechanismGenerator`, `FunctionMechanismGenerator`, `FunctionTagMechanismGenerator`, `AdvancementMechanismGenerator`) implementing `BaseMechanismGenerator` and returning `DatapackResource` objects. Supports custom functions (`data/<ns>/function/*.mcfunction`) with automatic leading slash sanitization, function tags (`data/<ns>/tags/function/*.json`) supporting `#minecraft:tick` and `#minecraft:load`, and advancements (`data/<ns>/advancement/*.json`). The validator verifies all mechanisms and rejects legacy 1.20- plural directories. Multi-mechanism composition and deterministic byte-identical zip reproducibility verified with 7 automated tests in `test_mechanisms.py` and 46/46 tests passing across all suites.
 
 ## Known issues / gaps
 - `10 times faster` is not yet interpreted reliably.
 - Some combined requests still need better generic clarification when a property is underspecified, such as attack damage.
-- Generator, validator, and repair coverage currently focus on loot tables and pack structure; custom `.mcfunction` functions, recipes, and advancement pipelines will expand in future steps.
+- Generator mechanisms now support loot tables, functions, tick/load tags, and advancements; custom recipes, predicates, and complex multi-scoreboard systems remain for future steps.
 
 ## Current priority
-Expand deterministic datapack generation and validation capabilities to custom functions, recipes, and advancements.
+Expand deterministic datapack generation and validation capabilities to custom recipes, predicates, and advanced scoreboards.
 
 ## Next logical work
-1. Step 10: Expand generator, validator, and repair loop to support custom `.mcfunction` functions, command triggers, and game events.
-2. Support custom recipe creation and advancement reward trees.
+1. Support custom recipe creation (`data/<ns>/recipe/*.json`) and crafting mechanics.
+2. Support custom predicates (`data/<ns>/predicate/*.json`) and advanced condition trees.
 3. Strengthen generic numeric multiplier parsing and parameter normalization.
 4. Keep shared AI context synchronized for Antigravity and ChatGPT/Codex.
 

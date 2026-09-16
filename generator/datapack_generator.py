@@ -6,7 +6,21 @@ from pathlib import Path
 from typing import Any, Dict, List, Optional
 
 from generator.loot_table_generator import LootTableGenerator
-from generator.models import DatapackManifest, GenerationResult, LootTableModification
+from generator.mechanisms import (
+    AdvancementMechanismGenerator,
+    FunctionMechanismGenerator,
+    FunctionTagMechanismGenerator,
+    LootTableMechanismGenerator,
+)
+from generator.models import (
+    AdvancementDefinition,
+    DatapackManifest,
+    DatapackResource,
+    FunctionDefinition,
+    FunctionTagDefinition,
+    GenerationResult,
+    LootTableModification,
+)
 
 
 def slugify(text: str) -> str:
@@ -21,6 +35,11 @@ def slugify(text: str) -> str:
 class DatapackGenerator:
     """
     Deterministic Datapack Generator for Minecraft Java 1.21.11.
+    Supports modular mechanisms:
+    - Loot table overrides / modifications
+    - mcfunction generation
+    - Function tags (tick, load, custom)
+    - Advancements
     """
 
     def __init__(
@@ -33,6 +52,12 @@ class DatapackGenerator:
         self.version = version
         self.loot_generator = LootTableGenerator(version=version)
 
+        # Mechanism generators
+        self.loot_mech = LootTableMechanismGenerator(loot_generator=self.loot_generator)
+        self.function_mech = FunctionMechanismGenerator()
+        self.tag_mech = FunctionTagMechanismGenerator()
+        self.advancement_mech = AdvancementMechanismGenerator()
+
     def extract_loot_modifications(
         self,
         plan: Optional[Dict[str, Any]] = None,
@@ -42,6 +67,7 @@ class DatapackGenerator:
         """
         Extracts loot table modification specifications generically from
         planner, context, and understanding structures.
+        Preserved for direct backwards compatibility.
         """
         modifications: List[LootTableModification] = []
 
@@ -152,31 +178,264 @@ class DatapackGenerator:
 
         return modifications
 
+    def extract_mechanisms(
+        self,
+        plan: Optional[Dict[str, Any]] = None,
+        context: Optional[Dict[str, Any]] = None,
+        understanding: Optional[Dict[str, Any]] = None
+    ) -> Dict[str, List[Any]]:
+        """
+        Generically extracts all mechanism specifications (loot tables,
+        functions, function tags, advancements) from the planner, context,
+        and understanding structures.
+        """
+        loot_modifications: List[LootTableModification] = []
+        functions: List[FunctionDefinition] = []
+        tags: List[FunctionTagDefinition] = []
+        advancements: List[AdvancementDefinition] = []
+
+        # 0. Check for explicit specifications directly in plan
+        if plan:
+            if plan.get("modifications"):
+                for raw in plan["modifications"]:
+                    if isinstance(raw, LootTableModification):
+                        loot_modifications.append(raw)
+                    elif isinstance(raw, dict):
+                        loot_modifications.append(LootTableModification(**raw))
+
+            if plan.get("functions"):
+                for raw in plan["functions"]:
+                    if isinstance(raw, FunctionDefinition):
+                        functions.append(raw)
+                    elif isinstance(raw, dict):
+                        functions.append(FunctionDefinition(**raw))
+
+            if plan.get("tags"):
+                for raw in plan["tags"]:
+                    if isinstance(raw, FunctionTagDefinition):
+                        tags.append(raw)
+                    elif isinstance(raw, dict):
+                        tags.append(FunctionTagDefinition(**raw))
+
+            if plan.get("advancements"):
+                for raw in plan["advancements"]:
+                    if isinstance(raw, AdvancementDefinition):
+                        advancements.append(raw)
+                    elif isinstance(raw, dict):
+                        advancements.append(AdvancementDefinition(**raw))
+
+            if loot_modifications or functions or tags or advancements:
+                return {
+                    "loot_modifications": loot_modifications,
+                    "functions": functions,
+                    "tags": tags,
+                    "advancements": advancements
+                }
+
+        # 1. Inspect planner implementation_plan
+        implementation_plan = (
+            plan.get("implementation_plan", []) if plan else []
+        )
+
+        has_loot_mech = False
+        has_func_mech = False
+        has_tick_tag_mech = False
+        has_load_tag_mech = False
+        has_adv_mech = False
+
+        for ip in implementation_plan:
+            for mech in ip.get("mechanisms", []):
+                mech_type = str(mech.get("type", "")).lower()
+                if any(t in mech_type for t in ["loot", "drop", "table"]):
+                    has_loot_mech = True
+                if any(t in mech_type for t in ["function", "mcfunction", "command", "tick", "load", "effect", "scoreboard"]):
+                    has_func_mech = True
+                if "tick" in mech_type:
+                    has_tick_tag_mech = True
+                if "load" in mech_type or "init" in mech_type:
+                    has_load_tag_mech = True
+                if any(t in mech_type for t in ["advancement", "trigger"]):
+                    has_adv_mech = True
+
+        # Requirements from understanding or context
+        requirements = []
+        if understanding and "requirements" in understanding:
+            requirements = understanding.get("requirements", [])
+        elif context and "requirements" in context:
+            requirements = context.get("requirements", [])
+
+        # Fallback inspection on requirements if planner didn't specify mechanism
+        if not (has_loot_mech or has_func_mech or has_adv_mech) and requirements:
+            for req in requirements:
+                intent = str(req.get("intent", "")).lower()
+                desc = str(req.get("description", "")).lower()
+                if any(t in intent or t in desc for t in ["drop", "loot"]):
+                    has_loot_mech = True
+                elif any(t in intent or t in desc for t in ["effect", "command", "give", "teleport", "speed", "title", "say"]):
+                    has_func_mech = True
+                    if any(t in desc or t in intent for t in ["every tick", "tick", "loop", "always", "constant"]):
+                        has_tick_tag_mech = True
+                elif any(t in intent or t in desc for t in ["advancement", "achievement"]):
+                    has_adv_mech = True
+
+        # Loot modifications extraction
+        if has_loot_mech:
+            loot_modifications = self.extract_loot_modifications(
+                plan=plan,
+                context=context,
+                understanding=understanding
+            )
+
+        # Functions & Tags extraction
+        if has_func_mech:
+            extracted_commands: List[str] = []
+            func_name = "main"
+
+            # Check steps in implementation_plan
+            for ip in implementation_plan:
+                for step in ip.get("steps", []):
+                    # Check for explicit commands in step
+                    if "commands" in step and isinstance(step["commands"], list):
+                        extracted_commands.extend([str(c) for c in step["commands"]])
+                    elif "command" in step:
+                        extracted_commands.append(str(step["command"]))
+                    else:
+                        action = str(step.get("action", "")).strip()
+                        first_word = action.split()[0].lstrip("/").lower() if action else ""
+                        known_command_roots = {
+                            "effect", "give", "execute", "scoreboard", "title", "say", "tellraw",
+                            "playsound", "particle", "attribute", "tag", "team", "teleport", "tp",
+                            "weather", "time", "gamemode", "difficulty", "clear", "kill"
+                        }
+                        if first_word in known_command_roots:
+                            extracted_commands.append(action.lstrip("/"))
+
+            # If no commands extracted from steps, derive generically from requirements
+            if not extracted_commands:
+                for req in requirements:
+                    intent = str(req.get("intent", "")).lower()
+                    target = str(req.get("target", "@a"))
+                    if "all player" in target.lower():
+                        target = "@a"
+                    elif "player" in target.lower() and not target.startswith("@"):
+                        target = "@p"
+
+                    details_dict = {}
+                    for d in req.get("details", []):
+                        if isinstance(d, dict):
+                            details_dict[str(d.get("name", "")).lower()] = d.get("value")
+
+                    if "effect" in intent or "effect" in details_dict or any("effect" in str(d.get("name", "")).lower() for d in req.get("details", [])):
+                        effect_name = details_dict.get("effect") or details_dict.get("type") or "speed"
+                        if not str(effect_name).startswith("minecraft:"):
+                            effect_name = f"minecraft:{effect_name}"
+                        duration = details_dict.get("duration", 10)
+                        amplifier = details_dict.get("amplifier", details_dict.get("level", 1))
+                        try:
+                            amp_int = max(0, int(amplifier) - 1)
+                        except (ValueError, TypeError):
+                            amp_int = 0
+                        extracted_commands.append(f"effect give {target} {effect_name} {duration} {amp_int} true")
+
+            if extracted_commands:
+                if has_tick_tag_mech:
+                    func_name = "tick"
+                elif has_load_tag_mech:
+                    func_name = "load"
+
+                default_ns = "minecraft_ai"
+                functions.append(
+                    FunctionDefinition(
+                        function_path=func_name,
+                        commands=extracted_commands,
+                        namespace=default_ns,
+                        description="Generated function"
+                    )
+                )
+
+                if has_tick_tag_mech:
+                    tags.append(
+                        FunctionTagDefinition(
+                            tag_name="tick",
+                            values=[f"{default_ns}:{func_name}"],
+                            namespace="minecraft"
+                        )
+                    )
+                if has_load_tag_mech:
+                    tags.append(
+                        FunctionTagDefinition(
+                            tag_name="load",
+                            values=[f"{default_ns}:{func_name}"],
+                            namespace="minecraft"
+                        )
+                    )
+
+        # Advancements extraction
+        if has_adv_mech:
+            adv_path = "root"
+            criteria = {
+                "requirement": {
+                    "trigger": "minecraft:tick"
+                }
+            }
+            advancements.append(
+                AdvancementDefinition(
+                    advancement_path=adv_path,
+                    criteria=criteria,
+                    namespace="minecraft_ai"
+                )
+            )
+
+        return {
+            "loot_modifications": loot_modifications,
+            "functions": functions,
+            "tags": tags,
+            "advancements": advancements
+        }
+
     def generate(
         self,
         plan: Optional[Dict[str, Any]] = None,
         context: Optional[Dict[str, Any]] = None,
         understanding: Optional[Dict[str, Any]] = None,
         modifications: Optional[List[LootTableModification]] = None,
+        functions: Optional[List[FunctionDefinition]] = None,
+        tags: Optional[List[FunctionTagDefinition]] = None,
+        advancements: Optional[List[AdvancementDefinition]] = None,
         datapack_name: Optional[str] = None,
         description: Optional[str] = None,
         create_zip: bool = True,
         clean: bool = True
     ) -> GenerationResult:
         """
-        Deterministically generates a complete Minecraft Java 1.21.11 datapack.
+        Deterministically generates a complete Minecraft Java 1.21.11 datapack
+        using the requested implementation mechanisms.
         """
-        # Resolve modifications
-        if modifications is None:
-            modifications = self.extract_loot_modifications(
+        loot_mods: List[LootTableModification] = list(modifications) if modifications is not None else []
+        funcs: List[FunctionDefinition] = list(functions) if functions is not None else []
+        tag_defs: List[FunctionTagDefinition] = list(tags) if tags is not None else []
+        adv_defs: List[AdvancementDefinition] = list(advancements) if advancements is not None else []
+
+        # If no explicit mechanism parameters provided, extract generically
+        if (
+            modifications is None
+            and functions is None
+            and tags is None
+            and advancements is None
+        ):
+            extracted = self.extract_mechanisms(
                 plan=plan,
                 context=context,
                 understanding=understanding
             )
+            loot_mods = extracted["loot_modifications"]
+            funcs = extracted["functions"]
+            tag_defs = extracted["tags"]
+            adv_defs = extracted["advancements"]
 
-        if not modifications:
+        if not (loot_mods or funcs or tag_defs or adv_defs):
             raise ValueError(
-                "No valid modifications could be determined from the plan and context."
+                "No valid modifications or mechanisms could be determined from the plan and context."
             )
 
         # Resolve datapack name
@@ -185,11 +444,17 @@ class DatapackGenerator:
                 datapack_name = slugify(understanding["understood_request"])
             elif plan and plan.get("summary"):
                 datapack_name = slugify(plan["summary"])
-            elif modifications:
-                first_mod = modifications[0]
+            elif loot_mods:
+                first_mod = loot_mods[0]
                 table_stem = Path(first_mod.loot_table_path).stem
                 item_stem = first_mod.item.split(":")[-1]
                 datapack_name = f"{table_stem}_drop_{item_stem}"
+            elif funcs:
+                first_func = funcs[0]
+                datapack_name = f"{first_func.function_path}_datapack"
+            elif adv_defs:
+                first_adv = adv_defs[0]
+                datapack_name = f"{first_adv.advancement_path}_datapack"
             else:
                 datapack_name = "minecraft_datapack"
 
@@ -209,9 +474,9 @@ class DatapackGenerator:
 
         files_generated: List[str] = []
 
-        # 1. Write pack.mcmeta
+        # 1. Write pack.mcmeta (Minecraft Java 1.21.11 major pack format 94)
         manifest = DatapackManifest(
-            pack_format=94,  # Minecraft Java 1.21.11 major pack format
+            pack_format=94,
             min_format=[94, 0],
             max_format=[94, 1],  # Minecraft Java 1.21.11 data pack version 94.1
             description=description
@@ -235,22 +500,32 @@ class DatapackGenerator:
             f.write(mcmeta_content)
         files_generated.append("pack.mcmeta")
 
-        # 2. Write loot tables under data/minecraft/loot_table/ (1.21+ convention)
-        data_dir = datapack_dir / "data" / "minecraft" / "loot_table"
+        # 2. Collect and write all resources from mechanism generators
+        resources: List[DatapackResource] = []
 
-        for mod in modifications:
-            modified_table = self.loot_generator.modify_loot_table(mod)
-            clean_rel = self.loot_generator._normalize_path(mod.loot_table_path)
+        # Loot table modifications
+        for mod in loot_mods:
+            resources.extend(self.loot_mech.generate(mod))
 
-            target_file = data_dir / clean_rel
+        # Functions
+        for func in funcs:
+            resources.extend(self.function_mech.generate(func))
+
+        # Function Tags
+        for tag in tag_defs:
+            resources.extend(self.tag_mech.generate(tag))
+
+        # Advancements
+        for adv in adv_defs:
+            resources.extend(self.advancement_mech.generate(adv))
+
+        # Deterministically write all resource files
+        for res in resources:
+            target_file = datapack_dir / res.relative_path
             target_file.parent.mkdir(parents=True, exist_ok=True)
-
-            content = self.loot_generator.serialize_loot_table(modified_table)
             with open(target_file, "w", encoding="utf-8", newline="\n") as f:
-                f.write(content)
-
-            rel_datapack_path = f"data/minecraft/loot_table/{clean_rel}"
-            files_generated.append(rel_datapack_path)
+                f.write(res.content)
+            files_generated.append(res.relative_path)
 
         # 3. Create deterministic ZIP archive if requested
         zip_path: Optional[Path] = None
@@ -294,6 +569,9 @@ def generate_datapack(
     context: Optional[Dict[str, Any]] = None,
     understanding: Optional[Dict[str, Any]] = None,
     modifications: Optional[List[LootTableModification]] = None,
+    functions: Optional[List[FunctionDefinition]] = None,
+    tags: Optional[List[FunctionTagDefinition]] = None,
+    advancements: Optional[List[AdvancementDefinition]] = None,
     output_dir: Optional[Path] = None,
     datapack_name: Optional[str] = None,
     description: Optional[str] = None,
@@ -308,7 +586,11 @@ def generate_datapack(
         context=context,
         understanding=understanding,
         modifications=modifications,
+        functions=functions,
+        tags=tags,
+        advancements=advancements,
         datapack_name=datapack_name,
         description=description,
         create_zip=create_zip
     )
+

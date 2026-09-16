@@ -30,6 +30,9 @@ class DatapackValidator:
         # Load valid item IDs from knowledge
         self.valid_items = self._load_valid_items()
 
+        # Load valid command roots from knowledge
+        self.valid_commands = self._load_valid_commands()
+
         # Vanilla loot tables base directory
         self.vanilla_loot_dir = (
             self.base_dir
@@ -39,6 +42,48 @@ class DatapackValidator:
             / self.version
             / "tables"
         )
+
+    def _load_valid_commands(self) -> Set[str]:
+        """
+        Loads all valid Minecraft command root names for 1.21.11 from knowledge assets.
+        """
+        commands_path = (
+            self.base_dir
+            / "knowledge"
+            / "commands"
+            / "java"
+            / self.version
+            / "commands.jsonl"
+        )
+        commands: Set[str] = set()
+        if commands_path.exists():
+            try:
+                with open(commands_path, "r", encoding="utf-8") as f:
+                    for line in f:
+                        line = line.strip()
+                        if line:
+                            entry = json.loads(line)
+                            cmd = entry.get("command")
+                            if cmd:
+                                commands.add(cmd.lower())
+            except Exception:
+                pass
+
+        if not commands:
+            commands = {
+                "advancement", "attribute", "ban", "ban-ip", "banlist", "bossbar",
+                "clear", "clone", "damage", "data", "datapack", "debug", "defaultgamemode",
+                "deop", "difficulty", "effect", "enchant", "execute", "experience", "fill",
+                "fillbiome", "forceload", "function", "gamemode", "gamerule", "give",
+                "help", "item", "jfr", "kick", "kill", "list", "locate", "loot", "me",
+                "msg", "op", "pardon", "pardon-ip", "particle", "perf", "place", "playsound",
+                "publish", "recipe", "reload", "return", "ride", "say", "schedule", "scoreboard",
+                "seed", "setblock", "setidletimeout", "setworldspawn", "spawnpoint", "spectate",
+                "spreadplayers", "stop", "stopsound", "summon", "tag", "team", "teammsg",
+                "teleport", "tell", "tellraw", "tick", "time", "title", "tm", "tp", "trigger",
+                "w", "weather", "whitelist", "worldborder", "xp"
+            }
+        return commands
 
     def _load_valid_items(self) -> Set[str]:
         """
@@ -305,31 +350,38 @@ class DatapackValidator:
                 )
             )
 
-        # Check for obsolete 1.20- plural 'loot_tables' directory
+        # Check for obsolete 1.20- plural directories ('loot_tables', 'functions', 'tags/functions', 'advancements')
         if data_dir.exists():
             for ns_dir in data_dir.iterdir():
                 if ns_dir.is_dir():
-                    obsolete_loot = ns_dir / "loot_tables"
-                    if obsolete_loot.exists():
-                        errors.append(
-                            ValidationIssue(
-                                level="error",
-                                code="OBSOLETE_PATH",
-                                message=(
-                                    f"Found legacy plural path '{obsolete_loot.relative_to(dir_path)}'. "
-                                    f"Minecraft 1.21+ requires singular 'data/{ns_dir.name}/loot_table/'."
-                                ),
-                                file=str(obsolete_loot.relative_to(dir_path))
+                    obsolete_paths = [
+                        (ns_dir / "loot_tables", f"data/{ns_dir.name}/loot_table/"),
+                        (ns_dir / "functions", f"data/{ns_dir.name}/function/"),
+                        (ns_dir / "tags" / "functions", f"data/{ns_dir.name}/tags/function/"),
+                        (ns_dir / "advancements", f"data/{ns_dir.name}/advancement/"),
+                    ]
+                    for obsolete_path, required_singular in obsolete_paths:
+                        if obsolete_path.exists():
+                            rel_obs = str(obsolete_path.relative_to(dir_path))
+                            errors.append(
+                                ValidationIssue(
+                                    level="error",
+                                    code="OBSOLETE_PATH",
+                                    message=(
+                                        f"Found legacy plural path '{rel_obs}'. "
+                                        f"Minecraft 1.21+ requires singular '{required_singular}'."
+                                    ),
+                                    file=rel_obs
+                                )
                             )
-                        )
-                        checks.append(
-                            ValidationCheck(
-                                name="1.21+ Singular Path Convention",
-                                passed=False,
-                                message="Found legacy plural 'loot_tables' directory",
-                                file=str(obsolete_loot.relative_to(dir_path))
+                            checks.append(
+                                ValidationCheck(
+                                    name="1.21+ Singular Path Convention",
+                                    passed=False,
+                                    message=f"Found legacy plural directory: {rel_obs}",
+                                    file=rel_obs
+                                )
                             )
-                        )
 
         # ---------------------------------------------------------
         # 2. pack.mcmeta Validation
@@ -703,6 +755,174 @@ class DatapackValidator:
                     name="Loot Table Structure & Identifier Check",
                     passed=loot_checks_passed,
                     message=f"Validated {len(loot_table_files)} loot table file(s)"
+                )
+            )
+
+        # ---------------------------------------------------------
+        # 6. Function (.mcfunction) Validation
+        # ---------------------------------------------------------
+        function_files = list(dir_path.rglob("*.mcfunction"))
+        func_errors = 0
+
+        for func_file in function_files:
+            rel_path = func_file.relative_to(dir_path).as_posix()
+            try:
+                with open(func_file, "r", encoding="utf-8") as f:
+                    lines = f.readlines()
+
+                for line_idx, raw_line in enumerate(lines, start=1):
+                    line = raw_line.strip()
+                    if not line or line.startswith("#"):
+                        continue
+
+                    # Commands in mcfunction files MUST NOT have leading slash
+                    if line.startswith("/"):
+                        errors.append(
+                            ValidationIssue(
+                                level="error",
+                                code="LEADING_SLASH_IN_FUNCTION",
+                                message=(
+                                    f"Command at line {line_idx} must not start with '/': '{line}'"
+                                ),
+                                file=rel_path
+                            )
+                        )
+                        func_errors += 1
+
+                    # Command root check
+                    first_token = line.lstrip("/").split()[0].lower() if line.lstrip("/").split() else ""
+                    if self.valid_commands and first_token and first_token not in self.valid_commands:
+                        warnings.append(
+                            ValidationIssue(
+                                level="warning",
+                                code="UNKNOWN_COMMAND",
+                                message=(
+                                    f"Command root '{first_token}' at line {line_idx} is not a known Minecraft command."
+                                ),
+                                file=rel_path
+                            )
+                        )
+            except Exception as e:
+                errors.append(
+                    ValidationIssue(
+                        level="error",
+                        code="FUNCTION_READ_ERROR",
+                        message=f"Error reading mcfunction file: {e}",
+                        file=rel_path
+                    )
+                )
+                func_errors += 1
+
+        if function_files:
+            checks.append(
+                ValidationCheck(
+                    name="Function Syntax Check",
+                    passed=(func_errors == 0),
+                    message=f"Validated {len(function_files)} mcfunction file(s)"
+                )
+            )
+
+        # ---------------------------------------------------------
+        # 7. Function Tag Validation (data/<ns>/tags/function/*.json)
+        # ---------------------------------------------------------
+        tag_files = [
+            f for f in json_files
+            if "tags" in f.parts and "function" in f.parts and f.name != "pack.mcmeta"
+        ]
+        tag_errors = 0
+
+        for tag_file in tag_files:
+            rel_path = tag_file.relative_to(dir_path).as_posix()
+            tag_data = parsed_json_cache.get(tag_file)
+
+            if not isinstance(tag_data, dict):
+                errors.append(
+                    ValidationIssue(
+                        level="error",
+                        code="MALFORMED_TAG",
+                        message="Function tag root must be a JSON object.",
+                        file=rel_path
+                    )
+                )
+                tag_errors += 1
+                continue
+
+            values = tag_data.get("values")
+            if values is None or not isinstance(values, list):
+                errors.append(
+                    ValidationIssue(
+                        level="error",
+                        code="MALFORMED_TAG",
+                        message="Function tag missing required 'values' list.",
+                        file=rel_path
+                    )
+                )
+                tag_errors += 1
+            else:
+                for idx, val in enumerate(values):
+                    if not isinstance(val, str) and not (isinstance(val, dict) and "id" in val):
+                        errors.append(
+                            ValidationIssue(
+                                level="error",
+                                code="MALFORMED_TAG",
+                                message=f"Tag value at index {idx} must be a string or object with 'id'.",
+                                file=rel_path
+                            )
+                        )
+                        tag_errors += 1
+
+        if tag_files:
+            checks.append(
+                ValidationCheck(
+                    name="Function Tag Validation",
+                    passed=(tag_errors == 0),
+                    message=f"Validated {len(tag_files)} function tag file(s)"
+                )
+            )
+
+        # ---------------------------------------------------------
+        # 8. Advancement Validation (data/<ns>/advancement/*.json)
+        # ---------------------------------------------------------
+        advancement_files = [
+            f for f in json_files
+            if "advancement" in f.parts and f.name != "pack.mcmeta"
+        ]
+        adv_errors = 0
+
+        for adv_file in advancement_files:
+            rel_path = adv_file.relative_to(dir_path).as_posix()
+            adv_data = parsed_json_cache.get(adv_file)
+
+            if not isinstance(adv_data, dict):
+                errors.append(
+                    ValidationIssue(
+                        level="error",
+                        code="MALFORMED_ADVANCEMENT",
+                        message="Advancement root must be a JSON object.",
+                        file=rel_path
+                    )
+                )
+                adv_errors += 1
+                continue
+
+            criteria = adv_data.get("criteria")
+            if criteria is None or not isinstance(criteria, dict) or len(criteria) == 0:
+                errors.append(
+                    ValidationIssue(
+                        level="error",
+                        code="MALFORMED_ADVANCEMENT",
+                        message="Advancement missing required non-empty 'criteria' object.",
+                        file=rel_path
+                    )
+                )
+                adv_errors += 1
+
+        if advancement_files:
+            checks.append(
+                ValidationCheck(
+                    name="Advancement Validation",
+                    passed=(adv_errors == 0),
+                    message=f"Validated {len(advancement_files)} advancement file(s)"
                 )
             )
 

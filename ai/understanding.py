@@ -376,6 +376,21 @@ Understand the user's intent.
         # Ensure optional clarification is properly represented.
         if result.get("clarification") is None:
             result["clarification"] = None
+        elif isinstance(result.get("clarification"), dict):
+            clar = result["clarification"]
+            options = clar.get("options")
+            if options is not None:
+                if isinstance(options, dict):
+                    flat_opts = []
+                    for k, v in options.items():
+                        flat_opts.append(f"{k}: {v}" if v else str(k))
+                    clar["options"] = flat_opts
+                elif isinstance(options, list):
+                    clar["options"] = [str(opt) for opt in options]
+                elif isinstance(options, str):
+                    clar["options"] = [options]
+                else:
+                    clar["options"] = []
 
         # Ensure missing_information is always a list.
         missing = result.get("missing_information")

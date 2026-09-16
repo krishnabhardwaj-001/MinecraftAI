@@ -36,6 +36,102 @@ class LootTableModification(BaseModel):
     )
 
 
+class DatapackResource(BaseModel):
+    """
+    Represents an individual generated datapack file.
+    """
+    model_config = ConfigDict(extra="allow")
+
+    relative_path: str = Field(
+        ...,
+        description="Relative path inside datapack (e.g. 'data/minecraft/function/main.mcfunction')"
+    )
+    content: Union[str, bytes] = Field(
+        ...,
+        description="Text (UTF-8) or binary content of the resource"
+    )
+    resource_type: str = Field(
+        default="generic",
+        description="Resource category (e.g. 'loot_table', 'function', 'tag', 'advancement')"
+    )
+
+
+class FunctionDefinition(BaseModel):
+    """
+    Specification for a Minecraft .mcfunction resource.
+    """
+    model_config = ConfigDict(extra="allow")
+
+    function_path: str = Field(
+        ...,
+        description="Relative function path without .mcfunction extension (e.g. 'main' or 'tick')"
+    )
+    commands: List[str] = Field(
+        default_factory=list,
+        description="List of Minecraft commands to execute in this function"
+    )
+    namespace: str = Field(
+        default="minecraft",
+        description="Datapack namespace (default: 'minecraft')"
+    )
+    description: Optional[str] = Field(
+        default=None,
+        description="Optional comment header description for the function"
+    )
+
+
+class FunctionTagDefinition(BaseModel):
+    """
+    Specification for a function tag JSON resource (e.g. tick.json, load.json).
+    """
+    model_config = ConfigDict(extra="allow")
+
+    tag_name: str = Field(
+        ...,
+        description="Tag identifier without .json extension (e.g. 'tick' or 'load')"
+    )
+    values: List[str] = Field(
+        default_factory=list,
+        description="Function names or tag references (e.g. ['minecraft:tick'])"
+    )
+    namespace: str = Field(
+        default="minecraft",
+        description="Tag namespace (default: 'minecraft')"
+    )
+    replace: bool = Field(
+        default=False,
+        description="Whether this tag overrides previous values"
+    )
+
+
+class AdvancementDefinition(BaseModel):
+    """
+    Specification for an advancement JSON resource.
+    """
+    model_config = ConfigDict(extra="allow")
+
+    advancement_path: str = Field(
+        ...,
+        description="Relative advancement path without .json extension (e.g. 'kill_creeper')"
+    )
+    criteria: Dict[str, Any] = Field(
+        default_factory=dict,
+        description="Criteria and triggers for the advancement"
+    )
+    rewards: Dict[str, Any] = Field(
+        default_factory=dict,
+        description="Rewards awarded upon completion (e.g. function, experience, loot)"
+    )
+    namespace: str = Field(
+        default="minecraft",
+        description="Advancement namespace (default: 'minecraft')"
+    )
+    display: Optional[Dict[str, Any]] = Field(
+        default=None,
+        description="Optional advancement display information"
+    )
+
+
 class DatapackManifest(BaseModel):
     model_config = ConfigDict(extra="allow")
 
