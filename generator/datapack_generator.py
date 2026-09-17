@@ -11,6 +11,7 @@ from generator.mechanisms import (
     FunctionMechanismGenerator,
     FunctionTagMechanismGenerator,
     LootTableMechanismGenerator,
+    PredicateMechanismGenerator,
     RecipeMechanismGenerator,
 )
 from generator.models import (
@@ -22,6 +23,7 @@ from generator.models import (
     GenerationResult,
     LootTableModification,
     MechanismSpecification,
+    PredicateDefinition,
     RecipeDefinition,
 )
 
@@ -61,6 +63,7 @@ class DatapackGenerator:
         self.tag_mech = FunctionTagMechanismGenerator()
         self.advancement_mech = AdvancementMechanismGenerator()
         self.recipe_mech = RecipeMechanismGenerator(version=version)
+        self.predicate_mech = PredicateMechanismGenerator(version=version)
 
     def extract_loot_modifications(
         self,
@@ -198,11 +201,13 @@ class DatapackGenerator:
         tags: List[FunctionTagDefinition] = []
         advancements: List[AdvancementDefinition] = []
         recipes: List[RecipeDefinition] = []
+        predicates: List[PredicateDefinition] = []
 
         # 0. Check for explicit specifications directly in plan
         if plan:
-            if plan.get("modifications"):
-                for raw in plan["modifications"]:
+            raw_mods = plan.get("modifications") or plan.get("loot_modifications")
+            if raw_mods:
+                for raw in raw_mods:
                     if isinstance(raw, LootTableModification):
                         loot_modifications.append(raw)
                     elif isinstance(raw, dict):
@@ -236,13 +241,21 @@ class DatapackGenerator:
                     elif isinstance(raw, dict):
                         recipes.append(RecipeDefinition(**raw))
 
-            if loot_modifications or functions or tags or advancements or recipes:
+            if plan.get("predicates"):
+                for raw in plan["predicates"]:
+                    if isinstance(raw, PredicateDefinition):
+                        predicates.append(raw)
+                    elif isinstance(raw, dict):
+                        predicates.append(PredicateDefinition(**raw))
+
+            if loot_modifications or functions or tags or advancements or recipes or predicates:
                 return {
                     "loot_modifications": loot_modifications,
                     "functions": functions,
                     "tags": tags,
                     "advancements": advancements,
-                    "recipes": recipes
+                    "recipes": recipes,
+                    "predicates": predicates
                 }
 
         # 1. Direct consumption from structured MechanismSpecification in implementation_plan
@@ -257,7 +270,8 @@ class DatapackGenerator:
                     has_structured_fields = any(
                         k in raw_mech for k in [
                             "target", "item", "commands", "values", "tag_name", "criteria", "rewards",
-                            "result_item", "recipe_type", "ingredients", "pattern", "key"
+                            "result_item", "recipe_type", "ingredients", "pattern", "key",
+                            "condition_type", "condition_params", "predicate_path"
                         ]
                     )
                     if has_structured_fields:
@@ -283,14 +297,18 @@ class DatapackGenerator:
                     elif any(t in m_type for t in ["recipe", "crafting", "crafting_shaped", "crafting_shapeless", "smelting", "blasting", "smoking", "campfire_cooking", "stonecutting"]) or "recipe" in m_type:
                         if spec.result_item or spec.item:
                             recipes.append(spec.to_recipe_definition())
+                    elif any(t in m_type for t in ["predicate", "custom_predicate", "condition"]):
+                        if spec.condition_type or spec.condition_params or spec.terms or spec.term or spec.path:
+                            predicates.append(spec.to_predicate_definition())
 
-        if loot_modifications or functions or tags or advancements or recipes:
+        if loot_modifications or functions or tags or advancements or recipes or predicates:
             return {
                 "loot_modifications": loot_modifications,
                 "functions": functions,
                 "tags": tags,
                 "advancements": advancements,
-                "recipes": recipes
+                "recipes": recipes,
+                "predicates": predicates
             }
 
         # 2. Fallback heuristic inspection for minimal or legacy plans
@@ -448,7 +466,8 @@ class DatapackGenerator:
             "functions": functions,
             "tags": tags,
             "advancements": advancements,
-            "recipes": recipes
+            "recipes": recipes,
+            "predicates": predicates
         }
 
     def generate(
@@ -461,6 +480,7 @@ class DatapackGenerator:
         tags: Optional[List[FunctionTagDefinition]] = None,
         advancements: Optional[List[AdvancementDefinition]] = None,
         recipes: Optional[List[RecipeDefinition]] = None,
+        predicates: Optional[List[PredicateDefinition]] = None,
         datapack_name: Optional[str] = None,
         description: Optional[str] = None,
         create_zip: bool = True,
@@ -475,6 +495,7 @@ class DatapackGenerator:
         tag_defs: List[FunctionTagDefinition] = list(tags) if tags is not None else []
         adv_defs: List[AdvancementDefinition] = list(advancements) if advancements is not None else []
         rec_defs: List[RecipeDefinition] = list(recipes) if recipes is not None else []
+        pred_defs: List[PredicateDefinition] = list(predicates) if predicates is not None else []
 
         # If no explicit mechanism parameters provided, extract generically
         if (
@@ -483,6 +504,7 @@ class DatapackGenerator:
             and tags is None
             and advancements is None
             and recipes is None
+            and predicates is None
         ):
             extracted = self.extract_mechanisms(
                 plan=plan,
@@ -494,8 +516,9 @@ class DatapackGenerator:
             tag_defs = extracted["tags"]
             adv_defs = extracted["advancements"]
             rec_defs = extracted.get("recipes", [])
+            pred_defs = extracted.get("predicates", [])
 
-        if not (loot_mods or funcs or tag_defs or adv_defs or rec_defs):
+        if not (loot_mods or funcs or tag_defs or adv_defs or rec_defs or pred_defs):
             raise ValueError(
                 "No valid modifications or mechanisms could be determined from the plan and context."
             )
@@ -520,6 +543,9 @@ class DatapackGenerator:
             elif rec_defs:
                 first_rec = rec_defs[0]
                 datapack_name = f"{first_rec.recipe_path}_datapack"
+            elif pred_defs:
+                first_pred = pred_defs[0]
+                datapack_name = f"{first_pred.predicate_path}_datapack"
             else:
                 datapack_name = "minecraft_datapack"
 
@@ -588,6 +614,10 @@ class DatapackGenerator:
         for rec in rec_defs:
             resources.extend(self.recipe_mech.generate(rec))
 
+        # Predicates
+        for pred in pred_defs:
+            resources.extend(self.predicate_mech.generate(pred))
+
         # Deterministically write all resource files
         for res in resources:
             target_file = datapack_dir / res.relative_path
@@ -642,6 +672,7 @@ def generate_datapack(
     tags: Optional[List[FunctionTagDefinition]] = None,
     advancements: Optional[List[AdvancementDefinition]] = None,
     recipes: Optional[List[RecipeDefinition]] = None,
+    predicates: Optional[List[PredicateDefinition]] = None,
     output_dir: Optional[Path] = None,
     datapack_name: Optional[str] = None,
     description: Optional[str] = None,
@@ -660,6 +691,7 @@ def generate_datapack(
         tags=tags,
         advancements=advancements,
         recipes=recipes,
+        predicates=predicates,
         datapack_name=datapack_name,
         description=description,
         create_zip=create_zip

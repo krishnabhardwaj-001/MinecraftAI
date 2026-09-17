@@ -118,6 +118,13 @@ RULES:
 20. Do not turn general Minecraft concepts into fake commands.
 21. Low-level JSON syntax details (like pool condition format) are handled by the generator; if the required entity and item knowledge is present, mark the plan as 'ready' rather than 'missing_knowledge'.
 22. For standard mob drop requests (e.g. 'Make every creeper drop diamonds'), default to adding the item drop to the mob loot table alongside default drops. Do not ask for clarification regarding keeping or replacing default drops unless the user explicitly mentions default drops.
+23. For predicate requests, if the predicate condition type is available in retrieved knowledge (under 'predicates') or supported Minecraft conditions, populate the structured predicate mechanism with type 'predicate' and mark status as 'ready'.
+24. For state-machine and event-trigger requests (e.g. 'only once when X starts', 'when X begins', 'on state change'):
+    - Distinguish GLOBAL environmental conditions (e.g. weather, daytime/night, world events) from PER-PLAYER conditions (e.g. player sneaking, health, inventory).
+    - For global environmental conditions, track state using a persistent global dummy player (e.g. '#global' or '#state') in a scoreboard objective, NOT per-player selectors (@a). Initialize it in load.mcfunction (e.g. 'scoreboard players set #global <obj> 0'), check transition on tick (e.g. 'execute if score #global <obj> matches 0 if predicate <pred> as @a run ...'), update state ('execute if predicate <pred> run scoreboard players set #global <obj> 1'), and reset state ('execute unless predicate <pred> run scoreboard players set #global <obj> 0').
+    - NEVER use player selectors (@a, @p, @r, @s, @e) in load.mcfunction for scoreboard initialization because #minecraft:load runs during world startup when NO players are online.
+    - For genuine per-player state machines, initialize uninitialized players safely in the tick loop (e.g. 'execute as @a unless score @s <obj> matches 0..1 run scoreboard players set @s <obj> 0') before evaluating scores.
+25. For player execution contexts in functions, always pair 'as @a at @s' when entity location, dimension, or local coordinates are relevant.
 
 STRUCTURED MECHANISM SPECIFICATIONS:
 Each entry in "mechanisms" should specify a "type" and its structured parameters:
@@ -157,6 +164,20 @@ Each entry in "mechanisms" should specify a "type" and its structured parameters
    - "ingredients": list of ingredient item IDs for shapeless/smelting (e.g. ["minecraft:dirt"])
    - "pattern": list of row strings for shaped (e.g. ["X", "#"])
    - "key": dictionary mapping characters to item IDs for shaped (e.g. {{"#": "minecraft:stick", "X": "minecraft:diamond"}})
+
+6. Predicate Mechanism:
+   - "type": "predicate"
+   - "namespace": datapack namespace (e.g. "minecraft_ai")
+   - "path": predicate file name without extension (e.g. "is_raining", "is_sneaking", "lucky_chance")
+   - "condition_type": predicate condition ID (e.g. "minecraft:weather_check", "minecraft:time_check", "minecraft:random_chance", "minecraft:entity_properties", "minecraft:match_tool", "minecraft:all_of", "minecraft:any_of", "minecraft:inverted")
+   - "condition_params": dictionary of condition-specific parameters:
+     * for "minecraft:weather_check": {{"raining": true}} or {{"thundering": true}}
+     * for "minecraft:time_check": {{"value": {{"min": 13000, "max": 24000}}}} (or integer value)
+     * for "minecraft:random_chance": {{"chance": 0.5}}
+     * for "minecraft:entity_properties": {{"entity": "this", "predicate": {{"flags": {{"is_sneaking": true}}}}}}
+     * for "minecraft:match_tool": {{"predicate": {{"items": ["minecraft:diamond_sword"]}}}}
+   - "terms": list of nested mechanism dictionaries for composite "minecraft:all_of" or "minecraft:any_of"
+   - "term": single nested mechanism dictionary for "minecraft:inverted"
 
 OUTPUT:
 
@@ -487,7 +508,17 @@ Return only JSON matching the required schema.
                         mech_type = "advancement"
                     elif mech_type in ["crafting", "crafting_shaped", "crafting_shapeless", "smelting", "blasting", "smoking", "recipe_modification"]:
                         mech_type = "recipe"
+                    elif mech_type in ["predicates", "custom_predicate", "predicate_condition"]:
+                        mech_type = "predicate"
                     mech_dict["type"] = mech_type
+
+                    # Normalize predicate condition_type
+                    raw_cond_type = mech_dict.get("condition_type")
+                    if raw_cond_type and isinstance(raw_cond_type, str):
+                        raw_cond_type = raw_cond_type.strip()
+                        if not raw_cond_type.startswith("minecraft:") and ":" not in raw_cond_type:
+                            raw_cond_type = f"minecraft:{raw_cond_type}"
+                        mech_dict["condition_type"] = raw_cond_type
 
                     # Normalize commands (strip leading slash, ensure list of strings)
                     raw_cmds = mech_dict.get("commands")

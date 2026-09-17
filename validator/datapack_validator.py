@@ -1,5 +1,6 @@
 import json
 import os
+import re
 import shutil
 import tempfile
 import zipfile
@@ -11,9 +12,18 @@ from validator.models import ValidationCheck, ValidationIssue, ValidationResult
 
 class DatapackValidator:
     """
-    Deterministic validator for Minecraft Java Edition 1.21.11 datapacks.
-    Validates directory and ZIP structures, JSON correctness, Minecraft 1.21+ path
-    conventions, item IDs against 1.21.11 knowledge, and vanilla drop preservation.
+    Deterministic static validator for Minecraft Java Edition 1.21.11 datapacks.
+    Validates directory and ZIP structures, JSON correctness, Minecraft 1.21+ singular path
+    conventions, item IDs against 1.21.11 knowledge, entity IDs, recipe/predicate schemas,
+    and vanilla drop preservation.
+
+    LIMITATIONS:
+    The DatapackValidator operates as a static, offline validator. It verifies that files,
+    paths, schemas, and identifiers comply with Minecraft 1.21.11 specifications, but it CANNOT
+    simulate runtime game-loop physics (such as the 20-tick linear ramp of rainLevel in
+    ServerLevel.tick()), player connection lifecycles, or runtime command execution results.
+    Runtime state-machine correctness (e.g. edge-triggered events, scoreboard state holders)
+    must be verified against Minecraft runtime semantics and architectural patterns.
     """
 
     EXPECTED_PACK_FORMAT = 94
@@ -32,6 +42,9 @@ class DatapackValidator:
 
         # Load valid command roots from knowledge
         self.valid_commands = self._load_valid_commands()
+
+        # Load valid entity IDs from knowledge
+        self.valid_entities = self._load_valid_entities()
 
         # Vanilla loot tables base directory
         self.vanilla_loot_dir = (
@@ -107,6 +120,35 @@ class DatapackValidator:
 
         try:
             with open(items_path, "r", encoding="utf-8") as f:
+                data = json.load(f)
+
+            if isinstance(data, list):
+                return {item["id"].lower() for item in data if "id" in item}
+            elif isinstance(data, dict):
+                return {k.lower() for k in data.keys()}
+        except Exception:
+            pass
+
+        return set()
+
+    def _load_valid_entities(self) -> Set[str]:
+        """
+        Loads all valid Minecraft entity IDs for 1.21.11 from knowledge assets.
+        """
+        entities_path = (
+            self.base_dir
+            / "knowledge"
+            / "entities"
+            / "java"
+            / self.version
+            / "entities.json"
+        )
+
+        if not entities_path.exists():
+            return set()
+
+        try:
+            with open(entities_path, "r", encoding="utf-8") as f:
                 data = json.load(f)
 
             if isinstance(data, list):
@@ -360,6 +402,7 @@ class DatapackValidator:
                         (ns_dir / "tags" / "functions", f"data/{ns_dir.name}/tags/function/"),
                         (ns_dir / "advancements", f"data/{ns_dir.name}/advancement/"),
                         (ns_dir / "recipes", f"data/{ns_dir.name}/recipe/"),
+                        (ns_dir / "predicates", f"data/{ns_dir.name}/predicate/"),
                     ]
                     for obsolete_path, required_singular in obsolete_paths:
                         if obsolete_path.exists():
@@ -803,6 +846,37 @@ class DatapackValidator:
                                 file=rel_path
                             )
                         )
+
+                    # Check for empty player selectors on load
+                    is_load_fn = (
+                        func_file.name == "load.mcfunction" or
+                        func_file.stem == "load"
+                    )
+                    if is_load_fn:
+                        load_selector_match = re.search(
+                            r"\bscoreboard\s+players\s+(?:set|add|remove|reset|enable)\s+(@[apres])\b",
+                            line,
+                            re.IGNORECASE
+                        ) or re.search(
+                            r"\btag\s+(@[apres])\s+(?:add|remove)\b",
+                            line,
+                            re.IGNORECASE
+                        )
+                        if load_selector_match:
+                            selector_used = load_selector_match.group(1)
+                            warnings.append(
+                                ValidationIssue(
+                                    level="warning",
+                                    code="EMPTY_SELECTOR_ON_LOAD",
+                                    message=(
+                                        f"Command at line {line_idx} modifies score/tag on '{selector_used}' inside a load function. "
+                                        f"#minecraft:load executes during world startup when no players are connected, "
+                                        f"so '{selector_used}' will match 0 entities. Use a global state holder (e.g. '#global') "
+                                        f"or initialize player scores dynamically in the tick loop."
+                                    ),
+                                    file=rel_path
+                                )
+                            )
             except Exception as e:
                 errors.append(
                     ValidationIssue(
@@ -1129,6 +1203,252 @@ class DatapackValidator:
                     name="Recipe Structure & Identifier Check",
                     passed=(recipe_errors == 0),
                     message=f"Validated {len(recipe_files)} recipe file(s)"
+                )
+            )
+
+        # ---------------------------------------------------------
+        # 10. Predicate Validation
+        # ---------------------------------------------------------
+        VALID_CONDITION_TYPES = {
+            "minecraft:all_of",
+            "minecraft:any_of",
+            "minecraft:inverted",
+            "minecraft:weather_check",
+            "minecraft:time_check",
+            "minecraft:random_chance",
+            "minecraft:random_chance_with_enchanted_bonus",
+            "minecraft:entity_properties",
+            "minecraft:killed_by_player",
+            "minecraft:entity_scores",
+            "minecraft:block_state_property",
+            "minecraft:match_tool",
+            "minecraft:table_bonus",
+            "minecraft:survives_explosion",
+            "minecraft:damage_source_properties",
+            "minecraft:location_check",
+            "minecraft:reference",
+            "minecraft:value_check",
+            "minecraft:enchantment_active_check",
+        }
+
+        predicate_files = list(dir_path.glob("data/*/predicate/**/*.json"))
+        predicate_errors = 0
+
+        def _validate_predicate_condition(cond: Any, rel_path: str) -> int:
+            err_count = 0
+            if not isinstance(cond, dict):
+                errors.append(
+                    ValidationIssue(
+                        level="error",
+                        code="MALFORMED_PREDICATE",
+                        message="Predicate condition must be a JSON object.",
+                        file=rel_path
+                    )
+                )
+                return 1
+
+            c_type = cond.get("condition")
+            if not c_type or not isinstance(c_type, str):
+                errors.append(
+                    ValidationIssue(
+                        level="error",
+                        code="MALFORMED_PREDICATE",
+                        message="Predicate condition object missing required 'condition' identifier.",
+                        file=rel_path
+                    )
+                )
+                return 1
+
+            norm_cond = c_type.lower() if c_type.startswith("minecraft:") else f"minecraft:{c_type.lower()}"
+            if norm_cond not in VALID_CONDITION_TYPES:
+                errors.append(
+                    ValidationIssue(
+                        level="error",
+                        code="UNSUPPORTED_PREDICATE_TYPE",
+                        message=f"Unsupported predicate condition type '{c_type}'.",
+                        file=rel_path
+                    )
+                )
+                return 1
+
+            # Check composite terms
+            if norm_cond in ("minecraft:all_of", "minecraft:any_of"):
+                terms = cond.get("terms")
+                if terms is None or not isinstance(terms, list) or len(terms) == 0:
+                    errors.append(
+                        ValidationIssue(
+                            level="error",
+                            code="MALFORMED_PREDICATE",
+                            message=f"Predicate composite '{norm_cond}' requires non-empty 'terms' list.",
+                            file=rel_path
+                        )
+                    )
+                    err_count += 1
+                else:
+                    for t in terms:
+                        err_count += _validate_predicate_condition(t, rel_path)
+
+            elif norm_cond == "minecraft:inverted":
+                term = cond.get("term")
+                if term is None or not isinstance(term, dict):
+                    errors.append(
+                        ValidationIssue(
+                            level="error",
+                            code="MALFORMED_PREDICATE",
+                            message="Predicate 'minecraft:inverted' requires a 'term' condition object.",
+                            file=rel_path
+                        )
+                    )
+                    err_count += 1
+                else:
+                    err_count += _validate_predicate_condition(term, rel_path)
+
+            elif norm_cond == "minecraft:random_chance":
+                chance = cond.get("chance")
+                if chance is None or not isinstance(chance, (int, float)) or not (0.0 <= float(chance) <= 1.0):
+                    errors.append(
+                        ValidationIssue(
+                            level="error",
+                            code="INVALID_PREDICATE_PARAM",
+                            message=f"Predicate 'random_chance' requires 'chance' float between 0.0 and 1.0, got '{chance}'.",
+                            file=rel_path
+                        )
+                    )
+                    err_count += 1
+
+            elif norm_cond == "minecraft:weather_check":
+                raining = cond.get("raining")
+                thundering = cond.get("thundering")
+                if raining is None and thundering is None:
+                    errors.append(
+                        ValidationIssue(
+                            level="error",
+                            code="INVALID_PREDICATE_PARAM",
+                            message="Predicate 'weather_check' requires at least one of 'raining' or 'thundering'.",
+                            file=rel_path
+                        )
+                    )
+                    err_count += 1
+                if raining is not None and not isinstance(raining, bool):
+                    errors.append(
+                        ValidationIssue(
+                            level="error",
+                            code="INVALID_PREDICATE_PARAM",
+                            message="Predicate 'weather_check' field 'raining' must be a boolean.",
+                            file=rel_path
+                        )
+                    )
+                    err_count += 1
+                if thundering is not None and not isinstance(thundering, bool):
+                    errors.append(
+                        ValidationIssue(
+                            level="error",
+                            code="INVALID_PREDICATE_PARAM",
+                            message="Predicate 'weather_check' field 'thundering' must be a boolean.",
+                            file=rel_path
+                        )
+                    )
+                    err_count += 1
+
+            elif norm_cond == "minecraft:match_tool":
+                predicate_obj = cond.get("predicate")
+                if not isinstance(predicate_obj, dict):
+                    errors.append(
+                        ValidationIssue(
+                            level="error",
+                            code="MALFORMED_PREDICATE",
+                            message="Predicate 'match_tool' requires a 'predicate' object.",
+                            file=rel_path
+                        )
+                    )
+                    err_count += 1
+                else:
+                    items = predicate_obj.get("items")
+                    if items:
+                        items_list = [items] if isinstance(items, str) else (items if isinstance(items, list) else [])
+                        for itm in items_list:
+                            if isinstance(itm, str) and not itm.startswith("#"):
+                                norm_item = itm.lower() if itm.startswith("minecraft:") else f"minecraft:{itm.lower()}"
+                                if self.valid_items and norm_item not in self.valid_items:
+                                    errors.append(
+                                        ValidationIssue(
+                                            level="error",
+                                            code="INVALID_ITEM_ID",
+                                            message=f"Item ID '{itm}' in predicate is not a recognized Minecraft {self.version} item.",
+                                            file=rel_path
+                                        )
+                                    )
+                                    err_count += 1
+
+            elif norm_cond == "minecraft:entity_properties":
+                pred_obj = cond.get("predicate")
+                if pred_obj and isinstance(pred_obj, dict):
+                    etype = pred_obj.get("type")
+                    if etype and isinstance(etype, str) and not etype.startswith("#"):
+                        norm_ent = etype.lower() if etype.startswith("minecraft:") else f"minecraft:{etype.lower()}"
+                        if self.valid_entities and norm_ent not in self.valid_entities:
+                            errors.append(
+                                ValidationIssue(
+                                    level="error",
+                                    code="INVALID_ENTITY_ID",
+                                    message=f"Entity type '{etype}' in predicate is not a recognized Minecraft {self.version} entity.",
+                                    file=rel_path
+                                )
+                            )
+                            err_count += 1
+
+            return err_count
+
+        for pred_path in predicate_files:
+            rel_path = str(pred_path.relative_to(dir_path))
+            try:
+                with open(pred_path, "r", encoding="utf-8") as f:
+                    pred_data = json.load(f)
+            except Exception as e:
+                errors.append(
+                    ValidationIssue(
+                        level="error",
+                        code="INVALID_JSON",
+                        message=f"Predicate file contains invalid JSON: {e}",
+                        file=rel_path
+                    )
+                )
+                predicate_errors += 1
+                continue
+
+            if isinstance(pred_data, list):
+                if len(pred_data) == 0:
+                    errors.append(
+                        ValidationIssue(
+                            level="error",
+                            code="MALFORMED_PREDICATE",
+                            message="Predicate condition list cannot be empty.",
+                            file=rel_path
+                        )
+                    )
+                    predicate_errors += 1
+                else:
+                    for cond in pred_data:
+                        predicate_errors += _validate_predicate_condition(cond, rel_path)
+            elif isinstance(pred_data, dict):
+                predicate_errors += _validate_predicate_condition(pred_data, rel_path)
+            else:
+                errors.append(
+                    ValidationIssue(
+                        level="error",
+                        code="MALFORMED_PREDICATE",
+                        message="Predicate file root must be a JSON object or array.",
+                        file=rel_path
+                    )
+                )
+                predicate_errors += 1
+
+        if predicate_files:
+            checks.append(
+                ValidationCheck(
+                    name="Predicate Structure & Identifier Check",
+                    passed=(predicate_errors == 0),
+                    message=f"Validated {len(predicate_files)} predicate file(s)"
                 )
             )
 

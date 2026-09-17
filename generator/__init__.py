@@ -1,6 +1,7 @@
 from generator.datapack_generator import DatapackGenerator, generate_datapack
 from generator.loot_table_generator import LootTableGenerator
 from generator.mechanisms.recipe_mech import RecipeMechanismGenerator
+from generator.mechanisms.predicate_mech import PredicateMechanismGenerator
 from generator.models import (
     AdvancementDefinition,
     DatapackManifest,
@@ -10,6 +11,7 @@ from generator.models import (
     GenerationResult,
     LootTableModification,
     MechanismSpecification,
+    PredicateDefinition,
     RecipeDefinition,
     validate_mechanism_specification,
 )
@@ -27,7 +29,10 @@ __all__ = [
     "AdvancementDefinition",
     "RecipeDefinition",
     "RecipeMechanismGenerator",
+    "PredicateDefinition",
+    "PredicateMechanismGenerator",
     "MechanismSpecification",
     "validate_mechanism_specification",
 ]
+
 

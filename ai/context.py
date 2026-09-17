@@ -216,6 +216,10 @@ class MinecraftKnowledgeContext:
             "items": results.get(
                 "items",
                 []
+            ),
+            "predicates": results.get(
+                "predicates",
+                []
             )
         }
 

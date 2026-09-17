@@ -2,3 +2,9 @@
 .env
 __pycache__/
 ai/__pycache__/
+*.pyc
+*.log
+*.log.gz
+scratch/
+generated/test_run/
+generated/.cache/

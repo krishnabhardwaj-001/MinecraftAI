@@ -8,12 +8,19 @@ from repair.models import RepairResult
 from validator.models import ValidationResult
 
 
+from qa.models import IntentVerificationResult, QAResult
+from qa.runtime import RuntimeTestResult
+
+
 class PipelineStage(str, Enum):
     UNDERSTANDING = "understanding"
     RETRIEVAL = "retrieval"
     PLANNING = "planning"
     GENERATION = "generation"
     VALIDATION = "validation"
+    QA_REVIEW = "qa_review"
+    INTENT_VERIFICATION = "intent_verification"
+    FINAL_VERIFICATION = "final_verification"
     REPAIR = "repair"
     COMPLETED = "completed"
 
@@ -26,7 +33,7 @@ class PipelineResult(BaseModel):
 
     status: str = Field(
         ...,
-        description="'success', 'needs_clarification', 'failed', or 'error'"
+        description="'verified', 'success', 'needs_clarification', 'failed', 'qa_failed', 'verification_failed', or 'error'"
     )
     minecraft_version: str = Field(
         default="1.21.11",
@@ -62,6 +69,26 @@ class PipelineResult(BaseModel):
         default=None,
         description="Diagnostic repair history if validation triggered the AI repair loop"
     )
+    qa_result: Optional[QAResult] = Field(
+        default=None,
+        description="Autonomous QA review outcome and structured findings"
+    )
+    intent_verification: Optional[IntentVerificationResult] = Field(
+        default=None,
+        description="Comparison outcome against original user intent"
+    )
+    runtime_result: Optional[RuntimeTestResult] = Field(
+        default=None,
+        description="Runtime simulation or server test outcome"
+    )
+    verification_status: Optional[str] = Field(
+        default="verified",
+        description="'verified', 'verification_failed', 'structurally_valid', or 'qa_failed'"
+    )
+    message: Optional[str] = Field(
+        default=None,
+        description="Human-readable outcome summary"
+    )
 
     # Outcomes
     final_datapack_path: Optional[str] = Field(
@@ -87,7 +114,7 @@ class PipelineResult(BaseModel):
 
     @property
     def is_success(self) -> bool:
-        return self.status == "success" and self.final_datapack_path is not None
+        return self.status in ("success", "verified") and self.final_datapack_path is not None
 
     def summary(self) -> str:
         lines = [

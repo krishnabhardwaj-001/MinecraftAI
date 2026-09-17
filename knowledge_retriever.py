@@ -54,6 +54,15 @@ ITEMS_FILE = (
     / "items.json"
 )
 
+PREDICATES_FILE = (
+    BASE_DIR
+    / "knowledge"
+    / "predicates"
+    / "java"
+    / VERSION
+    / "predicates.json"
+)
+
 
 # ============================================================
 # BASIC TOKENIZATION AND MORPHOLOGY
@@ -294,6 +303,20 @@ def load_item_knowledge():
 
         return items
 
+    return []
+
+
+# ============================================================
+# LOAD PREDICATE KNOWLEDGE
+# ============================================================
+
+def load_predicate_knowledge():
+    if PREDICATES_FILE.exists():
+        try:
+            with open(PREDICATES_FILE, "r", encoding="utf-8") as f:
+                return json.load(f)
+        except Exception:
+            return []
     return []
 
 
@@ -999,6 +1022,66 @@ def search_items_relevant(
 
 
 # ============================================================
+# SCORE PREDICATE RELEVANCE
+# ============================================================
+
+def score_predicate(query, predicate):
+    query_tokens = tokenize(query)
+    query_lower = query.lower()
+
+    name = predicate.get("name", "").lower()
+    cond = predicate.get("condition", "").lower()
+    desc = predicate.get("description", "").lower()
+
+    score = 0
+    if name in query_tokens or cond in query_tokens:
+        score += 40
+    if name.replace("_", " ") in query_lower:
+        score += 30
+
+    name_tokens = set(name.split("_"))
+    overlap = query_tokens.intersection(name_tokens)
+    score += len(overlap) * 15
+
+    desc_tokens = tokenize(desc)
+    desc_overlap = query_tokens.intersection(desc_tokens)
+    score += len(desc_overlap) * 5
+
+    if "predicate" in query_tokens or "condition" in query_tokens:
+        score += 10
+
+    return score
+
+
+# ============================================================
+# SEARCH PREDICATES RELEVANT TO QUERY
+# ============================================================
+
+def search_predicates_relevant(
+    predicates,
+    query,
+    limit=5
+):
+    results = []
+
+    for predicate in predicates:
+        score = score_predicate(query, predicate)
+        if score <= 0:
+            continue
+
+        entry = dict(predicate)
+        entry["score"] = score
+        results.append(entry)
+
+    results.sort(
+        key=lambda item: item["score"],
+        reverse=True
+    )
+
+    return results[:limit]
+
+
+# ============================================================
 # MINECRAFT KNOWLEDGE RETRIEVER
 # ============================================================
 
@@ -1029,6 +1112,10 @@ class MinecraftKnowledgeRetriever:
 
         self.items = (
             load_item_knowledge()
+        )
+
+        self.predicates = (
+            load_predicate_knowledge()
         )
 
     # --------------------------------------------------------
@@ -1081,13 +1168,22 @@ class MinecraftKnowledgeRetriever:
             )
         )
 
+        predicate_results = (
+            search_predicates_relevant(
+                self.predicates,
+                query,
+                limit
+            )
+        )
+
         return {
             "version": self.version,
             "semantic": semantic_results,
             "syntax": syntax_results,
             "loot_tables": loot_results,
             "entities": entity_results,
-            "items": item_results
+            "items": item_results,
+            "predicates": predicate_results
         }
 
     # --------------------------------------------------------

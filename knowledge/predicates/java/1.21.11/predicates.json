@@ -1,0 +1,105 @@
+[
+  {
+    "condition": "minecraft:weather_check",
+    "name": "weather_check",
+    "description": "Checks the current world weather state such as raining or thundering.",
+    "parameters": {
+      "raining": "boolean (optional)",
+      "thundering": "boolean (optional)"
+    },
+    "version": "1.21.11",
+    "edition": "Java"
+  },
+  {
+    "condition": "minecraft:time_check",
+    "name": "time_check",
+    "description": "Checks the current day time of the Minecraft world (e.g. night time 13000 to 24000).",
+    "parameters": {
+      "value": "integer or range object with min and max (e.g. {'min': 13000, 'max': 24000})",
+      "period": "integer (optional, default 24000)"
+    },
+    "version": "1.21.11",
+    "edition": "Java"
+  },
+  {
+    "condition": "minecraft:random_chance",
+    "name": "random_chance",
+    "description": "Checks if a random float between 0.0 and 1.0 is less than the specified probability.",
+    "parameters": {
+      "chance": "float between 0.0 and 1.0"
+    },
+    "version": "1.21.11",
+    "edition": "Java"
+  },
+  {
+    "condition": "minecraft:entity_properties",
+    "name": "entity_properties",
+    "description": "Checks properties, flags, or entity types of a target entity (e.g. player is sneaking, mob type).",
+    "parameters": {
+      "entity": "'this', 'attacker', 'direct_attacker', or 'target'",
+      "predicate": "entity predicate object with flags or type"
+    },
+    "version": "1.21.11",
+    "edition": "Java"
+  },
+  {
+    "condition": "minecraft:match_tool",
+    "name": "match_tool",
+    "description": "Checks the tool or item used in an action against item predicate criteria.",
+    "parameters": {
+      "predicate": "item predicate object with items or count"
+    },
+    "version": "1.21.11",
+    "edition": "Java"
+  },
+  {
+    "condition": "minecraft:location_check",
+    "name": "location_check",
+    "description": "Checks the location, biome, or coordinates of the execution context.",
+    "parameters": {
+      "predicate": "location predicate object (e.g. biome, position)"
+    },
+    "version": "1.21.11",
+    "edition": "Java"
+  },
+  {
+    "condition": "minecraft:all_of",
+    "name": "all_of",
+    "description": "Composite condition that passes only when all nested sub-predicate terms pass.",
+    "parameters": {
+      "terms": "array of predicate condition objects"
+    },
+    "version": "1.21.11",
+    "edition": "Java"
+  },
+  {
+    "condition": "minecraft:any_of",
+    "name": "any_of",
+    "description": "Composite condition that passes when at least one nested sub-predicate term passes.",
+    "parameters": {
+      "terms": "array of predicate condition objects"
+    },
+    "version": "1.21.11",
+    "edition": "Java"
+  },
+  {
+    "condition": "minecraft:inverted",
+    "name": "inverted",
+    "description": "Inverts the result of a single nested predicate condition object.",
+    "parameters": {
+      "term": "predicate condition object"
+    },
+    "version": "1.21.11",
+    "edition": "Java"
+  },
+  {
+    "condition": "minecraft:reference",
+    "name": "reference",
+    "description": "Invokes another predicate by namespace and path identifier.",
+    "parameters": {
+      "name": "resource identifier (e.g. 'namespace:path')"
+    },
+    "version": "1.21.11",
+    "edition": "Java"
+  }
+]

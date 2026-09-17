@@ -1,0 +1,14 @@
+{
+  "pack": {
+    "pack_format": 94,
+    "min_format": [
+      94,
+      0
+    ],
+    "max_format": [
+      94,
+      1
+    ],
+    "description": "Create a predicate that evaluates true when the world weather is raining."
+  }
+}

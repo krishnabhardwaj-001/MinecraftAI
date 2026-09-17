@@ -1,5 +1,6 @@
 from pathlib import Path
 from typing import Any, Dict, List, Optional, Union
+# pyrefly: ignore [missing-import]
 from pydantic import BaseModel, Field, ConfigDict
 
 
@@ -189,6 +190,39 @@ class RecipeDefinition(BaseModel):
     )
 
 
+class PredicateDefinition(BaseModel):
+    """
+    Specification for a Minecraft Java 1.21.11 predicate JSON resource.
+    Saved to data/<namespace>/predicate/<predicate_path>.json.
+    """
+    model_config = ConfigDict(extra="allow")
+
+    predicate_path: str = Field(
+        ...,
+        description="Relative predicate path without .json extension (e.g. 'is_raining', 'is_night')"
+    )
+    condition_type: str = Field(
+        default="minecraft:weather_check",
+        description="Minecraft condition type (e.g. 'minecraft:weather_check', 'minecraft:time_check', 'minecraft:random_chance', 'minecraft:location_check', 'minecraft:entity_properties', 'minecraft:match_tool', 'minecraft:inverted', 'minecraft:any_of', 'minecraft:all_of', 'minecraft:reference', 'minecraft:entity_scores')"
+    )
+    condition_params: Dict[str, Any] = Field(
+        default_factory=dict,
+        description="Parameters for the condition (e.g. {'raining': True}, {'chance': 0.5}, {'value': {'min': 13000, 'max': 24000}})"
+    )
+    terms: List[Dict[str, Any]] = Field(
+        default_factory=list,
+        description="Sub-conditions for composite conditions ('any_of', 'all_of')"
+    )
+    term: Optional[Dict[str, Any]] = Field(
+        default=None,
+        description="Sub-condition for inverted condition ('inverted')"
+    )
+    namespace: str = Field(
+        default="minecraft_ai",
+        description="Predicate namespace (default: 'minecraft_ai')"
+    )
+
+
 class DatapackManifest(BaseModel):
     model_config = ConfigDict(extra="allow")
 
@@ -351,6 +385,24 @@ class MechanismSpecification(BaseModel):
         description="Optional recipe group"
     )
 
+    # Predicate parameters
+    condition_type: Optional[str] = Field(
+        default=None,
+        description="Condition type for predicate mechanism (e.g. 'minecraft:weather_check', 'minecraft:time_check', 'minecraft:random_chance', 'minecraft:location_check', 'minecraft:entity_properties', 'minecraft:match_tool', 'minecraft:inverted', 'minecraft:any_of', 'minecraft:all_of', 'minecraft:reference', 'minecraft:entity_scores')"
+    )
+    condition_params: Optional[Dict[str, Any]] = Field(
+        default_factory=dict,
+        description="Parameters for the condition (e.g. {'raining': True} or {'chance': 0.5})"
+    )
+    terms: Optional[List[Dict[str, Any]]] = Field(
+        default_factory=list,
+        description="Sub-conditions for composite predicate types ('any_of', 'all_of')"
+    )
+    term: Optional[Dict[str, Any]] = Field(
+        default=None,
+        description="Sub-condition for inverted predicate type ('inverted')"
+    )
+
     def validate_completeness(self) -> None:
         """
         Validates that required fields for this mechanism type are populated.
@@ -424,6 +476,21 @@ class MechanismSpecification(BaseModel):
             namespace=self.namespace or "minecraft"
         )
 
+    def to_predicate_definition(self) -> PredicateDefinition:
+        p_path = self.path or self.target or "custom_predicate"
+        c_type = self.condition_type or "minecraft:weather_check"
+        if not c_type.startswith("minecraft:"):
+            c_type = f"minecraft:{c_type}"
+
+        return PredicateDefinition(
+            predicate_path=p_path,
+            condition_type=c_type,
+            condition_params=self.condition_params or {},
+            terms=self.terms or [],
+            term=self.term,
+            namespace=self.namespace or "minecraft_ai"
+        )
+
 
 def validate_mechanism_specification(spec: Union[MechanismSpecification, Dict[str, Any]]) -> None:
     """
@@ -444,6 +511,10 @@ def validate_mechanism_specification(spec: Union[MechanismSpecification, Dict[st
         ingredients = spec.get("ingredients")
         pattern = spec.get("pattern")
         key = spec.get("key")
+        condition_type = spec.get("condition_type") or spec.get("condition")
+        condition_params = spec.get("condition_params") or {}
+        terms = spec.get("terms")
+        term = spec.get("term")
     elif isinstance(spec, MechanismSpecification):
         spec_type = str(spec.type).lower()
         target = spec.target or spec.path
@@ -458,6 +529,10 @@ def validate_mechanism_specification(spec: Union[MechanismSpecification, Dict[st
         ingredients = spec.ingredients
         pattern = spec.pattern
         key = spec.key
+        condition_type = spec.condition_type
+        condition_params = spec.condition_params or {}
+        terms = spec.terms
+        term = spec.term
     else:
         raise ValueError(f"Expected MechanismSpecification or dict, got {type(spec)}")
 
@@ -505,6 +580,27 @@ def validate_mechanism_specification(spec: Union[MechanismSpecification, Dict[st
             if not ingredients or not isinstance(ingredients, list) or len(ingredients) == 0:
                 raise ValueError(f"Incomplete recipe specification: 'ingredients' must be a non-empty list. Got ingredients={ingredients}")
 
+    # 6. Predicate
+    elif spec_type in ["predicate", "custom_predicate", "condition"] or "predicate" in spec_type:
+        if not path or not str(path).strip():
+            raise ValueError(f"Incomplete predicate specification: missing 'path'. Got path={path}")
+        if not condition_type or not str(condition_type).strip():
+            raise ValueError(f"Incomplete predicate specification: missing 'condition_type'. Got condition_type={condition_type}")
+        norm_cond = str(condition_type).strip().lower()
+        if not norm_cond.startswith("minecraft:"):
+            norm_cond = f"minecraft:{norm_cond}"
+        if norm_cond in ["minecraft:any_of", "minecraft:all_of"]:
+            if not terms or not isinstance(terms, list) or len(terms) == 0:
+                raise ValueError(f"Incomplete composite predicate specification: 'terms' must be a non-empty list for '{norm_cond}'. Got terms={terms}")
+        elif norm_cond == "minecraft:inverted":
+            if not term or not isinstance(term, dict) or len(term) == 0:
+                raise ValueError(f"Incomplete inverted predicate specification: 'term' must be a non-empty dictionary for '{norm_cond}'. Got term={term}")
+        elif norm_cond == "minecraft:random_chance":
+            chance_val = condition_params.get("chance") if isinstance(condition_params, dict) else None
+            if chance_val is None:
+                raise ValueError(f"Incomplete random_chance predicate specification: missing 'chance' in condition_params. Got condition_params={condition_params}")
+
     else:
         raise ValueError(f"Unsupported mechanism specification type: '{spec_type}'")
+
 

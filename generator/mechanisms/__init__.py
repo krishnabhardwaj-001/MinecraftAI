@@ -8,6 +8,7 @@ from generator.mechanisms.function_mech import FunctionMechanismGenerator
 from generator.mechanisms.tag_mech import FunctionTagMechanismGenerator
 from generator.mechanisms.advancement_mech import AdvancementMechanismGenerator
 from generator.mechanisms.recipe_mech import RecipeMechanismGenerator
+from generator.mechanisms.predicate_mech import PredicateMechanismGenerator
 
 __all__ = [
     "BaseMechanismGenerator",
@@ -16,5 +17,6 @@ __all__ = [
     "FunctionTagMechanismGenerator",
     "AdvancementMechanismGenerator",
     "RecipeMechanismGenerator",
+    "PredicateMechanismGenerator",
 ]
 
