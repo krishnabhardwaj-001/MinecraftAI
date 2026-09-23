@@ -335,6 +335,65 @@ def test_obsolete_plural_path():
     return True
 
 
+def test_function_tag_validation():
+    print("=" * 70)
+    print("TEST 10: FUNCTION TAG SCHEMA & REFERENCE VALIDATION")
+    print("=" * 70)
+
+    with tempfile.TemporaryDirectory(prefix="val_tag_") as temp_dir:
+        dp_path = Path(temp_dir)
+        mcmeta = dp_path / "pack.mcmeta"
+        with open(mcmeta, "w", encoding="utf-8") as f:
+            f.write('{"pack": {"pack_format": 94, "description": "tag test"}}\n')
+
+        # 1. Valid function on disk
+        fn_path = dp_path / "data" / "test_pack" / "function" / "tick.mcfunction"
+        fn_path.parent.mkdir(parents=True, exist_ok=True)
+        fn_path.write_text("say ticking\n", encoding="utf-8")
+
+        # 2. Case A: Minimal canonical format (no replace field)
+        tag_path = dp_path / "data" / "minecraft" / "tags" / "function" / "tick.json"
+        tag_path.parent.mkdir(parents=True, exist_ok=True)
+        tag_path.write_text(json.dumps({"values": ["test_pack:tick"]}), encoding="utf-8")
+
+        validator = DatapackValidator()
+        res_a = validator.validate(dp_path)
+        assert res_a.is_valid, f"Expected minimal tag format to be valid, got errors: {res_a.errors}"
+        print("  [OK] Minimal canonical tag format (omitting replace) passed validation cleanly.")
+
+        # 3. Case B: Explicit 'replace': false is valid Minecraft syntax (do NOT error)
+        tag_path.write_text(json.dumps({"replace": False, "values": ["test_pack:tick"]}), encoding="utf-8")
+        res_b = validator.validate(dp_path)
+        assert res_b.is_valid, f"Expected 'replace': false to be recognized as valid, got: {res_b.errors}"
+        print("  [OK] Explicit 'replace': false recognized as valid syntax without error.")
+
+        # 4. Case C: Invalid non-boolean 'replace'
+        tag_path.write_text(json.dumps({"replace": "invalid_string", "values": ["test_pack:tick"]}), encoding="utf-8")
+        res_c = validator.validate(dp_path)
+        assert not res_c.is_valid, "Expected non-boolean replace to fail validation!"
+        assert any(e.code == "MALFORMED_TAG" for e in res_c.errors)
+        print("  [OK] Non-boolean 'replace' correctly flagged with MALFORMED_TAG.")
+
+        # 5. Case D: Misplaced game-loop tag under custom namespace
+        tag_path.unlink()
+        misplaced_tag = dp_path / "data" / "test_pack" / "tags" / "function" / "tick.json"
+        misplaced_tag.parent.mkdir(parents=True, exist_ok=True)
+        misplaced_tag.write_text(json.dumps({"values": ["test_pack:tick"]}), encoding="utf-8")
+        res_d = validator.validate(dp_path)
+        assert any(w.code == "MISPLACED_GAME_LOOP_TAG" for w in res_d.warnings)
+        print("  [OK] Misplaced game-loop tag under custom namespace caught with MISPLACED_GAME_LOOP_TAG warning.")
+
+        # 6. Case E: Missing function reference (all-or-nothing TagLoader drop risk)
+        misplaced_tag.unlink()
+        tag_path.write_text(json.dumps({"values": ["test_pack:non_existent_function"]}), encoding="utf-8")
+        res_e = validator.validate(dp_path)
+        assert not res_e.is_valid, "Expected missing tag reference to fail validation!"
+        assert any(e.code == "MISSING_TAG_REFERENCE" for e in res_e.errors)
+        print("  [OK] Missing tag reference correctly flagged with MISSING_TAG_REFERENCE.")
+
+    return True
+
+
 if __name__ == "__main__":
     t1 = test_valid_creeper_datapack()
     t2 = test_invalid_json()
@@ -345,10 +404,11 @@ if __name__ == "__main__":
     t7 = test_unsafe_zip_path()
     t8 = test_valid_skeleton_datapack()
     t9 = test_obsolete_plural_path()
+    t10 = test_function_tag_validation()
 
-    if all([t1, t2, t3, t4, t5, t6, t7, t8, t9]):
+    if all([t1, t2, t3, t4, t5, t6, t7, t8, t9, t10]):
         print("=" * 70)
-        print("ALL 9 VALIDATOR TESTS PASSED SUCCESSFULLY!")
+        print("ALL 10 VALIDATOR TESTS PASSED SUCCESSFULLY!")
         print("=" * 70)
         sys.exit(0)
     else:

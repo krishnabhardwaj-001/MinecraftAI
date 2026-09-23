@@ -1,0 +1,53 @@
+[
+  {
+    "tag": "minecraft:tick",
+    "name": "tick",
+    "namespace": "minecraft",
+    "relative_path": "data/minecraft/tags/function/tick.json",
+    "description": "Standard game-loop function tag. Every function registered in this tag is executed by the server once every game tick (20 times per second / 20 Hz). Used for continuous polling, timer countdowns, continuous player checks, and state machine transitions.",
+    "execution_rate": "20 TPS (every 0.05 seconds)",
+    "execution_context": "Server-level global context with @s unset. Functions needing player context should use 'execute as @a at @s run ...'.",
+    "schema": {
+      "values": "Required list of namespaced function identifiers (e.g. ['custom_pack:tick']) or subtags (e.g. ['#custom_pack:subtick']). Entries may also be objects with 'id' and 'required'.",
+      "replace": "Optional boolean. Defaults to false when omitted. When false (the standard default), this datapack's entries are appended to existing entries from other datapacks. When true, all entries from lower-priority datapacks for this tag are discarded."
+    },
+    "canonical_format": {
+      "values": [
+        "<namespace>:<function_name>"
+      ]
+    },
+    "best_practices": [
+      "Omit 'replace' by default so Minecraft uses the default append behavior (replace: false).",
+      "Always namespace functions explicitly (e.g. 'my_pack:tick', never bare 'tick').",
+      "Never generate this tag under a custom namespace (e.g. 'data/my_pack/tags/function/tick.json') expecting automatic execution, because Minecraft ONLY executes #minecraft:tick automatically.",
+      "Ensure all referenced functions exist on disk. In Minecraft Java 1.21+, if even one required function reference is missing, Mojang's TagLoader discards the entire tag."
+    ],
+    "version": "1.21.11",
+    "edition": "Java"
+  },
+  {
+    "tag": "minecraft:load",
+    "name": "load",
+    "namespace": "minecraft",
+    "relative_path": "data/minecraft/tags/function/load.json",
+    "description": "Standard initialization function tag. Every function registered in this tag is executed once when the world loads or when the /reload command is executed. Used for initializing scoreboard objectives, setting up default values for global state holders (fake players like #global), and printing load diagnostics.",
+    "execution_rate": "Once on world load and on /reload",
+    "execution_context": "Server startup context when 0 players are connected. Player selectors (@a, @p, @r) match 0 entities. All initialization must use fake player names (e.g. '#global').",
+    "schema": {
+      "values": "Required list of namespaced function identifiers (e.g. ['custom_pack:load']) or subtags. Entries may also be objects with 'id' and 'required'.",
+      "replace": "Optional boolean. Defaults to false when omitted. When false, appends to other datapacks. When true, overwrites lower-priority datapacks."
+    },
+    "canonical_format": {
+      "values": [
+        "<namespace>:<function_name>"
+      ]
+    },
+    "best_practices": [
+      "Omit 'replace' by default to allow cooperative loading alongside other datapacks.",
+      "Do not use player selectors (@a, @p) in load functions; use fake players (e.g. '#global', '#load_ran').",
+      "Ensure all referenced functions exist on disk to prevent TagLoader dropping the tag."
+    ],
+    "version": "1.21.11",
+    "edition": "Java"
+  }
+]

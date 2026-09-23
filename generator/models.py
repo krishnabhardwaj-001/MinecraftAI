@@ -1,7 +1,7 @@
 from pathlib import Path
 from typing import Any, Dict, List, Optional, Union
 # pyrefly: ignore [missing-import]
-from pydantic import BaseModel, Field, ConfigDict
+from pydantic import BaseModel, Field, ConfigDict, field_validator
 
 
 class LootTableModification(BaseModel):
@@ -57,6 +57,100 @@ class DatapackResource(BaseModel):
     )
 
 
+
+class ActionSpecification(BaseModel):
+    """
+    Structured specification of a gameplay action for Minecraft Java 1.21.11.
+    The Generator synthesizes exact Minecraft command syntax from these fields.
+    """
+    model_config = ConfigDict(extra="allow")
+
+    action_type: str = Field(
+        ...,
+        description="Action category: 'apply_effect', 'clear_effect', 'give_item', 'clear_item', 'set_score', 'add_score', 'reset_score', 'play_sound', 'spawn_particle', 'send_message', 'summon_entity', 'teleport'"
+    )
+    target: str = Field(
+        default="@a",
+        description="Target selector or score holder (e.g. '@a', '@p', '@s', '#global')"
+    )
+    execution_context: Optional[Dict[str, Any]] = Field(
+        default_factory=lambda: {"as_target": True, "at_target": True},
+        description="Context anchors for execution (e.g. 'as' and 'at')"
+    )
+    conditions: Optional[List[Dict[str, Any]]] = Field(
+        default_factory=list,
+        description="Optional execution conditions (predicate checks or scoreboard checks)"
+    )
+
+    # Item parameters
+    item: Optional[str] = Field(default=None, description="Resource ID of item (e.g. 'minecraft:diamond')")
+    count: Optional[int] = Field(default=1, description="Item quantity")
+
+    # Effect parameters
+    effect: Optional[str] = Field(default=None, description="Resource ID of effect (e.g. 'minecraft:speed')")
+    duration: Optional[Union[int, str]] = Field(
+        default=None,
+        description="Duration in seconds (int >= 1), 'infinite', or None for default"
+    )
+    amplifier: Optional[int] = Field(default=0, description="Effect amplifier (0 = level 1)")
+    show_particles: Optional[bool] = Field(default=True, description="Whether effect particles are visible")
+
+    @field_validator("duration", mode="before")
+    @classmethod
+    def validate_duration(cls, v: Any) -> Optional[Union[int, str]]:
+        if v is None:
+            return None
+        if isinstance(v, bool):
+            raise ValueError("Duration cannot be a boolean")
+        if isinstance(v, float):
+            raise ValueError(
+                f"Duration cannot be a float: {v}. Must be an integer >= 1 or 'infinite'."
+            )
+        if isinstance(v, int):
+            if v < 1:
+                raise ValueError(f"Duration must be a positive integer (>= 1 second). Got {v}")
+            return v
+        if isinstance(v, str):
+            v_str = v.strip()
+            if not v_str:
+                return None
+            if v_str.isdigit():
+                int_v = int(v_str)
+                if int_v < 1:
+                    raise ValueError(f"Duration must be a positive integer (>= 1 second). Got {int_v}")
+                return int_v
+            if v_str.startswith("-") and v_str[1:].isdigit():
+                raise ValueError(f"Duration must be a positive integer (>= 1 second). Got {v_str}")
+            if "." in v_str:
+                raise ValueError(
+                    f"Duration cannot be a float string: '{v}'. Must be an integer >= 1 or 'infinite'."
+                )
+            if v_str.lower() == "infinite":
+                return "infinite"
+            raise ValueError(
+                f"Invalid duration: '{v}'. Duration must be an integer >= 1 or 'infinite'."
+            )
+        raise ValueError(
+            f"Invalid duration type: {type(v).__name__}. Duration must be an integer >= 1 or 'infinite'."
+        )
+
+    # Scoreboard parameters
+    objective: Optional[str] = Field(default=None, description="Scoreboard objective name")
+    score_holder: Optional[str] = Field(default=None, description="Score holder (e.g. '#global' or '@s')")
+    score_value: Optional[int] = Field(default=None, description="Score integer value")
+    operation: Optional[str] = Field(default="set", description="Score operation: 'set', 'add', 'remove', 'reset'")
+
+    # Audio / Visual
+    sound: Optional[str] = Field(default=None, description="Sound event identifier")
+    particle: Optional[str] = Field(default=None, description="Particle identifier")
+
+    # Communication
+    message: Optional[str] = Field(default=None, description="Text message")
+
+    # Escape hatch for genuinely unmodeled operations (strictly audited)
+    raw_command: Optional[str] = Field(default=None, description="Raw command fallback for unmodeled advanced operations")
+
+
 class FunctionDefinition(BaseModel):
     """
     Specification for a Minecraft .mcfunction resource.
@@ -67,9 +161,13 @@ class FunctionDefinition(BaseModel):
         ...,
         description="Relative function path without .mcfunction extension (e.g. 'main' or 'tick')"
     )
+    actions: Optional[List[ActionSpecification]] = Field(
+        default_factory=list,
+        description="Structured gameplay actions to synthesize into commands"
+    )
     commands: List[str] = Field(
         default_factory=list,
-        description="List of Minecraft commands to execute in this function"
+        description="List of Minecraft commands to execute in this function (legacy fallback)"
     )
     namespace: str = Field(
         default="minecraft",
@@ -79,6 +177,7 @@ class FunctionDefinition(BaseModel):
         default=None,
         description="Optional comment header description for the function"
     )
+
 
 
 class FunctionTagDefinition(BaseModel):
@@ -309,10 +408,40 @@ class MechanismSpecification(BaseModel):
         description="Number of rolls for the pool"
     )
 
-    # Function parameters
+    # Function & Action parameters
+    actions: Optional[List[Union[ActionSpecification, Dict[str, Any]]]] = Field(
+        default_factory=list,
+        description="Structured actions for function or continuous_action mechanisms"
+    )
     commands: Optional[List[str]] = Field(
         default_factory=list,
-        description="List of Minecraft commands for function resources"
+        description="List of Minecraft commands for function resources (legacy fallback)"
+    )
+
+    # State machine parameters
+    state_scope: Optional[str] = Field(
+        default="global",
+        description="Scope of state machine: 'global' (e.g. environment/world) or 'player'"
+    )
+    objective: Optional[str] = Field(
+        default=None,
+        description="Scoreboard objective name for state machine tracking"
+    )
+    condition_predicate: Optional[str] = Field(
+        default=None,
+        description="Resource identifier of condition predicate (e.g. 'minecraft_ai:is_raining')"
+    )
+    on_enter: Optional[List[Union[ActionSpecification, Dict[str, Any]]]] = Field(
+        default_factory=list,
+        description="Actions triggered when the state transition activates"
+    )
+    on_exit: Optional[List[Union[ActionSpecification, Dict[str, Any]]]] = Field(
+        default_factory=list,
+        description="Actions triggered when the state transition deactivates"
+    )
+    trigger: Optional[str] = Field(
+        default=None,
+        description="Trigger hook: 'tick', 'load', 'custom'"
     )
 
     # Function tag parameters
@@ -429,8 +558,16 @@ class MechanismSpecification(BaseModel):
 
     def to_function_definition(self) -> FunctionDefinition:
         f_path = self.path or self.target or "main"
+        parsed_actions: List[ActionSpecification] = []
+        for act in (self.actions or []):
+            if isinstance(act, ActionSpecification):
+                parsed_actions.append(act)
+            elif isinstance(act, dict):
+                parsed_actions.append(ActionSpecification(**act))
+
         return FunctionDefinition(
             function_path=f_path,
+            actions=parsed_actions,
             commands=self.commands or [],
             namespace=self.namespace or "minecraft_ai",
             description=self.description
@@ -501,6 +638,7 @@ def validate_mechanism_specification(spec: Union[MechanismSpecification, Dict[st
         spec_type = str(spec.get("type", "")).lower()
         target = spec.get("target") or spec.get("path")
         item = spec.get("item")
+        actions = spec.get("actions")
         commands = spec.get("commands")
         path = spec.get("path") or spec.get("function_path") or spec.get("target")
         tag_name = spec.get("tag_name") or spec.get("path") or spec.get("target")
@@ -515,10 +653,14 @@ def validate_mechanism_specification(spec: Union[MechanismSpecification, Dict[st
         condition_params = spec.get("condition_params") or {}
         terms = spec.get("terms")
         term = spec.get("term")
+        objective = spec.get("objective") or spec.get("path")
+        condition_predicate = spec.get("condition_predicate") or spec.get("predicate")
+        on_enter = spec.get("on_enter") or spec.get("actions")
     elif isinstance(spec, MechanismSpecification):
         spec_type = str(spec.type).lower()
         target = spec.target or spec.path
         item = spec.item
+        actions = spec.actions
         commands = spec.commands
         path = spec.path or spec.target
         tag_name = spec.tag_name or spec.path or spec.target
@@ -533,6 +675,9 @@ def validate_mechanism_specification(spec: Union[MechanismSpecification, Dict[st
         condition_params = spec.condition_params or {}
         terms = spec.terms
         term = spec.term
+        objective = spec.objective or spec.path
+        condition_predicate = spec.condition_predicate
+        on_enter = spec.on_enter or spec.actions
     else:
         raise ValueError(f"Expected MechanismSpecification or dict, got {type(spec)}")
 
@@ -550,24 +695,40 @@ def validate_mechanism_specification(spec: Union[MechanismSpecification, Dict[st
     elif spec_type in ["function", "mcfunction", "command", "function_command"]:
         if not path or not str(path).strip():
             raise ValueError(f"Incomplete function specification: missing 'path'. Got path={path}")
-        if not commands or not isinstance(commands, list) or len(commands) == 0:
-            raise ValueError(f"Incomplete function specification: 'commands' must be a non-empty list. Got commands={commands}")
+        has_cmds = commands is not None and isinstance(commands, list) and len(commands) > 0
+        has_actions = actions is not None and isinstance(actions, list) and len(actions) > 0
+        if not (has_cmds or has_actions):
+            raise ValueError(f"Incomplete function specification: must provide non-empty 'actions' or 'commands'. Got actions={actions}, commands={commands}")
 
-    # 3. Loot table
+    # 3. State Machine
+    elif spec_type in ["state_machine", "event_latch", "event_trigger"]:
+        if not objective or not str(objective).strip():
+            raise ValueError(f"Incomplete state_machine specification: missing 'objective'. Got objective={objective}")
+        if not condition_predicate or not str(condition_predicate).strip():
+            raise ValueError(f"Incomplete state_machine specification: missing 'condition_predicate'. Got condition_predicate={condition_predicate}")
+        if not on_enter or not isinstance(on_enter, list) or len(on_enter) == 0:
+            raise ValueError(f"Incomplete state_machine specification: 'on_enter' must be a non-empty list of actions. Got on_enter={on_enter}")
+
+    # 4. Continuous Action
+    elif spec_type in ["continuous_action", "tick_action"]:
+        if not actions or not isinstance(actions, list) or len(actions) == 0:
+            raise ValueError(f"Incomplete continuous_action specification: 'actions' must be a non-empty list. Got actions={actions}")
+
+    # 5. Loot table
     elif spec_type in ["loot_table", "loot", "drop", "table", "loot_table_modification", "loot_table_override"] or "loot" in spec_type:
         if not target or not str(target).strip():
             raise ValueError(f"Incomplete loot_table specification: missing 'target' or 'path'. Got target={target}")
         if not item or not str(item).strip():
             raise ValueError(f"Incomplete loot_table specification: missing 'item'. Got item={item}")
 
-    # 4. Advancement
+    # 6. Advancement
     elif spec_type in ["advancement", "trigger"] or "advancement" in spec_type:
         if not path or not str(path).strip():
             raise ValueError(f"Incomplete advancement specification: missing 'path'. Got path={path}")
         if not criteria or not isinstance(criteria, dict) or len(criteria) == 0:
             raise ValueError(f"Incomplete advancement specification: 'criteria' must be a non-empty dictionary. Got criteria={criteria}")
 
-    # 5. Recipe
+    # 7. Recipe
     elif spec_type in ["recipe", "crafting", "crafting_shaped", "crafting_shapeless", "smelting", "blasting", "smoking", "campfire_cooking", "stonecutting"] or "recipe" in spec_type:
         if not result_item or not str(result_item).strip():
             raise ValueError(f"Incomplete recipe specification: missing 'result_item' or 'item'. Got result_item={result_item}")
@@ -580,7 +741,7 @@ def validate_mechanism_specification(spec: Union[MechanismSpecification, Dict[st
             if not ingredients or not isinstance(ingredients, list) or len(ingredients) == 0:
                 raise ValueError(f"Incomplete recipe specification: 'ingredients' must be a non-empty list. Got ingredients={ingredients}")
 
-    # 6. Predicate
+    # 8. Predicate
     elif spec_type in ["predicate", "custom_predicate", "condition"] or "predicate" in spec_type:
         if not path or not str(path).strip():
             raise ValueError(f"Incomplete predicate specification: missing 'path'. Got path={path}")

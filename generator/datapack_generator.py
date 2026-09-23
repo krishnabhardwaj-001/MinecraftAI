@@ -13,8 +13,10 @@ from generator.mechanisms import (
     LootTableMechanismGenerator,
     PredicateMechanismGenerator,
     RecipeMechanismGenerator,
+    StateMachineMechanismGenerator,
 )
 from generator.models import (
+    ActionSpecification,
     AdvancementDefinition,
     DatapackManifest,
     DatapackResource,
@@ -53,7 +55,7 @@ class DatapackGenerator:
         version: str = "1.21.11"
     ):
         self.base_dir = Path(__file__).resolve().parent.parent
-        self.output_dir = output_dir or (self.base_dir / "generated")
+        self.output_dir = Path(output_dir) if output_dir else (self.base_dir / "generated")
         self.version = version
         self.loot_generator = LootTableGenerator(version=version)
 
@@ -64,6 +66,7 @@ class DatapackGenerator:
         self.advancement_mech = AdvancementMechanismGenerator()
         self.recipe_mech = RecipeMechanismGenerator(version=version)
         self.predicate_mech = PredicateMechanismGenerator(version=version)
+        self.state_machine_mech = StateMachineMechanismGenerator(version=version)
 
     def extract_loot_modifications(
         self,
@@ -202,6 +205,7 @@ class DatapackGenerator:
         advancements: List[AdvancementDefinition] = []
         recipes: List[RecipeDefinition] = []
         predicates: List[PredicateDefinition] = []
+        state_machines: List[MechanismSpecification] = []
 
         # 0. Check for explicit specifications directly in plan
         if plan:
@@ -248,14 +252,22 @@ class DatapackGenerator:
                     elif isinstance(raw, dict):
                         predicates.append(PredicateDefinition(**raw))
 
-            if loot_modifications or functions or tags or advancements or recipes or predicates:
+            if plan.get("state_machines"):
+                for raw in plan["state_machines"]:
+                    if isinstance(raw, MechanismSpecification):
+                        state_machines.append(raw)
+                    elif isinstance(raw, dict):
+                        state_machines.append(MechanismSpecification(**raw))
+
+            if loot_modifications or functions or tags or advancements or recipes or predicates or state_machines:
                 return {
                     "loot_modifications": loot_modifications,
                     "functions": functions,
                     "tags": tags,
                     "advancements": advancements,
                     "recipes": recipes,
-                    "predicates": predicates
+                    "predicates": predicates,
+                    "state_machines": state_machines,
                 }
 
         # 1. Direct consumption from structured MechanismSpecification in implementation_plan
@@ -269,9 +281,10 @@ class DatapackGenerator:
                 if spec is None and isinstance(raw_mech, dict):
                     has_structured_fields = any(
                         k in raw_mech for k in [
-                            "target", "item", "commands", "values", "tag_name", "criteria", "rewards",
+                            "target", "item", "commands", "actions", "values", "tag_name", "criteria", "rewards",
                             "result_item", "recipe_type", "ingredients", "pattern", "key",
-                            "condition_type", "condition_params", "predicate_path"
+                            "condition_type", "condition_params", "predicate_path",
+                            "objective", "condition_predicate", "on_enter", "on_exit"
                         ]
                     )
                     if has_structured_fields:
@@ -282,11 +295,23 @@ class DatapackGenerator:
 
                 if spec is not None:
                     m_type = str(spec.type).lower()
-                    if any(t in m_type for t in ["function_tag", "tick_tag", "load_tag", "tag"]) or "tag" in m_type:
+                    if any(t in m_type for t in ["state_machine", "event_latch", "event_trigger"]):
+                        state_machines.append(spec)
+                    elif any(t in m_type for t in ["continuous_action", "tick_action"]):
+                        parsed_acts = [a if isinstance(a, ActionSpecification) else ActionSpecification(**a) for a in (spec.actions or [])]
+                        f_def = FunctionDefinition(
+                            function_path="tick",
+                            actions=parsed_acts,
+                            namespace=spec.namespace or "minecraft_ai",
+                            description="Continuous action loop"
+                        )
+                        functions.append(f_def)
+                        tags.append(FunctionTagDefinition(tag_name="tick", values=[f"{spec.namespace or 'minecraft_ai'}:tick"]))
+                    elif any(t in m_type for t in ["function_tag", "tick_tag", "load_tag", "tag"]) or "tag" in m_type:
                         if spec.values:
                             tags.append(spec.to_tag_definition())
                     elif any(t in m_type for t in ["function", "mcfunction", "command"]):
-                        if spec.commands:
+                        if spec.actions or spec.commands:
                             functions.append(spec.to_function_definition())
                     elif any(t in m_type for t in ["loot", "drop", "table"]):
                         if (spec.target or spec.path) and spec.item:
@@ -301,14 +326,15 @@ class DatapackGenerator:
                         if spec.condition_type or spec.condition_params or spec.terms or spec.term or spec.path:
                             predicates.append(spec.to_predicate_definition())
 
-        if loot_modifications or functions or tags or advancements or recipes or predicates:
+        if loot_modifications or functions or tags or advancements or recipes or predicates or state_machines:
             return {
                 "loot_modifications": loot_modifications,
                 "functions": functions,
                 "tags": tags,
                 "advancements": advancements,
                 "recipes": recipes,
-                "predicates": predicates
+                "predicates": predicates,
+                "state_machines": state_machines,
             }
 
         # 2. Fallback heuristic inspection for minimal or legacy plans
@@ -481,6 +507,7 @@ class DatapackGenerator:
         advancements: Optional[List[AdvancementDefinition]] = None,
         recipes: Optional[List[RecipeDefinition]] = None,
         predicates: Optional[List[PredicateDefinition]] = None,
+        state_machines: Optional[List[MechanismSpecification]] = None,
         datapack_name: Optional[str] = None,
         description: Optional[str] = None,
         create_zip: bool = True,
@@ -496,6 +523,7 @@ class DatapackGenerator:
         adv_defs: List[AdvancementDefinition] = list(advancements) if advancements is not None else []
         rec_defs: List[RecipeDefinition] = list(recipes) if recipes is not None else []
         pred_defs: List[PredicateDefinition] = list(predicates) if predicates is not None else []
+        sm_defs: List[MechanismSpecification] = list(state_machines) if state_machines is not None else []
 
         # If no explicit mechanism parameters provided, extract generically
         if (
@@ -505,6 +533,7 @@ class DatapackGenerator:
             and advancements is None
             and recipes is None
             and predicates is None
+            and state_machines is None
         ):
             extracted = self.extract_mechanisms(
                 plan=plan,
@@ -517,8 +546,9 @@ class DatapackGenerator:
             adv_defs = extracted["advancements"]
             rec_defs = extracted.get("recipes", [])
             pred_defs = extracted.get("predicates", [])
+            sm_defs = extracted.get("state_machines", [])
 
-        if not (loot_mods or funcs or tag_defs or adv_defs or rec_defs or pred_defs):
+        if not (loot_mods or funcs or tag_defs or adv_defs or rec_defs or pred_defs or sm_defs):
             raise ValueError(
                 "No valid modifications or mechanisms could be determined from the plan and context."
             )
@@ -618,13 +648,91 @@ class DatapackGenerator:
         for pred in pred_defs:
             resources.extend(self.predicate_mech.generate(pred))
 
-        # Deterministically write all resource files
+        # State machines
+        for sm in sm_defs:
+            resources.extend(self.state_machine_mech.generate(sm))
+
+        # Deterministically write all resource files with intelligent consolidation
         for res in resources:
             target_file = datapack_dir / res.relative_path
             target_file.parent.mkdir(parents=True, exist_ok=True)
-            with open(target_file, "w", encoding="utf-8", newline="\n") as f:
-                f.write(res.content)
-            files_generated.append(res.relative_path)
+
+            if target_file.exists():
+                # Merge function tag JSON files (e.g. tick.json, load.json)
+                if res.relative_path.endswith(".json") and "tags/function" in res.relative_path:
+                    try:
+                        existing_data = json.loads(target_file.read_text(encoding="utf-8"))
+                        new_data = json.loads(res.content)
+                        existing_vals = existing_data.get("values", [])
+                        new_vals = new_data.get("values", [])
+                        merged_vals = []
+                        for v in existing_vals + new_vals:
+                            if v not in merged_vals:
+                                merged_vals.append(v)
+                        merged_data = {"values": merged_vals}
+                        if existing_data.get("replace") is True or new_data.get("replace") is True:
+                            merged_data["replace"] = True
+                        content_to_write = json.dumps(merged_data, indent=2, ensure_ascii=False) + "\n"
+                        with open(target_file, "w", encoding="utf-8", newline="\n") as f:
+                            f.write(content_to_write)
+                    except Exception:
+                        with open(target_file, "w", encoding="utf-8", newline="\n") as f:
+                            f.write(res.content)
+
+                # Merge .mcfunction files (append commands, preserve single header)
+                elif res.relative_path.endswith(".mcfunction"):
+                    try:
+                        existing_text = target_file.read_text(encoding="utf-8")
+                        new_lines = [
+                            l for l in res.content.splitlines()
+                            if l.strip() and not l.strip().startswith("# Generated by")
+                        ]
+                        merged_content = existing_text.rstrip("\n") + "\n" + "\n".join(new_lines) + "\n"
+                        with open(target_file, "w", encoding="utf-8", newline="\n") as f:
+                            f.write(merged_content)
+                    except Exception:
+                        with open(target_file, "w", encoding="utf-8", newline="\n") as f:
+                            f.write(res.content)
+                else:
+                    with open(target_file, "w", encoding="utf-8", newline="\n") as f:
+                        f.write(res.content)
+            else:
+                with open(target_file, "w", encoding="utf-8", newline="\n") as f:
+                    f.write(res.content)
+
+            if res.relative_path not in files_generated:
+                files_generated.append(res.relative_path)
+
+        # Post-generation function tag sanitization:
+        # Prune any dangling function references that do not exist on disk,
+        # because in Minecraft Java 1.21.11, even ONE missing reference causes
+        # Minecraft's TagLoader to drop the ENTIRE tag.
+        existing_functions = set()
+        for func_file in datapack_dir.glob("data/*/function/**/*.mcfunction"):
+            rel_parts = func_file.relative_to(datapack_dir / "data").parts
+            fn_ns = rel_parts[0]
+            fn_subpath = "/".join(rel_parts[2:])[:-11]  # remove .mcfunction
+            existing_functions.add(f"{fn_ns}:{fn_subpath}")
+
+        for tag_file in datapack_dir.glob("data/*/tags/function/**/*.json"):
+            try:
+                tag_data = json.loads(tag_file.read_text(encoding="utf-8"))
+                original_vals = tag_data.get("values", [])
+                cleaned_vals = []
+                for val in original_vals:
+                    val_id = val if isinstance(val, str) else (val.get("id") if isinstance(val, dict) else "")
+                    is_required = True if isinstance(val, str) else val.get("required", True)
+                    # Keep if subtag (#...) or optional or points to existing function
+                    if val_id.startswith("#") or not is_required or val_id in existing_functions:
+                        cleaned_vals.append(val)
+
+                clean_tag_dict = {"values": cleaned_vals}
+                if tag_data.get("replace") is True:
+                    clean_tag_dict["replace"] = True
+
+                tag_file.write_text(json.dumps(clean_tag_dict, indent=2, ensure_ascii=False) + "\n", encoding="utf-8")
+            except Exception:
+                pass
 
         # 3. Create deterministic ZIP archive if requested
         zip_path: Optional[Path] = None
@@ -673,6 +781,7 @@ def generate_datapack(
     advancements: Optional[List[AdvancementDefinition]] = None,
     recipes: Optional[List[RecipeDefinition]] = None,
     predicates: Optional[List[PredicateDefinition]] = None,
+    state_machines: Optional[List[MechanismSpecification]] = None,
     output_dir: Optional[Path] = None,
     datapack_name: Optional[str] = None,
     description: Optional[str] = None,
@@ -692,6 +801,7 @@ def generate_datapack(
         advancements=advancements,
         recipes=recipes,
         predicates=predicates,
+        state_machines=state_machines,
         datapack_name=datapack_name,
         description=description,
         create_zip=create_zip

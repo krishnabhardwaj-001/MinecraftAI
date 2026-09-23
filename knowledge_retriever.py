@@ -63,6 +63,15 @@ PREDICATES_FILE = (
     / "predicates.json"
 )
 
+TAGS_FILE = (
+    BASE_DIR
+    / "knowledge"
+    / "tags"
+    / "java"
+    / VERSION
+    / "function_tags.json"
+)
+
 
 # ============================================================
 # BASIC TOKENIZATION AND MORPHOLOGY
@@ -314,6 +323,20 @@ def load_predicate_knowledge():
     if PREDICATES_FILE.exists():
         try:
             with open(PREDICATES_FILE, "r", encoding="utf-8") as f:
+                return json.load(f)
+        except Exception:
+            return []
+    return []
+
+
+# ============================================================
+# LOAD FUNCTION TAG KNOWLEDGE
+# ============================================================
+
+def load_tag_knowledge():
+    if TAGS_FILE.exists():
+        try:
+            with open(TAGS_FILE, "r", encoding="utf-8") as f:
                 return json.load(f)
         except Exception:
             return []
@@ -1082,6 +1105,65 @@ def search_predicates_relevant(
 
 
 # ============================================================
+# SCORE FUNCTION TAG RESULT
+# ============================================================
+
+def score_tag(
+    query,
+    tag_info
+):
+    query_tokens = tokenize(query)
+    query_lower = query.lower()
+
+    name = tag_info.get("name", "").lower()
+    full_tag = tag_info.get("tag", "").lower()
+    desc = tag_info.get("description", "").lower()
+
+    score = 0
+    if name in query_tokens or full_tag in query_tokens:
+        score += 50
+    if name in query_lower:
+        score += 30
+
+    desc_tokens = tokenize(desc)
+    overlap = query_tokens.intersection(desc_tokens)
+    score += len(overlap) * 5
+
+    if any(t in query_tokens for t in ["tag", "loop", "tick", "load", "every", "polling"]):
+        score += 20
+
+    return score
+
+
+# ============================================================
+# SEARCH FUNCTION TAGS RELEVANT TO QUERY
+# ============================================================
+
+def search_tags_relevant(
+    tags,
+    query,
+    limit=5
+):
+    results = []
+
+    for tag_info in tags:
+        score = score_tag(query, tag_info)
+        if score <= 0:
+            continue
+
+        entry = dict(tag_info)
+        entry["score"] = score
+        results.append(entry)
+
+    results.sort(
+        key=lambda item: item["score"],
+        reverse=True
+    )
+
+    return results[:limit]
+
+
+# ============================================================
 # MINECRAFT KNOWLEDGE RETRIEVER
 # ============================================================
 
@@ -1116,6 +1198,10 @@ class MinecraftKnowledgeRetriever:
 
         self.predicates = (
             load_predicate_knowledge()
+        )
+
+        self.tags = (
+            load_tag_knowledge()
         )
 
     # --------------------------------------------------------
@@ -1176,6 +1262,14 @@ class MinecraftKnowledgeRetriever:
             )
         )
 
+        tag_results = (
+            search_tags_relevant(
+                self.tags,
+                query,
+                limit
+            )
+        )
+
         return {
             "version": self.version,
             "semantic": semantic_results,
@@ -1183,7 +1277,8 @@ class MinecraftKnowledgeRetriever:
             "loot_tables": loot_results,
             "entities": entity_results,
             "items": item_results,
-            "predicates": predicate_results
+            "predicates": predicate_results,
+            "tags": tag_results
         }
 
     # --------------------------------------------------------

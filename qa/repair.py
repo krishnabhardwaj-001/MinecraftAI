@@ -99,6 +99,12 @@ class QARepairEngine:
             elif f.category == QACategory.FILE_COMPLETENESS and "MISSING-PRED" in f.id:
                 diagnoses.append(f"Predicate was planned but missing. Ensuring predicate mechanism is populated.")
 
+            # Case E: Missing/dangling function tag reference
+            elif f.category == QACategory.REFERENCE_INTEGRITY and "TAG-MISSING-FN" in f.id:
+                dead_fn = f.line_or_reference or ""
+                diagnoses.append(f"Function tag references non-existent function '{dead_fn}'. Pruning invalid tag entry.")
+                self._repair_dangling_tag_reference(mechanisms_list, dead_fn)
+
         # Update corrected plan with modified mechanisms
         if "implementation_plan" in corrected_plan:
             for ip in corrected_plan["implementation_plan"]:
@@ -124,12 +130,9 @@ class QARepairEngine:
     ) -> None:
         """
         Converts a flawed per-player environmental state machine to a robust #global state machine.
+        Supports both structured state_machine mechanisms and legacy function mechanisms.
         """
-        # Find load function and tick function
-        load_mech = next((m for m in mechanisms if m.get("type") == "function" and m.get("path") == "load"), None)
-        tick_mech = next((m for m in mechanisms if m.get("type") == "function" and m.get("path") == "tick"), None)
         pred_mech = next((m for m in mechanisms if m.get("type") == "predicate"), None)
-
         pred_id = "minecraft_ai:is_raining"
         if pred_mech:
             ns = pred_mech.get("namespace", "minecraft_ai")
@@ -141,6 +144,25 @@ class QARepairEngine:
             obj_name = "rain_state"
         elif "night" in pred_id.lower() or "time" in pred_id.lower():
             obj_name = "time_state"
+
+        # Case 1: Structured state_machine mechanism already present
+        sm_mech = next((m for m in mechanisms if m.get("type") == "state_machine"), None)
+        if sm_mech:
+            sm_mech["state_scope"] = "global"
+            sm_mech["objective"] = obj_name
+            sm_mech["condition_predicate"] = pred_id
+            if not sm_mech.get("on_enter"):
+                sm_mech["on_enter"] = [{
+                    "action_type": "give_item",
+                    "target": "@a",
+                    "item": "minecraft:diamond",
+                    "count": 1
+                }]
+            return
+
+        # Case 2: Legacy or explicit function mechanisms for load and tick
+        load_mech = next((m for m in mechanisms if m.get("type") == "function" and m.get("path") == "load"), None)
+        tick_mech = next((m for m in mechanisms if m.get("type") == "function" and m.get("path") == "tick"), None)
 
         # Update load function
         if load_mech:
@@ -157,6 +179,11 @@ class QARepairEngine:
                 if m_run:
                     action_cmd = m_run.group(1)
                     break
+        elif tick_mech and tick_mech.get("actions"):
+            # Extract from first action if present
+            first_act = tick_mech["actions"][0]
+            if isinstance(first_act, dict) and first_act.get("item"):
+                action_cmd = f"give @s {first_act.get('item')} {first_act.get('count', 1)}"
 
         # Update tick function with correct sequence and context
         if tick_mech:
@@ -192,10 +219,26 @@ class QARepairEngine:
     ) -> None:
         for mech in mechanisms:
             if mech.get("type") == "function":
-                new_cmds = []
-                for cmd in mech.get("commands", []):
-                    if ("give @s" in cmd or "effect give @s" in cmd) and "as @" not in cmd:
-                        new_cmds.append(f"execute as @a at @s run {cmd.lstrip('/')}")
-                    else:
-                        new_cmds.append(cmd)
-                mech["commands"] = new_cmds
+                # Handle structured actions
+                if mech.get("actions"):
+                    for act in mech["actions"]:
+                        if isinstance(act, dict):
+                            act["execution_context"] = {"as_target": True, "at_target": True}
+                # Handle legacy commands
+                if mech.get("commands"):
+                    new_cmds = []
+                    for cmd in mech.get("commands", []):
+                        if ("give @s" in cmd or "effect give @s" in cmd) and "as @" not in cmd:
+                            new_cmds.append(f"execute as @a at @s run {cmd.lstrip('/')}")
+                        else:
+                            new_cmds.append(cmd)
+                    mech["commands"] = new_cmds
+
+    def _repair_dangling_tag_reference(
+        self,
+        mechanisms: List[Dict[str, Any]],
+        dead_fn: str
+    ) -> None:
+        for m in mechanisms:
+            if m.get("type") in ("function_tag", "tag") and "values" in m:
+                m["values"] = [v for v in m["values"] if v != dead_fn]

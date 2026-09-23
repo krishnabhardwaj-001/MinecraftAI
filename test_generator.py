@@ -6,6 +6,7 @@ from pathlib import Path
 
 from ai.context import retrieve_minecraft_context
 from generator import DatapackGenerator, LootTableModification
+from validator.datapack_validator import DatapackValidator
 
 
 def test_creeper_drops_diamonds():
@@ -297,10 +298,92 @@ def test_generality_arbitrary_mob():
     )
     print(f"  [OK] Added drop: {added_entry.get('name')} in final pool.")
 
-    # Clean up
     shutil.rmtree(test_output_dir)
 
     print("\nTEST 3 PASSED SUCCESSFULLY!\n")
+    return True
+
+
+def test_multi_datapack_tag_aggregation():
+    print("=" * 70)
+    print("TEST 4: MULTI-DATAPACK TAG AGGREGATION & DANGLING-REFERENCE SANITIZATION")
+    print("=" * 70)
+
+    test_output_dir = Path("generated") / "tag_agg_test"
+    if test_output_dir.exists():
+        shutil.rmtree(test_output_dir)
+
+    gen = DatapackGenerator(output_dir=test_output_dir)
+
+    # Simulate two independent mechanisms contributing to #minecraft:tick
+    # and one ghost reference that should be pruned by the dangling-reference sanitizer
+    plan = {
+        "status": "ready",
+        "minecraft_version": "1.21.11",
+        "summary": "Multi-mechanism aggregation and sanitization test",
+        "functions": [
+            {
+                "function_path": "feature_a_loop",
+                "commands": ["say feature A running"],
+                "namespace": "feature_pack"
+            },
+            {
+                "function_path": "feature_b_loop",
+                "commands": ["say feature B running"],
+                "namespace": "feature_pack"
+            }
+        ],
+        "tags": [
+            {
+                "tag_name": "tick",
+                "values": ["feature_pack:feature_a_loop", "feature_pack:dangling_ghost_function"],
+                "namespace": "minecraft",
+                "replace": False
+            },
+            {
+                "tag_name": "tick",
+                "values": ["feature_pack:feature_b_loop"],
+                "namespace": "minecraft",
+                "replace": False
+            }
+        ]
+    }
+
+    gen_res = gen.generate(
+        plan=plan,
+        datapack_name="tag_aggregation_pack",
+        create_zip=False,
+        clean=True
+    )
+
+    tick_file = gen_res.datapack_path / "data" / "minecraft" / "tags" / "function" / "tick.json"
+    assert tick_file.exists(), f"Expected tick.json to exist at {tick_file}"
+
+    data = json.loads(tick_file.read_text(encoding="utf-8"))
+
+    # 1. Verify minimal canonical format (replace is omitted when false)
+    assert "replace" not in data, f"Expected 'replace' to be omitted by default, found: {data.get('replace')}"
+    print("  [OK] 'replace' omitted by default (minimal canonical format).")
+
+    # 2. Verify non-destructive aggregation (both feature_a_loop and feature_b_loop are present)
+    assert "feature_pack:feature_a_loop" in data["values"], "feature_a_loop missing from aggregated tick tag!"
+    assert "feature_pack:feature_b_loop" in data["values"], "feature_b_loop missing from aggregated tick tag!"
+    print("  [OK] Multi-mechanism tag values aggregated cleanly.")
+
+    # 3. Verify dangling-reference sanitizer pruned the ghost function to prevent TagLoader drop
+    assert "feature_pack:dangling_ghost_function" not in data["values"], (
+        "Dangling ghost function was not pruned by sanitizer!"
+    )
+    print("  [OK] Dangling function reference safely pruned by sanitizer.")
+
+    # 4. Verify the final aggregated datapack passes DatapackValidator cleanly
+    validator = DatapackValidator()
+    val_res = validator.validate(gen_res.datapack_path)
+    assert val_res.is_valid, f"Generated datapack failed validation: {val_res.errors}"
+    print("  [OK] Aggregated datapack passed DatapackValidator cleanly (0 errors).")
+
+    shutil.rmtree(test_output_dir)
+    print("\nTEST 4 PASSED SUCCESSFULLY!\n")
     return True
 
 
@@ -308,10 +391,11 @@ if __name__ == "__main__":
     t1 = test_creeper_drops_diamonds()
     t2 = test_determinism()
     t3 = test_generality_arbitrary_mob()
+    t4 = test_multi_datapack_tag_aggregation()
 
-    if t1 and t2 and t3:
+    if t1 and t2 and t3 and t4:
         print("=" * 70)
-        print("ALL GENERATOR TESTS PASSED SUCCESSFULLY!")
+        print("ALL 4 GENERATOR TESTS PASSED SUCCESSFULLY!")
         print("=" * 70)
         sys.exit(0)
     else:

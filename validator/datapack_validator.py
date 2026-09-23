@@ -922,6 +922,37 @@ class DatapackValidator:
                 tag_errors += 1
                 continue
 
+            # Validate 'replace' field if present (boolean required; 'replace': false is valid syntax)
+            if "replace" in tag_data:
+                if not isinstance(tag_data["replace"], bool):
+                    errors.append(
+                        ValidationIssue(
+                            level="error",
+                            code="MALFORMED_TAG",
+                            message="Field 'replace' in function tag must be a boolean.",
+                            file=rel_path
+                        )
+                    )
+                    tag_errors += 1
+
+            # Check for game-loop tags ('tick.json', 'load.json') placed outside 'minecraft' namespace
+            if tag_file.name in ["tick.json", "load.json"]:
+                rel_parts = tag_file.relative_to(dir_path).parts
+                if len(rel_parts) >= 2 and rel_parts[1] != "minecraft":
+                    tag_ns = rel_parts[1]
+                    warnings.append(
+                        ValidationIssue(
+                            level="warning",
+                            code="MISPLACED_GAME_LOOP_TAG",
+                            message=(
+                                f"Function tag '{tag_file.name}' is under namespace '{tag_ns}' ('{rel_path}'). "
+                                f"Minecraft Java 1.21.11 only triggers #minecraft:tick and #minecraft:load automatically. "
+                                f"Game loop functions should be registered under 'data/minecraft/tags/function/'."
+                            ),
+                            file=rel_path
+                        )
+                    )
+
             values = tag_data.get("values")
             if values is None or not isinstance(values, list):
                 errors.append(
@@ -945,6 +976,29 @@ class DatapackValidator:
                             )
                         )
                         tag_errors += 1
+                    else:
+                        val_id = val if isinstance(val, str) else str(val.get("id", ""))
+                        is_required = True if isinstance(val, str) else val.get("required", True)
+                        # Check target existence for non-optional, direct function references
+                        if is_required and not val_id.startswith("#"):
+                            if ":" in val_id:
+                                v_ns, v_path = val_id.split(":", 1)
+                            else:
+                                v_ns, v_path = "minecraft", val_id
+                            target_fn = dir_path / "data" / v_ns / "function" / f"{v_path}.mcfunction"
+                            if not target_fn.exists():
+                                errors.append(
+                                    ValidationIssue(
+                                        level="error",
+                                        code="MISSING_TAG_REFERENCE",
+                                        message=(
+                                            f"Function tag references non-existent function '{val_id}'. "
+                                            f"In Minecraft Java 1.21.11, a missing reference causes TagLoader to drop the entire tag (all-or-nothing behavior)."
+                                        ),
+                                        file=rel_path
+                                    )
+                                )
+                                tag_errors += 1
 
         if tag_files:
             checks.append(

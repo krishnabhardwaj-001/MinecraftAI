@@ -104,7 +104,7 @@ RULES:
 7. Do not ask unnecessary clarification questions.
 8. If the request is sufficiently clear, produce a plan.
 9. Populate structured parameters in "mechanisms" rather than vague prose.
-10. For commands inside function mechanisms, use valid Minecraft 1.21 syntax without leading slashes.
+10. You do NOT write raw Minecraft commands or command syntax strings. Instead, populate structured 'actions' inside mechanisms (specifying action_type, target, item, effect, duration, amplifier, objective, etc.). For effect actions, 'duration' may be an integer number of seconds (e.g. 30), 'infinite' for continuous/permanent effects, or omitted/null for default. The deterministic generator synthesizes the exact Minecraft commands.
 11. Do not output complete raw JSON files; the deterministic generator creates the actual datapack files from your structured mechanism specifications.
 12. Do not include testing actions. Testing belongs to the Validator.
 13. Do not claim that a Minecraft mechanism is valid unless the supplied
@@ -120,11 +120,9 @@ RULES:
 22. For standard mob drop requests (e.g. 'Make every creeper drop diamonds'), default to adding the item drop to the mob loot table alongside default drops. Do not ask for clarification regarding keeping or replacing default drops unless the user explicitly mentions default drops.
 23. For predicate requests, if the predicate condition type is available in retrieved knowledge (under 'predicates') or supported Minecraft conditions, populate the structured predicate mechanism with type 'predicate' and mark status as 'ready'.
 24. For state-machine and event-trigger requests (e.g. 'only once when X starts', 'when X begins', 'on state change'):
-    - Distinguish GLOBAL environmental conditions (e.g. weather, daytime/night, world events) from PER-PLAYER conditions (e.g. player sneaking, health, inventory).
-    - For global environmental conditions, track state using a persistent global dummy player (e.g. '#global' or '#state') in a scoreboard objective, NOT per-player selectors (@a). Initialize it in load.mcfunction (e.g. 'scoreboard players set #global <obj> 0'), check transition on tick (e.g. 'execute if score #global <obj> matches 0 if predicate <pred> as @a run ...'), update state ('execute if predicate <pred> run scoreboard players set #global <obj> 1'), and reset state ('execute unless predicate <pred> run scoreboard players set #global <obj> 0').
-    - NEVER use player selectors (@a, @p, @r, @s, @e) in load.mcfunction for scoreboard initialization because #minecraft:load runs during world startup when NO players are online.
-    - For genuine per-player state machines, initialize uninitialized players safely in the tick loop (e.g. 'execute as @a unless score @s <obj> matches 0..1 run scoreboard players set @s <obj> 0') before evaluating scores.
-25. For player execution contexts in functions, always pair 'as @a at @s' when entity location, dimension, or local coordinates are relevant.
+    - Use mechanism type 'state_machine' with 'objective', 'condition_predicate', 'state_scope' ('global' for environmental/world events like weather/time, or 'player' for individual player events), and 'on_enter' structured actions.
+    - The deterministic generator automatically handles safe scoreboard initialization in load.mcfunction (using persistent '#global' for global state or dynamic tick initialization for players) and sets up the tick transition and reset logic.
+25. For player-targeted actions, specify 'target': '@a' (or '@p' / '@s'). The generator automatically enforces correct execution context chaining ('execute as @a at @s run ...').
 
 STRUCTURED MECHANISM SPECIFICATIONS:
 Each entry in "mechanisms" should specify a "type" and its structured parameters:
@@ -140,7 +138,10 @@ Each entry in "mechanisms" should specify a "type" and its structured parameters
    - "type": "function"
    - "namespace": datapack namespace (e.g. "minecraft_ai")
    - "path": function path without extension (e.g. "speed", "tick", "join")
-   - "commands": list of valid Minecraft commands from knowledge (e.g. ["effect give @a minecraft:speed 10 0 true"])
+   - "actions": list of structured action objects:
+     * Apply effect: {{"action_type": "apply_effect", "target": "@a", "effect": "minecraft:speed", "duration": 30, "amplifier": 0}} (duration can be integer seconds like 30, "infinite" for permanent effects, or omitted/null for default)
+     * Give item: {{"action_type": "give_item", "target": "@a", "item": "minecraft:diamond", "count": 1}}
+     * Set score: {{"action_type": "set_score", "target": "#global", "objective": "state", "score_value": 0}}
 
 3. Function Tag Mechanism:
    - "type": "function_tag"
@@ -178,6 +179,19 @@ Each entry in "mechanisms" should specify a "type" and its structured parameters
      * for "minecraft:match_tool": {{"predicate": {{"items": ["minecraft:diamond_sword"]}}}}
    - "terms": list of nested mechanism dictionaries for composite "minecraft:all_of" or "minecraft:any_of"
    - "term": single nested mechanism dictionary for "minecraft:inverted"
+
+7. State Machine Mechanism (for edge-triggered requests like 'only once when X starts', 'when X begins'):
+   - "type": "state_machine"
+   - "namespace": datapack namespace (e.g. "minecraft_ai")
+   - "objective": scoreboard objective name (e.g. "rain_state", "time_state")
+   - "condition_predicate": predicate identifier (e.g. "minecraft_ai:is_raining")
+   - "state_scope": "global" (for weather/time/environment) or "player" (for individual player events)
+   - "on_enter": list of structured action objects to execute when condition starts (e.g. [{{"action_type": "give_item", "target": "@a", "item": "minecraft:diamond", "count": 1}}])
+
+8. Continuous Action Mechanism (for continuous looping actions):
+   - "type": "continuous_action"
+   - "trigger": "tick"
+   - "actions": list of structured action objects to execute continuously every tick
 
 OUTPUT:
 
@@ -510,7 +524,67 @@ Return only JSON matching the required schema.
                         mech_type = "recipe"
                     elif mech_type in ["predicates", "custom_predicate", "predicate_condition"]:
                         mech_type = "predicate"
+                    elif mech_type in ["state_machine", "event_latch", "event_trigger"]:
+                        mech_type = "state_machine"
+                    elif mech_type in ["continuous_action", "tick_action"]:
+                        mech_type = "continuous_action"
                     mech_dict["type"] = mech_type
+
+                    # Helper to normalize action dictionaries
+                    def _norm_action(act: Any) -> Dict[str, Any]:
+                        if isinstance(act, dict):
+                            ad = dict(act)
+                            a_type = str(ad.get("action_type", "apply_effect")).strip().lower()
+                            ad["action_type"] = a_type
+                            if ad.get("item"):
+                                iv = str(ad["item"]).strip()
+                                if not iv.startswith("minecraft:") and ":" not in iv:
+                                    iv = f"minecraft:{iv}"
+                                ad["item"] = iv
+                            if ad.get("effect"):
+                                ev = str(ad["effect"]).strip()
+                                if not ev.startswith("minecraft:") and ":" not in ev:
+                                    ev = f"minecraft:{ev}"
+                                ad["effect"] = ev
+                            if not ad.get("target"):
+                                ad["target"] = "@a"
+                            return ad
+                        elif isinstance(act, str):
+                            return {
+                                "action_type": "raw_command",
+                                "raw_command": act.lstrip("/")
+                            }
+                        return {}
+
+                    # Normalize structured actions
+                    raw_actions = mech_dict.get("actions")
+                    if raw_actions is not None:
+                        if isinstance(raw_actions, dict):
+                            raw_actions = [raw_actions]
+                        if isinstance(raw_actions, list):
+                            mech_dict["actions"] = [_norm_action(a) for a in raw_actions if _norm_action(a)]
+
+                    raw_on_enter = mech_dict.get("on_enter")
+                    if raw_on_enter is not None:
+                        if isinstance(raw_on_enter, dict):
+                            raw_on_enter = [raw_on_enter]
+                        if isinstance(raw_on_enter, list):
+                            mech_dict["on_enter"] = [_norm_action(a) for a in raw_on_enter if _norm_action(a)]
+
+                    raw_on_exit = mech_dict.get("on_exit")
+                    if raw_on_exit is not None:
+                        if isinstance(raw_on_exit, dict):
+                            raw_on_exit = [raw_on_exit]
+                        if isinstance(raw_on_exit, list):
+                            mech_dict["on_exit"] = [_norm_action(a) for a in raw_on_exit if _norm_action(a)]
+
+                    # Normalize state_machine condition_predicate
+                    raw_sm_pred = mech_dict.get("condition_predicate") or mech_dict.get("predicate")
+                    if raw_sm_pred and isinstance(raw_sm_pred, str):
+                        raw_sm_pred = raw_sm_pred.strip()
+                        if not raw_sm_pred.startswith("minecraft:") and not raw_sm_pred.startswith("minecraft_ai:") and ":" not in raw_sm_pred:
+                            raw_sm_pred = f"minecraft_ai:{raw_sm_pred}"
+                        mech_dict["condition_predicate"] = raw_sm_pred
 
                     # Normalize predicate condition_type
                     raw_cond_type = mech_dict.get("condition_type")

@@ -77,9 +77,38 @@ def test_function_tag_mechanism():
     assert res.resource_type == "function_tag"
 
     data = json.loads(res.content)
-    assert data.get("replace") is False
+    # Canonical minimal tag format: 'replace' is omitted when False
+    assert "replace" not in data
     assert data.get("values") == ["custom_pack:combat/heal_all", "minecraft_ai:tick"]
+
+    # Test explicit replace=True is preserved
+    tag_explicit = FunctionTagDefinition(
+        tag_name="custom_tag",
+        values=["custom_pack:action"],
+        namespace="custom_pack",
+        replace=True
+    )
+    res_explicit = gen.generate(tag_explicit)[0]
+    data_explicit = json.loads(res_explicit.content)
+    assert data_explicit.get("replace") is True
+    assert res_explicit.relative_path == "data/custom_pack/tags/function/custom_tag.json"
+
+    # Test game loop tags (tick, load) route to 'minecraft' namespace even with custom pack namespace
+    tag_routed = FunctionTagDefinition(
+        tag_name="load",
+        values=["my_pack:init"],
+        namespace="my_pack",
+        replace=False
+    )
+    res_routed = gen.generate(tag_routed)[0]
+    assert res_routed.relative_path == "data/minecraft/tags/function/load.json"
+    data_routed = json.loads(res_routed.content)
+    assert "replace" not in data_routed
+    assert data_routed.get("values") == ["my_pack:init"]
+
     print("  [OK] Function tag generated at data/minecraft/tags/function/tick.json with valid JSON.")
+    print("  [OK] Minimal canonical format verified (replace omitted when False, included when True).")
+    print("  [OK] Game-loop tag namespace routing to 'minecraft' verified.")
     return True
 
 

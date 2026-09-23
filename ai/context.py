@@ -220,6 +220,10 @@ class MinecraftKnowledgeContext:
             "predicates": results.get(
                 "predicates",
                 []
+            ),
+            "tags": results.get(
+                "tags",
+                []
             )
         }
 

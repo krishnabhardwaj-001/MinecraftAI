@@ -20,24 +20,37 @@ class FunctionTagMechanismGenerator(BaseMechanismGenerator):
         if clean_tag.endswith(".json"):
             clean_tag = clean_tag[:-5]
 
+        # In Minecraft Java 1.21.11, standard game-loop tags ('tick', 'load') must reside
+        # under the 'minecraft' namespace (data/minecraft/tags/function/{tick,load}.json).
+        if clean_tag in ["tick", "load"]:
+            tag_namespace = "minecraft"
+            fallback_val_ns = (
+                spec.namespace if spec.namespace and spec.namespace != "minecraft" else "minecraft_ai"
+            )
+        else:
+            tag_namespace = spec.namespace or "minecraft"
+            fallback_val_ns = spec.namespace or "minecraft_ai"
+
         # Normalize values: ensure each function identifier is valid
         normalized_values: List[str] = []
         for val in spec.values:
             val_clean = val.strip()
             if not val_clean:
                 continue
-            if ":" not in val_clean:
-                val_clean = f"{spec.namespace}:{val_clean}"
+            if ":" not in val_clean and not val_clean.startswith("#"):
+                val_clean = f"{fallback_val_ns}:{val_clean}"
             normalized_values.append(val_clean)
 
-        tag_dict = {
-            "replace": bool(spec.replace),
+        # Standard canonical tag format: omit 'replace' when false (Mojang default).
+        # Only include 'replace': true when explicitly requested.
+        tag_dict: dict = {
             "values": normalized_values
         }
+        if spec.replace:
+            tag_dict["replace"] = True
 
         content = json.dumps(tag_dict, indent=2, ensure_ascii=False) + "\n"
-        namespace = spec.namespace or "minecraft"
-        rel_path = f"data/{namespace}/tags/function/{clean_tag}.json"
+        rel_path = f"data/{tag_namespace}/tags/function/{clean_tag}.json"
 
         return [
             DatapackResource(
