@@ -72,6 +72,15 @@ TAGS_FILE = (
     / "function_tags.json"
 )
 
+SCOREBOARDS_FILE = (
+    BASE_DIR
+    / "knowledge"
+    / "scoreboards"
+    / "java"
+    / VERSION
+    / "scoreboards.json"
+)
+
 
 # ============================================================
 # BASIC TOKENIZATION AND MORPHOLOGY
@@ -337,6 +346,20 @@ def load_tag_knowledge():
     if TAGS_FILE.exists():
         try:
             with open(TAGS_FILE, "r", encoding="utf-8") as f:
+                return json.load(f)
+        except Exception:
+            return []
+    return []
+
+
+# ============================================================
+# LOAD SCOREBOARD KNOWLEDGE
+# ============================================================
+
+def load_scoreboard_knowledge():
+    if SCOREBOARDS_FILE.exists():
+        try:
+            with open(SCOREBOARDS_FILE, "r", encoding="utf-8") as f:
                 return json.load(f)
         except Exception:
             return []
@@ -1164,6 +1187,88 @@ def search_tags_relevant(
 
 
 # ============================================================
+# SCORE SCOREBOARD RESULT
+# ============================================================
+
+def score_scoreboard(
+    query,
+    item
+):
+    query_tokens = tokenize(query)
+    query_lower = query.lower()
+
+    name = str(item.get("name", "")).lower()
+    category = str(item.get("category", "")).lower()
+    desc = str(item.get("description", "")).lower()
+    criteria = str(item.get("criteria", "")).lower()
+    operator = str(item.get("operator", "")).lower()
+    slot = str(item.get("slot", "")).lower()
+
+    score = 0
+    if name in query_tokens or criteria in query_tokens:
+        score += 45
+    if operator in query_tokens or slot in query_tokens:
+        score += 40
+    if name.replace("_", " ") in query_lower:
+        score += 30
+
+    name_tokens = set(name.split("_"))
+    overlap = query_tokens.intersection(name_tokens)
+    score += len(overlap) * 15
+
+    desc_tokens = tokenize(desc)
+    desc_overlap = query_tokens.intersection(desc_tokens)
+    score += len(desc_overlap) * 5
+
+    # Check dedicated keywords
+    item_keywords = item.get("keywords", [])
+    for kw in item_keywords:
+        kw_lower = str(kw).lower()
+        if kw_lower in query_tokens:
+            score += 50
+        elif " " in kw_lower and kw_lower in query_lower:
+            score += 45
+
+    scoreboard_keywords = {
+        "scoreboard", "score", "objective", "points", "counter", "trigger",
+        "operation", "arithmetic", "sidebar", "below_name", "display",
+        "add", "remove", "reset", "set", "multiply", "divide", "modulo", "compare"
+    }
+    if any(k in query_tokens for k in scoreboard_keywords):
+        score += 10
+
+    return score
+
+
+# ============================================================
+# SEARCH SCOREBOARDS RELEVANT TO QUERY
+# ============================================================
+
+def search_scoreboards_relevant(
+    scoreboards,
+    query,
+    limit=5
+):
+    results = []
+
+    for item in scoreboards:
+        score = score_scoreboard(query, item)
+        if score <= 0:
+            continue
+
+        entry = dict(item)
+        entry["score"] = score
+        results.append(entry)
+
+    results.sort(
+        key=lambda it: it["score"],
+        reverse=True
+    )
+
+    return results[:limit]
+
+
+# ============================================================
 # MINECRAFT KNOWLEDGE RETRIEVER
 # ============================================================
 
@@ -1202,6 +1307,10 @@ class MinecraftKnowledgeRetriever:
 
         self.tags = (
             load_tag_knowledge()
+        )
+
+        self.scoreboards = (
+            load_scoreboard_knowledge()
         )
 
     # --------------------------------------------------------
@@ -1270,6 +1379,14 @@ class MinecraftKnowledgeRetriever:
             )
         )
 
+        scoreboard_results = (
+            search_scoreboards_relevant(
+                self.scoreboards,
+                query,
+                limit
+            )
+        )
+
         return {
             "version": self.version,
             "semantic": semantic_results,
@@ -1278,7 +1395,8 @@ class MinecraftKnowledgeRetriever:
             "entities": entity_results,
             "items": item_results,
             "predicates": predicate_results,
-            "tags": tag_results
+            "tags": tag_results,
+            "scoreboards": scoreboard_results
         }
 
     # --------------------------------------------------------

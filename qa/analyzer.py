@@ -4,6 +4,7 @@ from pathlib import Path
 from typing import Any, Dict, List, Optional, Set, Tuple
 
 from qa.models import QACategory, QAFinding, QASeverity
+from qa.scoreboard_semantics import ScoreboardSemanticSimulator
 
 
 class StaticSemanticAnalyzer:
@@ -60,6 +61,9 @@ class StaticSemanticAnalyzer:
 
         # 5. Check state machine temporal logic & ordering
         findings.extend(self._check_state_machine_logic(datapack_dir, resources))
+
+        # 6. Check scoreboard semantics & temporal state simulation
+        findings.extend(self._check_scoreboard_semantics(datapack_dir, resources))
 
         return findings
 
@@ -597,3 +601,13 @@ class StaticSemanticAnalyzer:
                 pass
 
         return findings
+    # -------------------------------------------------------------------------
+    # 5. Scoreboard Semantics & Temporal State Simulation
+    # -------------------------------------------------------------------------
+    def _check_scoreboard_semantics(
+        self,
+        datapack_dir: Path,
+        resources: Dict[str, Any]
+    ) -> List[QAFinding]:
+        sim = ScoreboardSemanticSimulator(version=self.version)
+        return sim.analyze_datapack(datapack_dir)

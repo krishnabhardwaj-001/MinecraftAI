@@ -5,9 +5,26 @@ import shutil
 import tempfile
 import zipfile
 from pathlib import Path
-from typing import Any, Dict, List, Optional, Set, Union
+from typing import Any, Dict, List, Optional, Set, Tuple, Union
 
+from generator.models import (
+    OBJECTIVE_NAME_REGEX,
+    VALID_SCORE_OPERATIONS,
+    VALID_SCORE_COMPARISONS,
+    VALID_BASE_DISPLAY_SLOTS,
+    VALID_TEAM_COLORS,
+    VALID_BUILTIN_CRITERIA,
+    VALID_STAT_PREFIXES,
+    validate_objective_name,
+    validate_criteria,
+    validate_display_slot,
+    validate_score_operation,
+    validate_comparison_operator,
+)
 from validator.models import ValidationCheck, ValidationIssue, ValidationResult
+
+MIN_SCORE_32 = -2147483648
+MAX_SCORE_32 = 2147483647
 
 
 class DatapackValidator:
@@ -159,6 +176,587 @@ class DatapackValidator:
             pass
 
         return set()
+
+    def _validate_score_integer(self, val_str: str, allow_negative: bool = True) -> Optional[str]:
+        """
+        Validates that a string represents a 32-bit signed integer.
+        Rejects floats, booleans, and out-of-bound numbers.
+        If allow_negative is False, rejects values < 0.
+        """
+        if not val_str or not isinstance(val_str, str):
+            return "Missing or empty score value"
+        val_clean = val_str.strip()
+        if val_clean.lower() in ("true", "false"):
+            return f"Score value cannot be a boolean: '{val_clean}'"
+        if "." in val_clean:
+            return f"Score value cannot be a float: '{val_clean}'. Must be a 32-bit integer."
+        try:
+            val = int(val_clean)
+        except ValueError:
+            return f"Score value '{val_clean}' is not a valid integer."
+
+        if val < MIN_SCORE_32 or val > MAX_SCORE_32:
+            return f"Score value {val} is outside 32-bit signed integer range [{MIN_SCORE_32}, {MAX_SCORE_32}]."
+
+        if not allow_negative and val < 0:
+            return f"Score value cannot be negative for this operation (got {val})."
+
+        return None
+
+    def _validate_score_range(self, range_str: str) -> Optional[str]:
+        """
+        Validates a Minecraft Java 1.21.11 score range expression.
+        Supported forms:
+          <int>
+          <min>..<max>
+          <min>..
+          ..<max>
+        Where all numbers are 32-bit signed integers and min <= max.
+        """
+        if not range_str or not isinstance(range_str, str):
+            return "Missing score range expression"
+        clean = range_str.strip()
+        if clean.lower() in ("true", "false"):
+            return f"Score range cannot be a boolean: '{clean}'"
+
+        if ".." in clean:
+            parts = clean.split("..")
+            if len(parts) != 2:
+                return f"Invalid range syntax with multiple '..' in '{clean}'"
+            low_s, high_s = parts[0].strip(), parts[1].strip()
+            if not low_s and not high_s:
+                return "Invalid range '..': at least one bound must be specified."
+
+            low_val = None
+            high_val = None
+            if low_s:
+                err = self._validate_score_integer(low_s, allow_negative=True)
+                if err:
+                    return f"Invalid lower bound in range '{clean}': {err}"
+                low_val = int(low_s)
+
+            if high_s:
+                err = self._validate_score_integer(high_s, allow_negative=True)
+                if err:
+                    return f"Invalid upper bound in range '{clean}': {err}"
+                high_val = int(high_s)
+
+            if low_val is not None and high_val is not None:
+                if low_val > high_val:
+                    return f"Invalid range '{clean}': lower bound ({low_val}) is greater than upper bound ({high_val})."
+            return None
+        else:
+            err = self._validate_score_integer(clean, allow_negative=True)
+            if err:
+                return f"Invalid score range match value '{clean}': {err}"
+            return None
+
+    def _validate_scoreboard_command_tokens(
+        self,
+        tokens: List[str],
+        line: str,
+        rel_path: str,
+        line_idx: int,
+        declared_objectives: Set[str],
+        errors: List[ValidationIssue]
+    ) -> int:
+        """
+        Validates tokens of a 'scoreboard ...' command.
+        Returns the number of errors encountered.
+        """
+        err_count = 0
+        if len(tokens) < 2:
+            errors.append(
+                ValidationIssue(
+                    level="error",
+                    code="UNKNOWN_COMMAND",
+                    message=f"Incomplete scoreboard command at line {line_idx}: '{line}'",
+                    file=rel_path
+                )
+            )
+            return 1
+
+        subsystem = tokens[1].lower()
+        if subsystem == "objectives":
+            if len(tokens) < 3:
+                errors.append(
+                    ValidationIssue(
+                        level="error",
+                        code="UNKNOWN_COMMAND",
+                        message=f"Incomplete scoreboard objectives command at line {line_idx}: '{line}'",
+                        file=rel_path
+                    )
+                )
+                return 1
+            sub_act = tokens[2].lower()
+            if sub_act == "add":
+                if len(tokens) < 4:
+                    errors.append(
+                        ValidationIssue(
+                            level="error",
+                            code="INVALID_SCOREBOARD_OBJECTIVE",
+                            message=f"Missing objective name in 'scoreboard objectives add' at line {line_idx}: '{line}'",
+                            file=rel_path
+                        )
+                    )
+                    return 1
+                # Objectives addition is parsed and validated in Pass 1 to avoid duplicate errors
+                return 0
+
+            elif sub_act == "remove":
+                if len(tokens) < 4:
+                    errors.append(
+                        ValidationIssue(
+                            level="error",
+                            code="INVALID_SCOREBOARD_OBJECTIVE",
+                            message=f"Missing objective name in 'scoreboard objectives remove' at line {line_idx}: '{line}'",
+                            file=rel_path
+                        )
+                    )
+                    return 1
+                obj_name = tokens[3]
+                try:
+                    validate_objective_name(obj_name)
+                except ValueError as e:
+                    errors.append(
+                        ValidationIssue(
+                            level="error",
+                            code="INVALID_SCOREBOARD_OBJECTIVE",
+                            message=f"Invalid objective name '{obj_name}' at line {line_idx}: {e}",
+                            file=rel_path
+                        )
+                    )
+                    err_count += 1
+                if obj_name not in declared_objectives:
+                    errors.append(
+                        ValidationIssue(
+                            level="error",
+                            code="UNDECLARED_SCOREBOARD_OBJECTIVE",
+                            message=f"Reference to undeclared scoreboard objective '{obj_name}' at line {line_idx}: '{line}'",
+                            file=rel_path
+                        )
+                    )
+                    err_count += 1
+
+            elif sub_act == "setdisplay":
+                if len(tokens) < 4:
+                    errors.append(
+                        ValidationIssue(
+                            level="error",
+                            code="INVALID_DISPLAY_SLOT",
+                            message=f"Missing slot in 'scoreboard objectives setdisplay' at line {line_idx}: '{line}'",
+                            file=rel_path
+                        )
+                    )
+                    return 1
+                slot = tokens[3]
+                try:
+                    validate_display_slot(slot)
+                except ValueError as e:
+                    errors.append(
+                        ValidationIssue(
+                            level="error",
+                            code="INVALID_DISPLAY_SLOT",
+                            message=f"Invalid display slot '{slot}' at line {line_idx}: {e}",
+                            file=rel_path
+                        )
+                    )
+                    err_count += 1
+                if len(tokens) >= 5:
+                    obj_name = tokens[4]
+                    try:
+                        validate_objective_name(obj_name)
+                    except ValueError as e:
+                        errors.append(
+                            ValidationIssue(
+                                level="error",
+                                code="INVALID_SCOREBOARD_OBJECTIVE",
+                                message=f"Invalid objective name '{obj_name}' in setdisplay at line {line_idx}: {e}",
+                                file=rel_path
+                            )
+                        )
+                        err_count += 1
+                    if obj_name not in declared_objectives:
+                        errors.append(
+                            ValidationIssue(
+                                level="error",
+                                code="UNDECLARED_SCOREBOARD_OBJECTIVE",
+                                message=f"Reference to undeclared scoreboard objective '{obj_name}' at line {line_idx}: '{line}'",
+                                file=rel_path
+                            )
+                        )
+                        err_count += 1
+
+            elif sub_act == "modify":
+                if len(tokens) >= 4:
+                    obj_name = tokens[3]
+                    try:
+                        validate_objective_name(obj_name)
+                    except ValueError as e:
+                        errors.append(
+                            ValidationIssue(
+                                level="error",
+                                code="INVALID_SCOREBOARD_OBJECTIVE",
+                                message=f"Invalid objective name '{obj_name}' at line {line_idx}: {e}",
+                                file=rel_path
+                            )
+                        )
+                        err_count += 1
+                    if obj_name not in declared_objectives:
+                        errors.append(
+                            ValidationIssue(
+                                level="error",
+                                code="UNDECLARED_SCOREBOARD_OBJECTIVE",
+                                message=f"Reference to undeclared scoreboard objective '{obj_name}' at line {line_idx}: '{line}'",
+                                file=rel_path
+                            )
+                        )
+                        err_count += 1
+
+        elif subsystem == "players":
+            if len(tokens) < 3:
+                errors.append(
+                    ValidationIssue(
+                        level="error",
+                        code="UNKNOWN_COMMAND",
+                        message=f"Incomplete scoreboard players command at line {line_idx}: '{line}'",
+                        file=rel_path
+                    )
+                )
+                return 1
+            sub_act = tokens[2].lower()
+            if sub_act in ("set", "add", "remove"):
+                if len(tokens) < 6:
+                    errors.append(
+                        ValidationIssue(
+                            level="error",
+                            code="INVALID_SCORE_VALUE" if len(tokens) == 5 else "INVALID_SCOREBOARD_OBJECTIVE",
+                            message=f"Incomplete 'scoreboard players {sub_act}' command at line {line_idx}: '{line}'",
+                            file=rel_path
+                        )
+                    )
+                    return 1
+                target = tokens[3]
+                obj_name = tokens[4]
+                val_str = tokens[5]
+
+                try:
+                    validate_objective_name(obj_name)
+                except ValueError as e:
+                    errors.append(
+                        ValidationIssue(
+                            level="error",
+                            code="INVALID_SCOREBOARD_OBJECTIVE",
+                            message=f"Invalid objective name '{obj_name}' at line {line_idx}: {e}",
+                            file=rel_path
+                        )
+                    )
+                    err_count += 1
+
+                if obj_name not in declared_objectives:
+                    errors.append(
+                        ValidationIssue(
+                            level="error",
+                            code="UNDECLARED_SCOREBOARD_OBJECTIVE",
+                            message=f"Reference to undeclared scoreboard objective '{obj_name}' at line {line_idx}: '{line}'",
+                            file=rel_path
+                        )
+                    )
+                    err_count += 1
+
+                allow_neg = (sub_act == "set")
+                val_err = self._validate_score_integer(val_str, allow_negative=allow_neg)
+                if val_err:
+                    errors.append(
+                        ValidationIssue(
+                            level="error",
+                            code="INVALID_SCORE_VALUE",
+                            message=f"Invalid score value '{val_str}' at line {line_idx}: {val_err}",
+                            file=rel_path
+                        )
+                    )
+                    err_count += 1
+
+            elif sub_act == "reset":
+                if len(tokens) >= 5:
+                    obj_name = tokens[4]
+                    try:
+                        validate_objective_name(obj_name)
+                    except ValueError as e:
+                        errors.append(
+                            ValidationIssue(
+                                level="error",
+                                code="INVALID_SCOREBOARD_OBJECTIVE",
+                                message=f"Invalid objective name '{obj_name}' at line {line_idx}: {e}",
+                                file=rel_path
+                            )
+                        )
+                        err_count += 1
+                    if obj_name not in declared_objectives:
+                        errors.append(
+                            ValidationIssue(
+                                level="error",
+                                code="UNDECLARED_SCOREBOARD_OBJECTIVE",
+                                message=f"Reference to undeclared scoreboard objective '{obj_name}' at line {line_idx}: '{line}'",
+                                file=rel_path
+                            )
+                        )
+                        err_count += 1
+
+            elif sub_act == "operation":
+                if len(tokens) < 8:
+                    errors.append(
+                        ValidationIssue(
+                            level="error",
+                            code="INVALID_SCORE_OPERATION",
+                            message=f"Incomplete scoreboard operation at line {line_idx}: '{line}'",
+                            file=rel_path
+                        )
+                    )
+                    return 1
+                target = tokens[3]
+                target_obj = tokens[4]
+                op = tokens[5]
+                source = tokens[6]
+                source_obj = tokens[7]
+
+                try:
+                    validate_objective_name(target_obj)
+                except ValueError as e:
+                    errors.append(
+                        ValidationIssue(
+                            level="error",
+                            code="INVALID_SCOREBOARD_OBJECTIVE",
+                            message=f"Invalid target objective '{target_obj}' at line {line_idx}: {e}",
+                            file=rel_path
+                        )
+                    )
+                    err_count += 1
+                if target_obj not in declared_objectives:
+                    errors.append(
+                        ValidationIssue(
+                            level="error",
+                            code="UNDECLARED_SCOREBOARD_OBJECTIVE",
+                            message=f"Reference to undeclared scoreboard objective '{target_obj}' at line {line_idx}: '{line}'",
+                            file=rel_path
+                        )
+                    )
+                    err_count += 1
+
+                try:
+                    validate_score_operation(op)
+                except ValueError as e:
+                    errors.append(
+                        ValidationIssue(
+                            level="error",
+                            code="INVALID_SCORE_OPERATION",
+                            message=f"Invalid score operation '{op}' at line {line_idx}: {e}",
+                            file=rel_path
+                        )
+                    )
+                    err_count += 1
+
+                try:
+                    validate_objective_name(source_obj)
+                except ValueError as e:
+                    errors.append(
+                        ValidationIssue(
+                            level="error",
+                            code="INVALID_SCOREBOARD_OBJECTIVE",
+                            message=f"Invalid source objective '{source_obj}' at line {line_idx}: {e}",
+                            file=rel_path
+                        )
+                    )
+                    err_count += 1
+                if source_obj not in declared_objectives:
+                    errors.append(
+                        ValidationIssue(
+                            level="error",
+                            code="UNDECLARED_SCOREBOARD_OBJECTIVE",
+                            message=f"Reference to undeclared scoreboard objective '{source_obj}' at line {line_idx}: '{line}'",
+                            file=rel_path
+                        )
+                    )
+                    err_count += 1
+
+            elif sub_act in ("get", "enable"):
+                if len(tokens) >= 5:
+                    obj_name = tokens[4]
+                    try:
+                        validate_objective_name(obj_name)
+                    except ValueError as e:
+                        errors.append(
+                            ValidationIssue(
+                                level="error",
+                                code="INVALID_SCOREBOARD_OBJECTIVE",
+                                message=f"Invalid objective name '{obj_name}' at line {line_idx}: {e}",
+                                file=rel_path
+                            )
+                        )
+                        err_count += 1
+                    if obj_name not in declared_objectives:
+                        errors.append(
+                            ValidationIssue(
+                                level="error",
+                                code="UNDECLARED_SCOREBOARD_OBJECTIVE",
+                                message=f"Reference to undeclared scoreboard objective '{obj_name}' at line {line_idx}: '{line}'",
+                                file=rel_path
+                            )
+                        )
+                        err_count += 1
+
+        return err_count
+
+    def _validate_execute_score_conditions(
+        self,
+        tokens: List[str],
+        line: str,
+        rel_path: str,
+        line_idx: int,
+        declared_objectives: Set[str],
+        errors: List[ValidationIssue]
+    ) -> int:
+        """
+        Validates any '(if|unless) score' conditions in an execute command line.
+        Returns the number of errors encountered.
+        """
+        err_count = 0
+        i = 0
+        while i < len(tokens):
+            tok = tokens[i].lower()
+            if tok in ("if", "unless") and i + 1 < len(tokens) and tokens[i + 1].lower() == "score":
+                if i + 3 >= len(tokens):
+                    errors.append(
+                        ValidationIssue(
+                            level="error",
+                            code="INVALID_SCORE_COMPARISON",
+                            message=f"Incomplete execute score condition at line {line_idx}: '{line}'",
+                            file=rel_path
+                        )
+                    )
+                    return err_count + 1
+
+                target = tokens[i + 2]
+                target_obj = tokens[i + 3]
+
+                try:
+                    validate_objective_name(target_obj)
+                except ValueError as e:
+                    errors.append(
+                        ValidationIssue(
+                            level="error",
+                            code="INVALID_SCOREBOARD_OBJECTIVE",
+                            message=f"Invalid objective name '{target_obj}' at line {line_idx}: {e}",
+                            file=rel_path
+                        )
+                    )
+                    err_count += 1
+
+                if target_obj not in declared_objectives:
+                    errors.append(
+                        ValidationIssue(
+                            level="error",
+                            code="UNDECLARED_SCOREBOARD_OBJECTIVE",
+                            message=f"Reference to undeclared scoreboard objective '{target_obj}' at line {line_idx}: '{line}'",
+                            file=rel_path
+                        )
+                    )
+                    err_count += 1
+
+                if i + 4 >= len(tokens):
+                    errors.append(
+                        ValidationIssue(
+                            level="error",
+                            code="INVALID_SCORE_COMPARISON",
+                            message=f"Incomplete execute score condition at line {line_idx}: missing comparison operator or 'matches'",
+                            file=rel_path
+                        )
+                    )
+                    return err_count + 1
+
+                op_or_matches = tokens[i + 4]
+                if op_or_matches.lower() == "matches":
+                    if i + 5 >= len(tokens):
+                        errors.append(
+                            ValidationIssue(
+                                level="error",
+                                code="INVALID_SCORE_COMPARISON",
+                                message=f"Missing range expression after 'matches' at line {line_idx}: '{line}'",
+                                file=rel_path
+                            )
+                        )
+                        return err_count + 1
+                    range_str = tokens[i + 5]
+                    range_err = self._validate_score_range(range_str)
+                    if range_err:
+                        errors.append(
+                            ValidationIssue(
+                                level="error",
+                                code="INVALID_SCORE_COMPARISON",
+                                message=f"Invalid score range '{range_str}' at line {line_idx}: {range_err}",
+                                file=rel_path
+                            )
+                        )
+                        err_count += 1
+                    i += 6
+                else:
+                    op = op_or_matches
+                    try:
+                        validate_comparison_operator(op)
+                    except ValueError as e:
+                        errors.append(
+                            ValidationIssue(
+                                level="error",
+                                code="INVALID_SCORE_COMPARISON",
+                                message=f"Invalid score comparison operator '{op}' at line {line_idx}: {e}",
+                                file=rel_path
+                            )
+                        )
+                        err_count += 1
+
+                    if i + 6 >= len(tokens):
+                        errors.append(
+                            ValidationIssue(
+                                level="error",
+                                code="INVALID_SCORE_COMPARISON",
+                                message=f"Incomplete score comparison at line {line_idx}: missing source or source objective",
+                                file=rel_path
+                            )
+                        )
+                        return err_count + 1
+
+                    source = tokens[i + 5]
+                    source_obj = tokens[i + 6]
+
+                    try:
+                        validate_objective_name(source_obj)
+                    except ValueError as e:
+                        errors.append(
+                            ValidationIssue(
+                                level="error",
+                                code="INVALID_SCOREBOARD_OBJECTIVE",
+                                message=f"Invalid source objective '{source_obj}' at line {line_idx}: {e}",
+                                file=rel_path
+                            )
+                        )
+                        err_count += 1
+
+                    if source_obj not in declared_objectives:
+                        errors.append(
+                            ValidationIssue(
+                                level="error",
+                                code="UNDECLARED_SCOREBOARD_OBJECTIVE",
+                                message=f"Reference to undeclared scoreboard objective '{source_obj}' at line {line_idx}: '{line}'",
+                                file=rel_path
+                            )
+                        )
+                        err_count += 1
+
+                    i += 7
+            else:
+                i += 1
+
+        return err_count
 
     def validate(self, path: Union[str, Path]) -> ValidationResult:
         """
@@ -803,80 +1401,177 @@ class DatapackValidator:
             )
 
         # ---------------------------------------------------------
-        # 6. Function (.mcfunction) Validation
+        # 6. Function (.mcfunction) Validation & Scoreboard Safety
         # ---------------------------------------------------------
         function_files = list(dir_path.rglob("*.mcfunction"))
         func_errors = 0
+        scoreboard_errors = 0
+
+        # Pass 1: Parse and index all declared scoreboard objectives and display slots
+        declared_objectives: Dict[str, Dict[str, Any]] = {}
+        display_slot_assignments: Dict[str, Dict[str, Any]] = {}
+        function_lines_cache: Dict[Path, List[Tuple[int, str]]] = {}
 
         for func_file in function_files:
             rel_path = func_file.relative_to(dir_path).as_posix()
             try:
                 with open(func_file, "r", encoding="utf-8") as f:
                     lines = f.readlines()
-
+                parsed_lines: List[Tuple[int, str]] = []
                 for line_idx, raw_line in enumerate(lines, start=1):
                     line = raw_line.strip()
                     if not line or line.startswith("#"):
                         continue
+                    parsed_lines.append((line_idx, line))
 
-                    # Commands in mcfunction files MUST NOT have leading slash
-                    if line.startswith("/"):
-                        errors.append(
-                            ValidationIssue(
-                                level="error",
-                                code="LEADING_SLASH_IN_FUNCTION",
-                                message=(
-                                    f"Command at line {line_idx} must not start with '/': '{line}'"
-                                ),
-                                file=rel_path
-                            )
-                        )
-                        func_errors += 1
+                    # Parse objective declarations
+                    clean_for_add = line
+                    if "run scoreboard objectives add" in clean_for_add:
+                        clean_for_add = clean_for_add[clean_for_add.index("run scoreboard objectives add") + 4:]
 
-                    # Command root check
-                    first_token = line.lstrip("/").split()[0].lower() if line.lstrip("/").split() else ""
-                    if self.valid_commands and first_token and first_token not in self.valid_commands:
-                        warnings.append(
-                            ValidationIssue(
-                                level="warning",
-                                code="UNKNOWN_COMMAND",
-                                message=(
-                                    f"Command root '{first_token}' at line {line_idx} is not a known Minecraft command."
-                                ),
-                                file=rel_path
-                            )
-                        )
+                    m_add = re.match(r"^scoreboard\s+objectives\s+add\s+(\S+)(?:\s+(\S+))?(?:\s+(.*))?$", clean_for_add)
+                    if m_add:
+                        obj_name = m_add.group(1)
+                        crit = m_add.group(2)
+                        disp = (m_add.group(3) or "").strip()
 
-                    # Check for empty player selectors on load
-                    is_load_fn = (
-                        func_file.name == "load.mcfunction" or
-                        func_file.stem == "load"
-                    )
-                    if is_load_fn:
-                        load_selector_match = re.search(
-                            r"\bscoreboard\s+players\s+(?:set|add|remove|reset|enable)\s+(@[apres])\b",
-                            line,
-                            re.IGNORECASE
-                        ) or re.search(
-                            r"\btag\s+(@[apres])\s+(?:add|remove)\b",
-                            line,
-                            re.IGNORECASE
-                        )
-                        if load_selector_match:
-                            selector_used = load_selector_match.group(1)
-                            warnings.append(
+                        # Validate objective name
+                        try:
+                            validate_objective_name(obj_name)
+                        except ValueError as e:
+                            errors.append(
                                 ValidationIssue(
-                                    level="warning",
-                                    code="EMPTY_SELECTOR_ON_LOAD",
-                                    message=(
-                                        f"Command at line {line_idx} modifies score/tag on '{selector_used}' inside a load function. "
-                                        f"#minecraft:load executes during world startup when no players are connected, "
-                                        f"so '{selector_used}' will match 0 entities. Use a global state holder (e.g. '#global') "
-                                        f"or initialize player scores dynamically in the tick loop."
-                                    ),
+                                    level="error",
+                                    code="INVALID_SCOREBOARD_OBJECTIVE",
+                                    message=f"Invalid objective name '{obj_name}' at line {line_idx}: {e}",
                                     file=rel_path
                                 )
                             )
+                            scoreboard_errors += 1
+
+                        # Validate criteria
+                        if not crit:
+                            errors.append(
+                                ValidationIssue(
+                                    level="error",
+                                    code="INVALID_SCOREBOARD_CRITERIA",
+                                    message=f"Missing criteria in 'scoreboard objectives add' at line {line_idx}: '{line}'",
+                                    file=rel_path
+                                )
+                            )
+                            scoreboard_errors += 1
+                        else:
+                            try:
+                                validate_criteria(crit)
+                            except ValueError as e:
+                                errors.append(
+                                    ValidationIssue(
+                                        level="error",
+                                        code="INVALID_SCOREBOARD_CRITERIA",
+                                        message=f"Invalid criteria '{crit}' for objective '{obj_name}' at line {line_idx}: {e}",
+                                        file=rel_path
+                                    )
+                                )
+                                scoreboard_errors += 1
+
+                        # Check for conflicting declarations
+                        if obj_name in declared_objectives:
+                            prev_def = declared_objectives[obj_name]
+                            if prev_def["criteria"] != crit:
+                                errors.append(
+                                    ValidationIssue(
+                                        level="error",
+                                        code="CONFLICTING_OBJECTIVE_DEFINITION",
+                                        message=(
+                                            f"Conflicting criteria for objective '{obj_name}': "
+                                            f"'{prev_def['criteria']}' ({prev_def['file']}:{prev_def['line']}) vs "
+                                            f"'{crit}' ({rel_path}:{line_idx})"
+                                        ),
+                                        file=rel_path
+                                    )
+                                )
+                                scoreboard_errors += 1
+                            elif prev_def["display_name"] != disp:
+                                errors.append(
+                                    ValidationIssue(
+                                        level="error",
+                                        code="CONFLICTING_OBJECTIVE_DEFINITION",
+                                        message=(
+                                            f"Conflicting display name for objective '{obj_name}': "
+                                            f"'{prev_def['display_name']}' ({prev_def['file']}:{prev_def['line']}) vs "
+                                            f"'{disp}' ({rel_path}:{line_idx})"
+                                        ),
+                                        file=rel_path
+                                    )
+                                )
+                                scoreboard_errors += 1
+                        else:
+                            declared_objectives[obj_name] = {
+                                "criteria": crit,
+                                "display_name": disp,
+                                "file": rel_path,
+                                "line": line_idx
+                            }
+
+                    # Parse display slot assignments
+                    clean_for_slot = line
+                    if "run scoreboard objectives setdisplay" in clean_for_slot:
+                        clean_for_slot = clean_for_slot[clean_for_slot.index("run scoreboard objectives setdisplay") + 4:]
+
+                    m_slot = re.match(r"^scoreboard\s+objectives\s+setdisplay\s+(\S+)(?:\s+(\S+))?(?:\s+(.*))?$", clean_for_slot)
+                    if m_slot:
+                        slot = m_slot.group(1)
+                        slot_obj = m_slot.group(2)
+                        try:
+                            validate_display_slot(slot)
+                        except ValueError as e:
+                            errors.append(
+                                ValidationIssue(
+                                    level="error",
+                                    code="INVALID_DISPLAY_SLOT",
+                                    message=f"Invalid display slot '{slot}' at line {line_idx}: {e}",
+                                    file=rel_path
+                                )
+                            )
+                            scoreboard_errors += 1
+
+                        if slot_obj:
+                            try:
+                                validate_objective_name(slot_obj)
+                            except ValueError as e:
+                                errors.append(
+                                    ValidationIssue(
+                                        level="error",
+                                        code="INVALID_SCOREBOARD_OBJECTIVE",
+                                        message=f"Invalid objective name '{slot_obj}' in setdisplay at line {line_idx}: {e}",
+                                        file=rel_path
+                                    )
+                                )
+                                scoreboard_errors += 1
+
+                            if slot in display_slot_assignments and display_slot_assignments[slot]["objective"] != slot_obj:
+                                prev_slot = display_slot_assignments[slot]
+                                errors.append(
+                                    ValidationIssue(
+                                        level="error",
+                                        code="CONFLICTING_OBJECTIVE_DEFINITION",
+                                        message=(
+                                            f"Conflicting display slot assignment: '{slot}' assigned to '{prev_slot['objective']}' "
+                                            f"({prev_slot['file']}:{prev_slot['line']}) and '{slot_obj}' ({rel_path}:{line_idx})"
+                                        ),
+                                        file=rel_path
+                                    )
+                                )
+                                scoreboard_errors += 1
+                            else:
+                                display_slot_assignments[slot] = {
+                                    "objective": slot_obj,
+                                    "file": rel_path,
+                                    "line": line_idx
+                                }
+
+                function_lines_cache[func_file] = parsed_lines
+
             except Exception as e:
                 errors.append(
                     ValidationIssue(
@@ -888,12 +1583,115 @@ class DatapackValidator:
                 )
                 func_errors += 1
 
+        # Pass 2: Line-by-line syntax, context, and scoreboard reference validation
+        declared_obj_names = set(declared_objectives.keys())
+
+        for func_file, parsed_lines in function_lines_cache.items():
+            rel_path = func_file.relative_to(dir_path).as_posix()
+            is_load_fn = (
+                func_file.name == "load.mcfunction" or
+                func_file.stem == "load"
+            )
+
+            for line_idx, line in parsed_lines:
+                # 1. Leading slash check
+                if line.startswith("/"):
+                    errors.append(
+                        ValidationIssue(
+                            level="error",
+                            code="LEADING_SLASH_IN_FUNCTION",
+                            message=f"Command at line {line_idx} must not start with '/': '{line}'",
+                            file=rel_path
+                        )
+                    )
+                    func_errors += 1
+
+                # 2. Command root check
+                first_token = line.lstrip("/").split()[0].lower() if line.lstrip("/").split() else ""
+                if self.valid_commands and first_token and first_token not in self.valid_commands:
+                    warnings.append(
+                        ValidationIssue(
+                            level="warning",
+                            code="UNKNOWN_COMMAND",
+                            message=f"Command root '{first_token}' at line {line_idx} is not a known Minecraft command.",
+                            file=rel_path
+                        )
+                    )
+
+                # 3. Empty player selectors on load
+                if is_load_fn:
+                    load_selector_match = re.search(
+                        r"\bscoreboard\s+players\s+(?:set|add|remove|reset|enable)\s+(@[apres])\b",
+                        line,
+                        re.IGNORECASE
+                    ) or re.search(
+                        r"\btag\s+(@[apres])\s+(?:add|remove)\b",
+                        line,
+                        re.IGNORECASE
+                    )
+                    if load_selector_match:
+                        selector_used = load_selector_match.group(1)
+                        warnings.append(
+                            ValidationIssue(
+                                level="warning",
+                                code="EMPTY_SELECTOR_ON_LOAD",
+                                message=(
+                                    f"Command at line {line_idx} modifies score/tag on '{selector_used}' inside a load function. "
+                                    f"#minecraft:load executes during world startup when no players are connected, "
+                                    f"so '{selector_used}' will match 0 entities. Use a global state holder (e.g. '#global') "
+                                    f"or initialize player scores dynamically in the tick loop."
+                                ),
+                                file=rel_path
+                            )
+                        )
+
+                # 4. Scoreboard command & execute score conditions validation
+                line_tokens = line.split()
+                if line_tokens:
+                    curr_tokens = line_tokens
+                    while curr_tokens and curr_tokens[0].lower() == "execute":
+                        sb_errs = self._validate_execute_score_conditions(
+                            tokens=curr_tokens,
+                            line=line,
+                            rel_path=rel_path,
+                            line_idx=line_idx,
+                            declared_objectives=declared_obj_names,
+                            errors=errors
+                        )
+                        scoreboard_errors += sb_errs
+                        if "run" in [t.lower() for t in curr_tokens]:
+                            lower_tokens = [t.lower() for t in curr_tokens]
+                            run_idx = lower_tokens.index("run")
+                            curr_tokens = curr_tokens[run_idx + 1:]
+                        else:
+                            break
+
+                    if curr_tokens and curr_tokens[0].lower() == "scoreboard":
+                        sb_cmd_errs = self._validate_scoreboard_command_tokens(
+                            tokens=curr_tokens,
+                            line=line,
+                            rel_path=rel_path,
+                            line_idx=line_idx,
+                            declared_objectives=declared_obj_names,
+                            errors=errors
+                        )
+                        scoreboard_errors += sb_cmd_errs
+
+        func_errors += scoreboard_errors
+
         if function_files:
             checks.append(
                 ValidationCheck(
                     name="Function Syntax Check",
                     passed=(func_errors == 0),
                     message=f"Validated {len(function_files)} mcfunction file(s)"
+                )
+            )
+            checks.append(
+                ValidationCheck(
+                    name="Scoreboard System & Objective Validation",
+                    passed=(scoreboard_errors == 0),
+                    message=f"Validated {len(declared_objectives)} scoreboard objective(s) and operations across function files"
                 )
             )
 
@@ -981,8 +1779,31 @@ class DatapackValidator:
                         is_required = True if isinstance(val, str) else val.get("required", True)
                         # Check target existence for non-optional, direct function references
                         if is_required and not val_id.startswith("#"):
+                            if not val_id.strip():
+                                errors.append(
+                                    ValidationIssue(
+                                        level="error",
+                                        code="MALFORMED_TAG",
+                                        message=f"Function tag contains empty function reference at index {idx}.",
+                                        file=rel_path
+                                    )
+                                )
+                                tag_errors += 1
+                                continue
                             if ":" in val_id:
-                                v_ns, v_path = val_id.split(":", 1)
+                                v_parts = val_id.split(":")
+                                if len(v_parts) != 2 or not v_parts[0] or not v_parts[1]:
+                                    errors.append(
+                                        ValidationIssue(
+                                            level="error",
+                                            code="MALFORMED_TAG",
+                                            message=f"Malformed function tag reference '{val_id}' at index {idx}.",
+                                            file=rel_path
+                                        )
+                                    )
+                                    tag_errors += 1
+                                    continue
+                                v_ns, v_path = v_parts[0], v_parts[1]
                             else:
                                 v_ns, v_path = "minecraft", val_id
                             target_fn = dir_path / "data" / v_ns / "function" / f"{v_path}.mcfunction"

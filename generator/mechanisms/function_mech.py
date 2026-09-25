@@ -1,12 +1,19 @@
 import json
 import logging
 import re
-from typing import Any, Dict, List, Optional
+from typing import Any, Dict, List, Optional, Union
 
 logger = logging.getLogger(__name__)
 
 from generator.mechanisms.base import BaseMechanismGenerator
-from generator.models import ActionSpecification, DatapackResource, FunctionDefinition
+from generator.models import (
+    ActionSpecification,
+    DatapackResource,
+    FunctionDefinition,
+    MechanismSpecification,
+    ScoreboardObjectiveDefinition,
+    ScoreCompareCondition,
+)
 
 
 class FunctionMechanismGenerator(BaseMechanismGenerator):
@@ -38,6 +45,128 @@ class FunctionMechanismGenerator(BaseMechanismGenerator):
             return f"{default_prefix}{clean}"
         return clean
 
+    @staticmethod
+    def _format_display_name(display_name: Union[str, Dict[str, Any]]) -> str:
+        if isinstance(display_name, dict):
+            return json.dumps(display_name, ensure_ascii=False)
+        raw = str(display_name).strip()
+        if (raw.startswith("{") and raw.endswith("}")) or (raw.startswith("[") and raw.endswith("]")):
+            return raw
+        if (raw.startswith('"') and raw.endswith('"')) or (raw.startswith("'") and raw.endswith("'")):
+            return raw
+        escaped = raw.replace('"', '\\"')
+        return f'"{escaped}"'
+
+    def synthesize_objective_command(
+        self,
+        obj_def: Union[ScoreboardObjectiveDefinition, MechanismSpecification, Dict[str, Any]]
+    ) -> List[str]:
+        """
+        Deterministically translates a scoreboard objective definition into valid
+        Minecraft Java 1.21.11 command strings (add and optional setdisplay).
+        """
+        if isinstance(obj_def, dict):
+            obj = str(obj_def.get("objective") or obj_def.get("path") or obj_def.get("target") or "").strip()
+            criteria = str(obj_def.get("criteria") or "dummy").strip()
+            display_name = obj_def.get("display_name")
+            display_slot = obj_def.get("display_slot")
+        elif isinstance(obj_def, ScoreboardObjectiveDefinition):
+            obj = obj_def.objective
+            criteria = obj_def.criteria
+            display_name = obj_def.display_name
+            display_slot = obj_def.display_slot
+        elif isinstance(obj_def, MechanismSpecification):
+            obj = str(obj_def.objective or obj_def.path or obj_def.target or "").strip()
+            crit = obj_def.criteria or "dummy"
+            criteria = str(crit) if isinstance(crit, str) else "dummy"
+            display_name = obj_def.display_name
+            display_slot = obj_def.display_slot
+        else:
+            raise ValueError(f"Unsupported scoreboard objective type: {type(obj_def)}")
+
+        if not obj:
+            raise ValueError("Scoreboard objective name cannot be empty.")
+
+        cmds: List[str] = []
+        if display_name is not None and str(display_name).strip():
+            formatted_name = self._format_display_name(display_name)
+            cmds.append(f"scoreboard objectives add {obj} {criteria} {formatted_name}")
+        else:
+            cmds.append(f"scoreboard objectives add {obj} {criteria}")
+
+        if display_slot:
+            cmds.append(f"scoreboard objectives setdisplay {display_slot} {obj}")
+
+        return cmds
+
+    def _generate_score_action(self, action: ActionSpecification, a_type: str, target: str) -> Optional[str]:
+        holder = action.score_holder or target
+        obj = action.objective
+
+        if a_type in ("set_score", "score_set"):
+            target_obj = obj or "state"
+            val = action.score_value if action.score_value is not None else 0
+            return f"scoreboard players set {holder} {target_obj} {val}"
+
+        elif a_type in ("add_score", "score_add"):
+            target_obj = obj or "state"
+            val = action.score_value if action.score_value is not None else 1
+            return f"scoreboard players add {holder} {target_obj} {val}"
+
+        elif a_type in ("remove_score", "score_remove"):
+            target_obj = obj or "state"
+            val = action.score_value if action.score_value is not None else 0
+            return f"scoreboard players remove {holder} {target_obj} {val}"
+
+        elif a_type in ("reset_score", "score_reset"):
+            if obj:
+                return f"scoreboard players reset {holder} {obj}"
+            return f"scoreboard players reset {holder}"
+
+        elif a_type in ("remove_objective", "objective_remove"):
+            if obj:
+                return f"scoreboard objectives remove {obj}"
+
+        return None
+
+    def _generate_score_operation(self, action: ActionSpecification, target: str) -> Optional[str]:
+        target_holder = action.score_holder or target
+        target_obj = action.objective
+        op = action.operation
+        source_holder = action.source_holder
+        source_obj = action.source_objective
+
+        if target_holder and target_obj and op and source_holder and source_obj:
+            return f"scoreboard players operation {target_holder} {target_obj} {op} {source_holder} {source_obj}"
+        return None
+
+    def _generate_score_condition(self, cond: Union[Dict[str, Any], ScoreCompareCondition]) -> Optional[str]:
+        if isinstance(cond, ScoreCompareCondition):
+            prefix = "unless" if cond.inverted else "if"
+            return f"{prefix} score {cond.target} {cond.target_objective} {cond.operator} {cond.source} {cond.source_objective}"
+
+        if isinstance(cond, dict):
+            c_type = str(cond.get("type", "")).strip().lower()
+            if c_type == "score_compare":
+                inv = bool(cond.get("inverted", False) or cond.get("unless", False))
+                prefix = "unless" if inv else "if"
+                target_h = cond.get("target") or cond.get("score_holder") or "@s"
+                target_o = cond.get("target_objective") or cond.get("objective")
+                op = cond.get("operator") or "="
+                src_h = cond.get("source") or cond.get("source_holder") or "#global"
+                src_o = cond.get("source_objective") or cond.get("objective")
+                if target_o and src_o:
+                    return f"{prefix} score {target_h} {target_o} {op} {src_h} {src_o}"
+            elif c_type == "score" or "score" in cond or "objective" in cond:
+                holder = cond.get("holder", cond.get("score_holder", cond.get("target", "#global")))
+                obj = cond.get("objective", cond.get("score"))
+                matches = cond.get("matches", cond.get("range", cond.get("value", 0)))
+                inv = bool(cond.get("inverted", False) or cond.get("unless", False))
+                prefix = "unless" if inv else "if"
+                if obj:
+                    return f"{prefix} score {holder} {obj} matches {matches}"
+        return None
+
     def synthesize_action(self, action: ActionSpecification) -> Optional[str]:
         """
         Deterministically translates an ActionSpecification into a valid
@@ -49,18 +178,22 @@ class FunctionMechanismGenerator(BaseMechanismGenerator):
         # Build conditions prefix if specified
         cond_parts: List[str] = []
         for cond in (action.conditions or []):
-            if isinstance(cond, dict):
-                c_type = cond.get("type", "")
+            if isinstance(cond, ScoreCompareCondition):
+                score_cond = self._generate_score_condition(cond)
+                if score_cond:
+                    cond_parts.append(score_cond)
+            elif isinstance(cond, dict):
+                c_type = str(cond.get("type", "")).strip().lower()
                 if c_type == "predicate" or "predicate" in cond:
                     pred_id = self._normalize_id(cond.get("predicate"))
                     if pred_id:
-                        cond_parts.append(f"if predicate {pred_id}")
-                elif c_type == "score" or "score" in cond or "objective" in cond:
-                    holder = cond.get("holder", cond.get("score_holder", "#global"))
-                    obj = cond.get("objective", cond.get("score"))
-                    matches = cond.get("matches", cond.get("value", 0))
-                    if obj:
-                        cond_parts.append(f"if score {holder} {obj} matches {matches}")
+                        inv = bool(cond.get("inverted", False) or cond.get("unless", False))
+                        prefix = "unless" if inv else "if"
+                        cond_parts.append(f"{prefix} predicate {pred_id}")
+                else:
+                    score_cond = self._generate_score_condition(cond)
+                    if score_cond:
+                        cond_parts.append(score_cond)
 
         cond_prefix = " ".join(cond_parts).strip()
 
@@ -107,22 +240,17 @@ class FunctionMechanismGenerator(BaseMechanismGenerator):
                 cmd_body = f"clear {target}"
 
         # 3. Scoreboard actions
-        elif a_type in ("set_score", "score_set"):
-            holder = action.score_holder or target
-            obj = action.objective or "state"
-            val = action.score_value if action.score_value is not None else 0
-            cmd_body = f"scoreboard players set {holder} {obj} {val}"
+        elif a_type in (
+            "set_score", "score_set",
+            "add_score", "score_add",
+            "remove_score", "score_remove",
+            "reset_score", "score_reset",
+            "remove_objective", "objective_remove"
+        ):
+            cmd_body = self._generate_score_action(action, a_type, target) or ""
 
-        elif a_type in ("add_score", "score_add"):
-            holder = action.score_holder or target
-            obj = action.objective or "state"
-            val = action.score_value if action.score_value is not None else 1
-            cmd_body = f"scoreboard players add {holder} {obj} {val}"
-
-        elif a_type in ("reset_score", "score_reset"):
-            holder = action.score_holder or target
-            obj = action.objective or "state"
-            cmd_body = f"scoreboard players reset {holder} {obj}"
+        elif a_type in ("operation_score", "score_operation"):
+            cmd_body = self._generate_score_operation(action, target) or ""
 
         # 4. Audio / Visual
         elif a_type in ("play_sound", "sound"):

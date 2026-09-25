@@ -116,3 +116,107 @@ Bytecode analysis of Minecraft Java Edition 1.21.11 (`server-1.21.11.jar` classe
    - Standard game-loop tags (`tick`, `load`, `#minecraft:tick`, `#minecraft:load`) automatically route to `data/minecraft/tags/function/{clean_tag}.json`.
    - `DatapackGenerator` non-destructively merges tag values and runs a post-generation tag sanitizer ensuring every referenced resource exists in the pack, removing dangling references to prevent Minecraft's all-or-nothing tag drop.
    - `DatapackValidator` accepts `"replace": false` as valid Minecraft syntax, checks boolean types, warns on `MISPLACED_GAME_LOOP_TAG` if `tick`/`load` tags are placed outside the `minecraft` namespace, and checks for dangling references.
+
+## D022 — Scoreboard Domain Knowledge and RAG Integration (Step 16.1)
+To support advanced scoreboard-based systems, objectives, and arithmetic operations deterministically:
+1. Authoritative Knowledge Registry: Created `knowledge/scoreboards/java/1.21.11/scoreboards.json` indexing criteria (`dummy`, `trigger`, `deathCount`, `playerKillCount`, `totalKillCount`, `health`, `xp`, `level`, `food`, `air`, `armor`, custom stats, item/mob stats), display slots (`sidebar`, `list`, `below_name`, `sidebar.team.<color>`), arithmetic operations (`=`, `+=`, `-=`, `*=`, `/=`, `%=`, `<`, `>`, `><`), score comparisons (`<`, `<=`, `=`, `>`, `>=`, `matches`), and architectural best practices.
+2. Knowledge Indexing & Scoring: Integrated scoreboard loading and relevance scoring (`score_scoreboard`, `search_scoreboards_relevant`) into `knowledge_retriever.py` and `ai/context.py`, matching keywords, operators, criteria, and display slots for incoming natural-language queries.
+3. Automated Retrieval Verification: Expanded `test_retrieval.py` with `test_scoreboard_retrieval()` verifying criteria, slots, arithmetic operations, and comparison operators across multiple natural language scenarios.
+
+## D023 — Structured Data Contracts & Models for Scoreboards (Step 16.2)
+To represent scoreboard operations and objectives deterministically within the existing architecture:
+1. Architectural Continuity: Reused existing `ActionSpecification` and `MechanismSpecification` without creating a separate or parallel scoreboard system.
+2. Objective Definition Model: Introduced `ScoreboardObjectiveDefinition` representing objective name (1-16 chars matching `^[a-zA-Z0-9_.+-]+$`), criteria (validated against Step 16.1 authoritative knowledge), optional display name, and optional display slot (`sidebar`, `list`, `below_name`, `sidebar.team.<color>`).
+3. Comparison Condition Model: Introduced `ScoreCompareCondition` representing score-to-score comparisons (`<`, `<=`, `=`, `>`, `>=`) with target, source, objectives, and inversion support (`if` vs `unless`).
+4. ActionSpecification Extension: Added `remove_score` and `operation_score` (requiring `target`, `objective`, `operation`, `source_holder`, `source_objective`). Supported operations strictly match Step 16.1 knowledge (`=`, `+=`, `-=`, `*=`, `/=`, `%=`, `<`, `>`, `><`).
+5. Strict Score Value Validation: Preserved Step 15 strictness by validating `score_value` in `mode="before"`. Coercion of floats (30.5, 30.0, "30.0") and booleans (True/False) is strictly rejected. Enforced non-negative requirement (min: 0) for `add_score` and `remove_score` matching Minecraft Brigadier syntax constraints.
+6. MechanismSpecification & validate_mechanism_specification: Expanded `MechanismSpecification` to support `scoreboard_objective` mechanisms carrying objective definitions and actions. Added `to_scoreboard_objective_definition()` and early structural validation in `validate_mechanism_specification()`.
+
+## D024 — Deterministic Scoreboard Command Generation and Resource Consolidation (Step 16.3)
+To translate structured scoreboard contracts into valid Minecraft Java 1.21.11 commands deterministically:
+1. Command Synthesis in Existing Architecture: Extended `FunctionMechanismGenerator` to synthesize:
+   - `scoreboard objectives add <objective> <criteria> [<displayName>]` with support for plain string and JSON component formats.
+   - `scoreboard objectives setdisplay <slot> <objective>` for all valid base and team-colored slots.
+   - `scoreboard players set|add|remove <target> <objective> <score>`.
+   - `scoreboard players reset <target> [<objective>]` (supporting targeted or objective-wide score resets).
+   - `scoreboard players operation <target> <target_obj> <op> <source> <source_obj>` for all 9 authoritative operations (`=`, `+=`, `-=`, `*=`, `/=`, `%=`, `<`, `>`, `><`).
+   - `execute (if|unless) score ...` for both score ranges (`matches <range>`) and score comparisons (`<`, `<=`, `=`, `>`, `>=`).
+2. Scoped Context Anchoring (@a -> @s): In `StateMachineMechanismGenerator._extract_action_command`, mapped `@a` to `@s` exclusively for execution inside the existing `as @a at @s` context loop to ensure per-player scoreboard increments. Preserved explicit selectors (`@p`, `@s`, `#global`, `#state`, `#timer`) without modification across all synthesis methods.
+3. Objective Consolidation & Conflict Prevention: In `DatapackGenerator.generate()`, deduplicated identical objective definitions into a single `load.mcfunction` initialization line. If multiple definitions for the same objective conflict in criteria, display name, or display slot, the generator raises `ValueError` to prevent silent misconfiguration.
+4. Intelligent Lifecycle Function Merging: When merging `.mcfunction` files, deduplicated identical objective registrations, display slot assignments, and diagnostic setup in lifecycle functions (`load.mcfunction`, `tick.mcfunction`), while strictly preventing conflicting definitions or silent clobbering across custom function files.
+
+## D025 — Static Scoreboard Validation and Safety Checks (Step 16.4)
+To ensure scoreboard datapacks are validated statically and deterministically before reaching runtime:
+1. Two-Pass Objective and Command Validation: In `DatapackValidator` Section 6:
+   - Pass 1 traverses all `.mcfunction` files, indexes all objective declarations (`scoreboard objectives add <name> <criteria> [<displayName>]`) and display slot assignments (`scoreboard objectives setdisplay <slot> <name>`), validates names (1-16 chars, alphanumeric regex), validates criteria against Step 16.1 authoritative knowledge, and detects conflicting definitions across mechanisms (`CONFLICTING_OBJECTIVE_DEFINITION`).
+   - Pass 2 checks line syntax, leading slashes, unknown commands, and performs exhaustive command token parsing for all scoreboard subcommands and chained `execute` score conditions.
+2. Comprehensive Scoreboard Command & Operation Validation:
+   - Validates `scoreboard objectives add|remove|setdisplay|modify` and `scoreboard players set|add|remove|reset|operation|get|enable`.
+   - Validates all 9 authoritative operations (`=`, `+=`, `-=`, `*=`, `/=`, `%=`, `<`, `>`, `><`) and rejects unsupported operators with `INVALID_SCORE_OPERATION`.
+   - Checks that all referenced objectives are declared within the datapack, raising `UNDECLARED_SCOREBOARD_OBJECTIVE` on missing declarations.
+3. 32-bit Integer Boundary & Non-Negative Enforcement:
+   - Validates that literal scoreboard score values fall strictly within Minecraft's signed 32-bit integer range `[-2147483648, 2147483647]`.
+   - Rejects booleans and floating-point literals with `INVALID_SCORE_VALUE`.
+   - Enforces `min: 0` non-negative integer amount for `players add` and `players remove`, while preserving valid negative score values for `players set`.
+4. Score Comparison & Range Expression Validation:
+   - Validates execute-score conditions (`if|unless score`) across unwrapped execute chains.
+   - Enforces valid score range syntax for `matches`: exact integers, closed intervals `min..max` (with `min <= max`), and half-open intervals `min..` / `..max`.
+   - Enforces valid comparison operators for score-to-score comparisons: `<`, `<=`, `=`, `>=`, `>`.
+5. Function Tag & Lifecycle Determinism:
+   - Preserves Step 15 function tag validation (`MISSING_TAG_REFERENCE`, `MALFORMED_TAG`, non-boolean replace rejection, explicit `"replace": false` support).
+   - Validates lifecycle load/tick structure while preventing false positives for global state holders (`#global`) and per-player state machine tick loops.
+
+## D026 — QA Semantic Analysis & Runtime Simulation for Scoreboards (Step 16.5)
+To detect semantic defects, temporal state-machine anomalies, and runtime scoreboard hazards without building a heavyweight Minecraft server emulator:
+1. Abstract Scoreboard State Model (`AbstractScoreboardState`):
+   - Tracks objectives, criterion types, holders (`#global`, fake players, player selectors like `@s`), scores, and explicit initialization states.
+   - Accurately models Minecraft Java Edition signed 32-bit integer arithmetic with two's complement wrapping (`[-2147483648, 2147483647]`).
+   - Implements Minecraft Java semantics for integer division (`/=`) and modulo (`%=`) truncating toward zero, swap (`><`), and bounded operations (`<`, `>`).
+2. Three-Valued Logic (`TriState`):
+   - Implements Kleene three-valued logic (`TRUE`, `FALSE`, `UNKNOWN`) with complete truth tables for NOT (`~`), AND (`&`), and OR (`|`).
+   - Evaluates range expressions (`matches min..max`) and score-to-score comparisons (`<`, `<=`, `=`, `>=`, `>`).
+   - Explicitly returns `TriState.UNKNOWN` for uninitialized scores or dynamic runtime entities (players, mobs, weather) instead of false assumptions.
+3. Multi-Tick Temporal State-Machine Simulation:
+   - Executes a deterministic multi-tick lifecycle across 10 discrete ticks (Ticks 1..3: inactive, Ticks 4..7: sustained active, Ticks 8..10: inactive).
+   - Tracks rising edge transitions (Tick 4: FALSE -> TRUE) and falling edge transitions (Tick 8: TRUE -> FALSE).
+   - Verifies edge-triggered, once-only action firing vs continuous repetition.
+4. Semantic Hazard Detection & Diagnostic Codes:
+   - `SCORE_USE_BEFORE_INITIALIZATION`: Detects uninitialized `#global` or fake player state tested in tick without prior initialization in `load.mcfunction`.
+   - `SCORE_OPERATION_DIVIDE_BY_ZERO` / `SCORE_OPERATION_MODULO_BY_ZERO`: Detects arithmetic operations where divisor is statically known to be 0.
+   - `STATE_EVENT_REPEATS`: Detects transition actions firing repeatedly across sustained active ticks due to missing state latches.
+   - `STATE_EVENT_UNREACHABLE`: Detects on-enter actions that never satisfy entry conditions under simulated active states.
+   - `STATE_LATCH_NEVER_RESETS`: Detects state holders locked at 1 after condition ceases due to missing reset transitions.
+   - `SCORE_WRITE_CONFLICT`: Detects multiple unconditional score writes targeting the same holder/objective in the same tick lifecycle.
+5. Deterministic QA Integration:
+   - Integrated into `StaticSemanticAnalyzer.analyze()` as Section 6, fully participating in the autonomous QA review pipeline (`AutonomousQAReviewer`).
+   - Sorts all findings deterministically by `(file, id, line_or_reference)` to ensure stable, reproducible runs.
+
+## D027 — Planner / AI Instruction Alignment for Scoreboards (Step 16.6)
+To align the AI Planner instructions, prompts, and context handling with the structured scoreboard architecture without generating raw commands:
+1. System Prompt Rules & Constraints (Rules 26–30):
+   - Rule 26 (Objective Creation & Display): Teaches the model to use the structured mechanism `scoreboard_objective` with `objective`, `criteria`, `display_name`, and `display_slot`, and informs the model that objective creation belongs in one-time initialization (`load.mcfunction`).
+   - Rule 27 (Score Actions): Explicitly forbids emitting raw `scoreboard players ...` commands. Instructs the model to populate structured actions (`set_score`, `add_score`, `remove_score`, `reset_score`, `operation_score`) with supported operations (`=`, `+=`, `-=`, `*=`, `/=`, `%=`, `<`, `>`, `><`).
+   - Rule 28 (Score Conditions): Instructs the model to express score range conditions (`matches`) and score comparisons (`score_compare` with `<`, `<=`, `=`, `>=`, `>`) via structured condition dictionaries inside action `conditions`.
+   - Rule 29 (Lifecycle Separation): Clearly distinguishes `load` (objective registration, display slot configuration, initial score setup), `tick` / `continuous_action` (continuous repeated increments/updates), and `state_machine` (transition edge-triggered events).
+   - Rule 30 (Scoreboard Ambiguity & Clarification): Forbids inventing arbitrary numbers, criteria, or operations when essential information is missing, requiring the model to output status `needs_clarification` and populate `clarifications`.
+2. Scoreboard Objective Mechanism Contract:
+   - Added Section 9 to structured mechanism specifications in `_system_prompt()`.
+   - In `_normalize_result()`, normalized variations (`"scoreboard"`, `"objective"`, `"scoreboards"`) into canonical `"scoreboard_objective"`, defaulting criteria to `"dummy"` and normalizing `display_slot`.
+3. Score Action & Condition Normalization:
+   - In `_normalize_result()`, synchronized `target` and `score_holder` for all score actions.
+   - Coerced valid integer string `score_value` into integers.
+   - Normalized conditions to `score` and `score_compare` models matching `ScoreCompareCondition`.
+4. Ambiguity / Clarification Enforcement:
+   - When `normalized_clarifications` is populated by the model, automatically updates `status` to `"needs_clarification"`.
+5. Dependency Injection for AI Provider:
+   - Extended `MinecraftPlanner` and `create_plan()` to accept an optional `ai_provider`, enabling fast, deterministic unit testing without external network or Ollama dependencies while preserving full compatibility with default Ollama production runs.
+
+## D028 — Automated Verification Gate Architecture (Step 16.7)
+To prove the entire Step 16 scoreboard architecture works as a coherent pipeline without relying on live Ollama or a Minecraft server:
+1. Mock AI Injection: `MockPipelineAI` in `test_step16_verification.py` intercepts `generate_structured()` calls by matching system prompt markers (`understanding layer`, `planning engine`, `qa reviewer`). Tests inject deterministic Planner responses exercising the full downstream pipeline (Understanding -> RAG -> Planner -> Generator -> Validator -> QA -> READY) without network or inference dependencies.
+2. Layered Defense Contract: Each of the 20 failure-injection tests targets a specific architectural layer (Pydantic Model, DatapackGenerator, DatapackValidator, or StaticSemanticAnalyzer). Tests assert the correct error code at the correct layer, proving defense-in-depth rather than centralizing all checks in one validator.
+3. READY Gate Contract: `verification_status == 'verified'` requires `status == 'success'`, passing structural validation, passing QA, passing intent verification, and passing runtime simulation. Any single stage failure leaves `verification_status` unset or set to `'verification_failed'` / `'qa_failed'`.
+4. Artifact Parity Contract: ZIP archives must contain exactly the same file set as the generated folder, with no parent-directory prefix, pack.mcmeta at ZIP root, data/ at ZIP root, and canonical game-loop tags under `data/minecraft/tags/function/`. Every referenced function in tags must resolve to an existing `.mcfunction` on disk.
+5. Repair Loop Verification: Autonomous repair loop is verified for both failure exhaustion (aborting with `failed`/`verification_failed` and preserving attempt history when errors are unrepairable) and repair success (re-planning structured mechanisms, deterministically regenerating, re-validating, re-reviewing via QA, and achieving `status='success'`, `verification_status='verified'`).
+6. Real-Minecraft Boundary: The automated gate covers structural validity, static semantic simulation, intent verification, and ZIP integrity. Full 20Hz server runtime verification (player joins, world physics, continuous game loop) is explicitly documented as a manual step outside the automated gate.
+7. Ollama-Dependent Tests: Pre-existing `test_pipeline.py` tests that call Ollama without mock injection are known environment-conditional integration tests. Their failure when Ollama is unavailable is not a regression — they are not within the Step 16.7 automated gate scope.

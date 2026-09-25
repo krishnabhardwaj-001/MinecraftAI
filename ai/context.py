@@ -186,7 +186,10 @@ class MinecraftKnowledgeContext:
                 "syntax": [],
                 "loot_tables": [],
                 "entities": [],
-                "items": []
+                "items": [],
+                "predicates": [],
+                "tags": [],
+                "scoreboards": []
             }
 
         results = self.retriever.search(
@@ -223,6 +226,10 @@ class MinecraftKnowledgeContext:
             ),
             "tags": results.get(
                 "tags",
+                []
+            ),
+            "scoreboards": results.get(
+                "scoreboards",
                 []
             )
         }

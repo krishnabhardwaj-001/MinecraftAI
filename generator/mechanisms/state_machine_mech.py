@@ -62,6 +62,15 @@ class StateMachineMechanismGenerator(BaseMechanismGenerator):
             return f"give @s {raw_cmd[8:]}"
         if raw_cmd.startswith("effect give @a "):
             return f"effect give @s {raw_cmd[15:]}"
+        prefix_add = "scoreboard players add @a "
+        if raw_cmd.startswith(prefix_add):
+            return f"scoreboard players add @s {raw_cmd[len(prefix_add):]}"
+        prefix_set = "scoreboard players set @a "
+        if raw_cmd.startswith(prefix_set):
+            return f"scoreboard players set @s {raw_cmd[len(prefix_set):]}"
+        prefix_rem = "scoreboard players remove @a "
+        if raw_cmd.startswith(prefix_rem):
+            return f"scoreboard players remove @s {raw_cmd[len(prefix_rem):]}"
 
         return raw_cmd
 

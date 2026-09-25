@@ -1,7 +1,8 @@
+import re
 from pathlib import Path
 from typing import Any, Dict, List, Optional, Union
 # pyrefly: ignore [missing-import]
-from pydantic import BaseModel, Field, ConfigDict, field_validator
+from pydantic import BaseModel, Field, ConfigDict, field_validator, model_validator
 
 
 class LootTableModification(BaseModel):
@@ -58,7 +59,265 @@ class DatapackResource(BaseModel):
 
 
 
+# ==============================================================================
+# SCOREBOARD CONSTANTS & VALIDATION HELPERS (Minecraft Java 1.21.11)
+# ==============================================================================
+
+OBJECTIVE_NAME_REGEX = re.compile(r"^[a-zA-Z0-9_.\+\-]+$")
+
+VALID_SCORE_OPERATIONS = {"=", "+=", "-=", "*=", "/=", "%=", "<", ">", "><"}
+
+VALID_SCORE_COMPARISONS = {"<", "<=", "=", ">=", ">"}
+
+VALID_BASE_DISPLAY_SLOTS = {"sidebar", "list", "below_name"}
+
+VALID_TEAM_COLORS = {
+    "black", "dark_blue", "dark_green", "dark_aqua", "dark_red", "dark_purple",
+    "gold", "gray", "dark_gray", "blue", "green", "aqua", "red", "light_purple",
+    "yellow", "white",
+}
+
+VALID_BUILTIN_CRITERIA = {
+    "dummy", "trigger", "deathCount", "playerKillCount", "totalKillCount",
+    "health", "xp", "level", "food", "air", "armor",
+}
+
+VALID_STAT_PREFIXES = (
+    "minecraft.custom:",
+    "minecraft.mined:",
+    "minecraft.crafted:",
+    "minecraft.used:",
+    "minecraft.broken:",
+    "minecraft.picked_up:",
+    "minecraft.dropped:",
+    "minecraft.killed:",
+    "minecraft.killed_by:",
+    "teamkill.",
+    "killedByTeam.",
+)
+
+
+def validate_objective_name(name: str) -> str:
+    r"""
+    Validates a Minecraft Java 1.21.11 scoreboard objective name.
+    Constraint: 1 to 16 characters matching ^[a-zA-Z0-9_.\+\-]+$.
+    """
+    if not isinstance(name, str) or not name.strip():
+        raise ValueError("Objective name must be a non-empty string.")
+    clean = name.strip()
+    if len(clean) > 16:
+        raise ValueError(
+            f"Objective name '{clean}' exceeds maximum length of 16 characters ({len(clean)} characters)."
+        )
+    if not OBJECTIVE_NAME_REGEX.match(clean):
+        raise ValueError(
+            f"Objective name '{clean}' contains invalid characters. "
+            "Allowed characters: letters (A-Z, a-z), digits (0-9), '_', '.', '+', and '-'."
+        )
+    return clean
+
+
+def validate_criteria(criteria: str) -> str:
+    """
+    Validates scoreboard criteria against Minecraft Java 1.21.11 authoritative knowledge.
+    Supports built-in criteria, team criteria, and statistic criteria prefixes.
+    """
+    if not isinstance(criteria, str) or not criteria.strip():
+        raise ValueError("Criteria must be a non-empty string.")
+    clean = criteria.strip()
+    norm = clean
+    if norm.startswith("minecraft:"):
+        norm = norm[10:]
+    if norm in VALID_BUILTIN_CRITERIA:
+        return clean
+    if any(norm.startswith(p) for p in VALID_STAT_PREFIXES):
+        return clean
+    if any(norm.startswith(p) for p in ("custom:", "mined:", "crafted:", "used:", "broken:", "picked_up:", "dropped:", "killed:", "killed_by:")):
+        return clean
+    raise ValueError(
+        f"Invalid scoreboard criteria: '{clean}'. "
+        f"Must be a built-in criteria (e.g. {sorted(list(VALID_BUILTIN_CRITERIA))}) or statistic criteria."
+    )
+
+
+def validate_display_slot(slot: str) -> str:
+    """
+    Validates scoreboard display slot against Minecraft Java 1.21.11 knowledge.
+    Allowed: 'sidebar', 'list', 'below_name', 'sidebar.team.<color>'.
+    """
+    if not isinstance(slot, str) or not slot.strip():
+        raise ValueError("Display slot must be a non-empty string.")
+    clean = slot.strip().lower()
+    if clean in VALID_BASE_DISPLAY_SLOTS:
+        return clean
+    if clean.startswith("sidebar.team."):
+        team_color = clean[len("sidebar.team."):]
+        if team_color in VALID_TEAM_COLORS:
+            return clean
+        raise ValueError(
+            f"Invalid team color '{team_color}' in display slot '{clean}'. "
+            f"Supported colors: {sorted(list(VALID_TEAM_COLORS))}"
+        )
+    raise ValueError(
+        f"Invalid display slot: '{clean}'. "
+        f"Supported display slots: {sorted(list(VALID_BASE_DISPLAY_SLOTS))} or 'sidebar.team.<color>'."
+    )
+
+
+def validate_score_operation(op: str) -> str:
+    """
+    Validates scoreboard operation against Minecraft Java 1.21.11 knowledge.
+    Allowed: '=', '+=', '-=', '*=', '/=', '%=', '<', '>', '><'.
+    """
+    if not isinstance(op, str) or not op.strip():
+        raise ValueError("Score operation must be a non-empty string.")
+    clean = op.strip()
+    if clean in VALID_SCORE_OPERATIONS:
+        return clean
+    raise ValueError(
+        f"Invalid score operation: '{clean}'. "
+        f"Supported operations: {sorted(list(VALID_SCORE_OPERATIONS))}"
+    )
+
+
+def validate_comparison_operator(op: str) -> str:
+    """
+    Validates scoreboard comparison operator against Minecraft Java 1.21.11 knowledge.
+    Allowed: '<', '<=', '=', '>', '>='.
+    """
+    if not isinstance(op, str) or not op.strip():
+        raise ValueError("Comparison operator must be a non-empty string.")
+    clean = op.strip()
+    if clean not in VALID_SCORE_COMPARISONS:
+        raise ValueError(
+            f"Invalid score comparison operator: '{clean}'. "
+            f"Supported comparison operators: {sorted(list(VALID_SCORE_COMPARISONS))}"
+        )
+    return clean
+
+
+class ScoreCompareCondition(BaseModel):
+    """
+    Structured specification of a score-to-score comparison condition.
+    Maps to Minecraft: execute (if|unless) score <target> <target_objective> <operator> <source> <source_objective>
+    """
+    model_config = ConfigDict(extra="allow")
+
+    type: str = Field(
+        default="score_compare",
+        description="Condition type: 'score_compare'"
+    )
+    target: str = Field(
+        ...,
+        description="Target selector or score holder being compared (e.g. '@s', '@p', '#global')"
+    )
+    target_objective: str = Field(
+        ...,
+        description="Objective name for target score"
+    )
+    operator: str = Field(
+        ...,
+        description="Comparison operator: '<', '<=', '=', '>', '>='"
+    )
+    source: str = Field(
+        ...,
+        description="Source selector or score holder to compare against (e.g. '#global', '@s')"
+    )
+    source_objective: str = Field(
+        ...,
+        description="Objective name for source score"
+    )
+    inverted: bool = Field(
+        default=False,
+        description="Whether condition is inverted ('unless score ...' vs 'if score ...')"
+    )
+
+    @field_validator("target_objective", "source_objective")
+    @classmethod
+    def validate_objective_fields(cls, v: str) -> str:
+        return validate_objective_name(v)
+
+    @field_validator("operator")
+    @classmethod
+    def validate_operator_field(cls, v: str) -> str:
+        return validate_comparison_operator(v)
+
+    @field_validator("target", "source")
+    @classmethod
+    def validate_holders(cls, v: str) -> str:
+        if not isinstance(v, str) or not v.strip():
+            raise ValueError("Target and source score holders must be non-empty strings.")
+        return v.strip()
+
+
+class ScoreboardObjectiveDefinition(BaseModel):
+    """
+    Structured specification of a Minecraft scoreboard objective definition.
+    Represents objective creation and display configuration for Java 1.21.11.
+    """
+    model_config = ConfigDict(extra="allow")
+
+    type: str = Field(
+        default="scoreboard_objective",
+        description="Type identifier, defaults to 'scoreboard_objective'"
+    )
+    objective: str = Field(
+        ...,
+        description="Scoreboard objective name (1-16 chars, [a-zA-Z0-9_.-+])"
+    )
+    criteria: str = Field(
+        default="dummy",
+        description="Objective criteria (e.g. 'dummy', 'deathCount', 'health', 'minecraft.custom:...')"
+    )
+    display_name: Optional[Union[str, Dict[str, Any]]] = Field(
+        default=None,
+        description="Optional display name (string or raw JSON text component)"
+    )
+    display_slot: Optional[str] = Field(
+        default=None,
+        description="Optional display slot: 'sidebar', 'list', 'below_name', 'sidebar.team.<color>'"
+    )
+
+    @field_validator("objective")
+    @classmethod
+    def validate_objective(cls, v: str) -> str:
+        return validate_objective_name(v)
+
+    @field_validator("criteria")
+    @classmethod
+    def validate_criteria_field(cls, v: str) -> str:
+        return validate_criteria(v)
+
+    @field_validator("display_slot")
+    @classmethod
+    def validate_display_slot_field(cls, v: Optional[str]) -> Optional[str]:
+        if v is None:
+            return None
+        return validate_display_slot(v)
+
+
+ALLOWED_ACTION_TYPES = {
+    "apply_effect", "effect", "give_effect",
+    "clear_effect", "remove_effect",
+    "give_item", "give", "item",
+    "clear_item", "remove_item", "clear",
+    "set_score", "score_set",
+    "add_score", "score_add",
+    "remove_score", "score_remove",
+    "reset_score", "score_reset",
+    "remove_objective", "objective_remove",
+    "operation_score", "score_operation",
+    "play_sound", "sound",
+    "spawn_particle", "particle",
+    "send_message", "message", "say",
+    "summon_entity", "summon",
+    "teleport",
+    "raw_command",
+}
+
+
 class ActionSpecification(BaseModel):
+
     """
     Structured specification of a gameplay action for Minecraft Java 1.21.11.
     The Generator synthesizes exact Minecraft command syntax from these fields.
@@ -67,7 +326,7 @@ class ActionSpecification(BaseModel):
 
     action_type: str = Field(
         ...,
-        description="Action category: 'apply_effect', 'clear_effect', 'give_item', 'clear_item', 'set_score', 'add_score', 'reset_score', 'play_sound', 'spawn_particle', 'send_message', 'summon_entity', 'teleport'"
+        description="Action category: 'apply_effect', 'clear_effect', 'give_item', 'clear_item', 'set_score', 'add_score', 'remove_score', 'reset_score', 'operation_score', 'play_sound', 'spawn_particle', 'send_message', 'summon_entity', 'teleport'"
     )
     target: str = Field(
         default="@a",
@@ -77,7 +336,7 @@ class ActionSpecification(BaseModel):
         default_factory=lambda: {"as_target": True, "at_target": True},
         description="Context anchors for execution (e.g. 'as' and 'at')"
     )
-    conditions: Optional[List[Dict[str, Any]]] = Field(
+    conditions: Optional[List[Union[Dict[str, Any], ScoreCompareCondition]]] = Field(
         default_factory=list,
         description="Optional execution conditions (predicate checks or scoreboard checks)"
     )
@@ -138,7 +397,129 @@ class ActionSpecification(BaseModel):
     objective: Optional[str] = Field(default=None, description="Scoreboard objective name")
     score_holder: Optional[str] = Field(default=None, description="Score holder (e.g. '#global' or '@s')")
     score_value: Optional[int] = Field(default=None, description="Score integer value")
-    operation: Optional[str] = Field(default="set", description="Score operation: 'set', 'add', 'remove', 'reset'")
+    operation: Optional[str] = Field(default=None, description="Score operation: '=', '+=', '-=', '*=', '/=', '%=', '<', '>', '><'")
+    source_holder: Optional[str] = Field(default=None, description="Source score holder for operation_score")
+    source_objective: Optional[str] = Field(default=None, description="Source objective name for operation_score")
+
+    @field_validator("score_value", mode="before")
+    @classmethod
+    def validate_score_value(cls, v: Any) -> Optional[int]:
+        if v is None:
+            return None
+        if isinstance(v, bool):
+            raise ValueError(f"Score value cannot be a boolean: {v}")
+        if isinstance(v, float):
+            raise ValueError(
+                f"Score value cannot be a float: {v}. Must be an integer."
+            )
+        if isinstance(v, str):
+            v_str = v.strip()
+            if not v_str:
+                return None
+            if "." in v_str:
+                raise ValueError(
+                    f"Score value cannot be a float string: '{v}'. Must be an integer."
+                )
+            try:
+                return int(v_str)
+            except ValueError:
+                raise ValueError(f"Invalid score value string: '{v}'. Must be an integer.")
+        if isinstance(v, int):
+            return v
+        raise ValueError(
+            f"Invalid score value type: {type(v).__name__}. Must be an integer."
+        )
+
+    @field_validator("conditions", mode="before")
+    @classmethod
+    def validate_conditions(cls, v: Any) -> Optional[List[Any]]:
+        if v is None:
+            return []
+        if not isinstance(v, list):
+            raise ValueError(f"conditions must be a list, got {type(v).__name__}")
+        validated = []
+        for cond in v:
+            if isinstance(cond, ScoreCompareCondition):
+                validated.append(cond)
+            elif isinstance(cond, dict):
+                c_type = str(cond.get("type", "")).strip().lower()
+                if c_type == "score_compare":
+                    validated_cond = ScoreCompareCondition(**cond)
+                    validated.append(validated_cond.model_dump())
+                elif c_type == "score":
+                    if "objective" in cond and cond["objective"]:
+                        validate_objective_name(cond["objective"])
+                    validated.append(cond)
+                else:
+                    validated.append(cond)
+            else:
+                validated.append(cond)
+        return validated
+
+    @model_validator(mode="after")
+    def validate_action_fields(self) -> "ActionSpecification":
+        a_type = (self.action_type or "").strip().lower()
+        if not a_type or a_type not in ALLOWED_ACTION_TYPES:
+            raise ValueError(
+                f"Invalid action_type: '{self.action_type}'. Must be one of {sorted(ALLOWED_ACTION_TYPES)}"
+            )
+
+        if self.objective:
+            self.objective = validate_objective_name(self.objective)
+
+        if a_type in ("set_score", "score_set"):
+            holder = self.score_holder or self.target
+            if not holder:
+                raise ValueError("set_score requires 'target' or 'score_holder'.")
+            if not self.objective:
+                raise ValueError("set_score requires 'objective' to be specified.")
+
+        elif a_type in ("add_score", "score_add"):
+            holder = self.score_holder or self.target
+            if not holder:
+                raise ValueError("add_score requires 'target' or 'score_holder'.")
+            if not self.objective:
+                raise ValueError("add_score requires 'objective' to be specified.")
+            if self.score_value is not None and self.score_value < 0:
+                raise ValueError(
+                    f"add_score score_value must be non-negative (>= 0). Got {self.score_value}. "
+                    "Use remove_score or operation_score '-=' to subtract scores."
+                )
+
+        elif a_type in ("remove_score", "score_remove"):
+            holder = self.score_holder or self.target
+            if not holder:
+                raise ValueError("remove_score requires 'target' or 'score_holder'.")
+            if not self.objective:
+                raise ValueError("remove_score requires 'objective' to be specified.")
+            if self.score_value is None:
+                raise ValueError("remove_score requires 'score_value' to be specified.")
+            if self.score_value < 0:
+                raise ValueError(
+                    f"remove_score score_value must be non-negative (>= 0). Got {self.score_value}."
+                )
+
+        elif a_type == "operation_score":
+            holder = self.score_holder or self.target
+            if not holder:
+                raise ValueError("operation_score requires 'target' (or 'score_holder').")
+            if not self.objective:
+                raise ValueError("operation_score requires 'objective'.")
+            if not self.operation:
+                raise ValueError("operation_score requires 'operation' to be specified.")
+            validate_score_operation(self.operation)
+            if not self.source_holder:
+                raise ValueError("operation_score requires 'source_holder' to be specified.")
+            if not self.source_objective:
+                raise ValueError("operation_score requires 'source_objective' to be specified.")
+            validate_objective_name(self.source_objective)
+
+        elif a_type in ("reset_score", "score_reset"):
+            holder = self.score_holder or self.target
+            if not holder:
+                raise ValueError("reset_score requires 'target' or 'score_holder'.")
+
+        return self
 
     # Audio / Visual
     sound: Optional[str] = Field(default=None, description="Sound event identifier")
@@ -418,14 +799,14 @@ class MechanismSpecification(BaseModel):
         description="List of Minecraft commands for function resources (legacy fallback)"
     )
 
-    # State machine parameters
+    # State machine & Scoreboard parameters
     state_scope: Optional[str] = Field(
         default="global",
         description="Scope of state machine: 'global' (e.g. environment/world) or 'player'"
     )
     objective: Optional[str] = Field(
         default=None,
-        description="Scoreboard objective name for state machine tracking"
+        description="Scoreboard objective name for state machine tracking or scoreboard mechanism"
     )
     condition_predicate: Optional[str] = Field(
         default=None,
@@ -444,6 +825,24 @@ class MechanismSpecification(BaseModel):
         description="Trigger hook: 'tick', 'load', 'custom'"
     )
 
+    # Scoreboard-specific parameters
+    display_name: Optional[Union[str, Dict[str, Any]]] = Field(
+        default=None,
+        description="Optional display name for scoreboard objective"
+    )
+    display_slot: Optional[str] = Field(
+        default=None,
+        description="Optional display slot: 'sidebar', 'list', 'below_name', 'sidebar.team.<color>'"
+    )
+    source_holder: Optional[str] = Field(
+        default=None,
+        description="Source score holder for scoreboard operation actions"
+    )
+    source_objective: Optional[str] = Field(
+        default=None,
+        description="Source objective name for scoreboard operation actions"
+    )
+
     # Function tag parameters
     tag_name: Optional[str] = Field(
         default=None,
@@ -458,10 +857,10 @@ class MechanismSpecification(BaseModel):
         description="Whether this tag overrides previous values"
     )
 
-    # Advancement parameters
-    criteria: Optional[Dict[str, Any]] = Field(
-        default_factory=dict,
-        description="Criteria and triggers for the advancement"
+    # Advancement & Scoreboard criteria parameters
+    criteria: Optional[Union[Dict[str, Any], str]] = Field(
+        default=None,
+        description="Criteria and triggers for advancement (dict) or scoreboard objective (str, e.g. 'dummy', 'deathCount')"
     )
     rewards: Optional[Dict[str, Any]] = Field(
         default_factory=dict,
@@ -582,11 +981,28 @@ class MechanismSpecification(BaseModel):
             replace=bool(self.replace)
         )
 
+    def to_scoreboard_objective_definition(self) -> ScoreboardObjectiveDefinition:
+        obj_name = self.objective or self.path or self.target
+        if not obj_name:
+            raise ValueError(
+                "Cannot convert to ScoreboardObjectiveDefinition: missing 'objective', 'path', or 'target'"
+            )
+        crit = self.criteria or "dummy"
+        if isinstance(crit, dict):
+            raise ValueError(f"Scoreboard criteria must be a string, got dict: {crit}")
+        return ScoreboardObjectiveDefinition(
+            objective=str(obj_name),
+            criteria=str(crit),
+            display_name=self.display_name,
+            display_slot=self.display_slot
+        )
+
     def to_advancement_definition(self) -> AdvancementDefinition:
         a_path = self.path or self.target or "root"
+        crit = self.criteria if isinstance(self.criteria, dict) else {}
         return AdvancementDefinition(
             advancement_path=a_path,
-            criteria=self.criteria or {},
+            criteria=crit,
             rewards=self.rewards or {},
             namespace=self.namespace or "minecraft_ai",
             display=self.display
@@ -629,7 +1045,7 @@ class MechanismSpecification(BaseModel):
         )
 
 
-def validate_mechanism_specification(spec: Union[MechanismSpecification, Dict[str, Any]]) -> None:
+def validate_mechanism_specification(spec: Union[MechanismSpecification, Dict[str, Any], ScoreboardObjectiveDefinition]) -> None:
     """
     Strictly validates a mechanism specification for completeness.
     Raises ValueError if required parameters are missing or invalid.
@@ -656,6 +1072,10 @@ def validate_mechanism_specification(spec: Union[MechanismSpecification, Dict[st
         objective = spec.get("objective") or spec.get("path")
         condition_predicate = spec.get("condition_predicate") or spec.get("predicate")
         on_enter = spec.get("on_enter") or spec.get("actions")
+        display_name = spec.get("display_name")
+        display_slot = spec.get("display_slot")
+        source_holder = spec.get("source_holder")
+        source_objective = spec.get("source_objective")
     elif isinstance(spec, MechanismSpecification):
         spec_type = str(spec.type).lower()
         target = spec.target or spec.path
@@ -678,8 +1098,38 @@ def validate_mechanism_specification(spec: Union[MechanismSpecification, Dict[st
         objective = spec.objective or spec.path
         condition_predicate = spec.condition_predicate
         on_enter = spec.on_enter or spec.actions
+        display_name = spec.display_name
+        display_slot = spec.display_slot
+        source_holder = spec.source_holder
+        source_objective = spec.source_objective
+    elif isinstance(spec, ScoreboardObjectiveDefinition):
+        spec_type = "scoreboard_objective"
+        target = None
+        item = None
+        actions = None
+        commands = None
+        path = None
+        tag_name = None
+        values = None
+        criteria = spec.criteria
+        recipe_type = "crafting_shapeless"
+        result_item = None
+        ingredients = None
+        pattern = None
+        key = None
+        condition_type = None
+        condition_params = {}
+        terms = None
+        term = None
+        objective = spec.objective
+        condition_predicate = None
+        on_enter = None
+        display_name = spec.display_name
+        display_slot = spec.display_slot
+        source_holder = None
+        source_objective = None
     else:
-        raise ValueError(f"Expected MechanismSpecification or dict, got {type(spec)}")
+        raise ValueError(f"Expected MechanismSpecification, ScoreboardObjectiveDefinition, or dict, got {type(spec)}")
 
     if not spec_type:
         raise ValueError("Mechanism specification missing required 'type'.")
@@ -699,20 +1149,37 @@ def validate_mechanism_specification(spec: Union[MechanismSpecification, Dict[st
         has_actions = actions is not None and isinstance(actions, list) and len(actions) > 0
         if not (has_cmds or has_actions):
             raise ValueError(f"Incomplete function specification: must provide non-empty 'actions' or 'commands'. Got actions={actions}, commands={commands}")
+        if actions:
+            if not isinstance(actions, list):
+                raise ValueError(f"Incomplete function specification: 'actions' must be a list. Got actions={actions}")
+            for act in actions:
+                if isinstance(act, dict):
+                    ActionSpecification(**act)
+                elif isinstance(act, ActionSpecification):
+                    pass
+                else:
+                    raise ValueError(f"Invalid action item in function mechanism: {type(act).__name__}")
 
     # 3. State Machine
     elif spec_type in ["state_machine", "event_latch", "event_trigger"]:
         if not objective or not str(objective).strip():
             raise ValueError(f"Incomplete state_machine specification: missing 'objective'. Got objective={objective}")
+        validate_objective_name(str(objective))
         if not condition_predicate or not str(condition_predicate).strip():
             raise ValueError(f"Incomplete state_machine specification: missing 'condition_predicate'. Got condition_predicate={condition_predicate}")
         if not on_enter or not isinstance(on_enter, list) or len(on_enter) == 0:
             raise ValueError(f"Incomplete state_machine specification: 'on_enter' must be a non-empty list of actions. Got on_enter={on_enter}")
+        for act in on_enter:
+            if isinstance(act, dict):
+                ActionSpecification(**act)
 
     # 4. Continuous Action
     elif spec_type in ["continuous_action", "tick_action"]:
         if not actions or not isinstance(actions, list) or len(actions) == 0:
             raise ValueError(f"Incomplete continuous_action specification: 'actions' must be a non-empty list. Got actions={actions}")
+        for act in actions:
+            if isinstance(act, dict):
+                ActionSpecification(**act)
 
     # 5. Loot table
     elif spec_type in ["loot_table", "loot", "drop", "table", "loot_table_modification", "loot_table_override"] or "loot" in spec_type:
@@ -760,6 +1227,39 @@ def validate_mechanism_specification(spec: Union[MechanismSpecification, Dict[st
             chance_val = condition_params.get("chance") if isinstance(condition_params, dict) else None
             if chance_val is None:
                 raise ValueError(f"Incomplete random_chance predicate specification: missing 'chance' in condition_params. Got condition_params={condition_params}")
+
+    # 9. Scoreboard objective
+    elif spec_type in ["scoreboard_objective", "scoreboard", "scoreboard_objectives", "objective"]:
+        obj_name = objective or path or target
+        if not obj_name or not str(obj_name).strip():
+            raise ValueError(
+                f"Incomplete scoreboard mechanism specification: missing 'objective'. Got objective={objective}"
+            )
+        validate_objective_name(str(obj_name))
+
+        if not criteria or not str(criteria).strip():
+            raise ValueError(
+                f"Incomplete scoreboard mechanism specification: missing 'criteria'. Got criteria={criteria}"
+            )
+        if isinstance(criteria, dict):
+            raise ValueError(f"Scoreboard criteria must be a string, got dict: {criteria}")
+        validate_criteria(str(criteria))
+
+        if display_slot is not None and str(display_slot).strip():
+            validate_display_slot(str(display_slot))
+
+        if actions:
+            if not isinstance(actions, list):
+                raise ValueError(
+                    f"Incomplete scoreboard mechanism specification: 'actions' must be a list. Got actions={actions}"
+                )
+            for act in actions:
+                if isinstance(act, dict):
+                    ActionSpecification(**act)
+                elif isinstance(act, ActionSpecification):
+                    pass
+                else:
+                    raise ValueError(f"Invalid action item in scoreboard mechanism: {type(act).__name__}")
 
     else:
         raise ValueError(f"Unsupported mechanism specification type: '{spec_type}'")

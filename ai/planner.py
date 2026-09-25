@@ -46,9 +46,9 @@ class PlannerResult(BaseModel):
 
 
 class MinecraftPlanner:
-    def __init__(self, provider="ollama", version="1.21.11"):
+    def __init__(self, provider="ollama", version="1.21.11", ai_provider=None):
         self.version = version
-        self.ai = AIProvider(provider=provider)
+        self.ai = ai_provider or AIProvider(provider=provider)
 
     def _schema(self) -> Dict[str, Any]:
         return PlannerResult.model_json_schema()
@@ -123,6 +123,36 @@ RULES:
     - Use mechanism type 'state_machine' with 'objective', 'condition_predicate', 'state_scope' ('global' for environmental/world events like weather/time, or 'player' for individual player events), and 'on_enter' structured actions.
     - The deterministic generator automatically handles safe scoreboard initialization in load.mcfunction (using persistent '#global' for global state or dynamic tick initialization for players) and sets up the tick transition and reset logic.
 25. For player-targeted actions, specify 'target': '@a' (or '@p' / '@s'). The generator automatically enforces correct execution context chaining ('execute as @a at @s run ...').
+26. For scoreboard objective requests (creating objectives, tracking player statistics, configuring display slots):
+    - Use mechanism type 'scoreboard_objective' with 'objective' (1-16 chars, alphanumeric/underscore/dot/dash/plus), 'criteria' (e.g. 'dummy', 'deathCount', 'playerKillCount', 'totalKillCount', 'health', 'trigger', 'xp', 'level', 'food', 'air', 'armor', or valid statistic criteria from retrieved knowledge), optional 'display_name', and optional 'display_slot' ('sidebar', 'list', 'below_name', 'sidebar.team.<color>').
+    - Objective creation belongs in one-time initialization ('load.mcfunction'), which the generator handles deterministically when 'scoreboard_objective' is specified.
+27. For score actions (modifying, setting, adding, subtracting, resetting, or operating on scores):
+    - Do NOT output raw 'scoreboard players ...' command strings.
+    - Instead, populate structured action objects inside 'actions' (for functions/load) or 'on_enter' (for state machines):
+      * Set score: {{"action_type": "set_score", "target": "<holder>", "objective": "<obj>", "score_value": <int>}}
+      * Add score: {{"action_type": "add_score", "target": "<holder>", "objective": "<obj>", "score_value": <int >= 0>}}
+      * Remove score: {{"action_type": "remove_score", "target": "<holder>", "objective": "<obj>", "score_value": <int >= 0>}}
+      * Reset score: {{"action_type": "reset_score", "target": "<holder>", "objective": "<obj optional>"}}
+      * Operation score: {{"action_type": "operation_score", "target": "<holder>", "objective": "<obj>", "operation": "<op>", "source_holder": "<source_holder>", "source_objective": "<source_obj>"}}
+        Supported operations: '=', '+=', '-=', '*=', '/=', '%=', '<', '>', '><'.
+      Holders can be entity selectors ('@a', '@p', '@s') or named fake players (e.g. '#global', '#state', '#timer').
+28. For score conditions (conditional execution based on score values or comparisons):
+    - Use structured conditions inside action 'conditions':
+      * Score range condition: {{"type": "score", "holder": "<holder>", "objective": "<obj>", "range": "<range>"}} (range can be an exact integer e.g. "10", a closed interval e.g. "1..10", or a half-open interval e.g. "5..", "..0")
+      * Score comparison condition: {{"type": "score_compare", "target": "<target_holder>", "target_objective": "<obj>", "operator": "<op>", "source": "<source_holder>", "source_objective": "<source_obj>"}}
+        Supported comparison operators: '<', '<=', '=', '>=', '>'.
+29. Lifecycle Separation (Load vs Tick vs State Machine):
+    - 'load' (one-time setup): Use 'scoreboard_objective' mechanism for objective registration, display slot configuration, initial score values, and one-time setup.
+    - 'tick' / 'continuous_action': Use 'continuous_action' or 'function' on tick for continuous repeated score updates (e.g. incrementing a counter every tick).
+    - 'state_machine': Use 'state_machine' for transition/edge-triggered requests (e.g. 'only once when rain starts', 'when night begins'). The generator automatically coordinates safe load initialization, tick transition latches, on_enter execution, and falling edge reset logic.
+30. Scoreboard Ambiguity & Clarification:
+    - If a scoreboard request lacks essential information needed for implementation, do NOT invent arbitrary numbers, objectives, or operations. Set status to 'needs_clarification' and populate 'clarifications':
+      * Objective purpose/criteria is unclear (e.g. 'Create a scoreboard.' -> ask what should be tracked or what criteria is intended).
+      * Score value is missing when required (e.g. 'Give me points.' -> ask how many points and which score/objective).
+      * Target is ambiguous (e.g. 'Add 10 points.' -> ask who receives the points).
+      * Comparison operands are missing (e.g. 'Compare the score.' -> ask which score/objective and against what).
+      * Operation is ambiguous (e.g. 'Change score A using score B.' -> ask which operation: set, add, subtract, multiply, divide, modulo, min, max, swap).
+      * Temporal behavior is unclear (e.g. 'Give me points when it rains.' -> ask whether once when rain starts or repeatedly while raining).
 
 STRUCTURED MECHANISM SPECIFICATIONS:
 Each entry in "mechanisms" should specify a "type" and its structured parameters:
@@ -142,6 +172,14 @@ Each entry in "mechanisms" should specify a "type" and its structured parameters
      * Apply effect: {{"action_type": "apply_effect", "target": "@a", "effect": "minecraft:speed", "duration": 30, "amplifier": 0}} (duration can be integer seconds like 30, "infinite" for permanent effects, or omitted/null for default)
      * Give item: {{"action_type": "give_item", "target": "@a", "item": "minecraft:diamond", "count": 1}}
      * Set score: {{"action_type": "set_score", "target": "#global", "objective": "state", "score_value": 0}}
+     * Add score: {{"action_type": "add_score", "target": "@a", "objective": "points", "score_value": 10}}
+     * Remove score: {{"action_type": "remove_score", "target": "@p", "objective": "points", "score_value": 5}}
+     * Reset score: {{"action_type": "reset_score", "target": "@a", "objective": "temp"}}
+     * Score operation: {{"action_type": "operation_score", "target": "@s", "objective": "score_a", "operation": "*=", "source_holder": "@s", "source_objective": "score_b"}}
+     * Conditional execution with score checks:
+       Inside any action, add "conditions":
+       - Range check: [{{"type": "score", "holder": "@s", "objective": "points", "range": "10.."}}]
+       - Compare check: [{{"type": "score_compare", "target": "@s", "target_objective": "score_a", "operator": ">", "source": "@s", "source_objective": "score_b"}}]
 
 3. Function Tag Mechanism:
    - "type": "function_tag"
@@ -192,6 +230,14 @@ Each entry in "mechanisms" should specify a "type" and its structured parameters
    - "type": "continuous_action"
    - "trigger": "tick"
    - "actions": list of structured action objects to execute continuously every tick
+
+9. Scoreboard Objective Mechanism (for objective creation, display slot configuration, and initial setup in load):
+   - "type": "scoreboard_objective"
+   - "objective": objective name (1-16 chars, e.g. "deaths", "kills", "points")
+   - "criteria": criteria string (e.g. "dummy", "deathCount", "playerKillCount", "totalKillCount", "health", "trigger", "level", "food", "air", "armor")
+   - "display_name": optional display name string or text component (e.g. "Deaths")
+   - "display_slot": optional display slot ("sidebar", "list", "below_name", "sidebar.team.<color>")
+   - "actions": optional list of structured initial score actions to run during load (e.g. [{{"action_type": "set_score", "target": "#global", "objective": "points", "score_value": 0}}])
 
 OUTPUT:
 
@@ -420,6 +466,8 @@ Return only JSON matching the required schema.
                 normalized_clarifications.append(str(item))
 
         result["clarifications"] = normalized_clarifications
+        if normalized_clarifications:
+            result["status"] = "needs_clarification"
 
         # ---------------------------------------------------------
         # Implementation plan
@@ -528,6 +576,8 @@ Return only JSON matching the required schema.
                         mech_type = "state_machine"
                     elif mech_type in ["continuous_action", "tick_action"]:
                         mech_type = "continuous_action"
+                    elif mech_type in ["scoreboard", "scoreboard_objective", "objective", "scoreboards"]:
+                        mech_type = "scoreboard_objective"
                     mech_dict["type"] = mech_type
 
                     # Helper to normalize action dictionaries
@@ -535,7 +585,20 @@ Return only JSON matching the required schema.
                         if isinstance(act, dict):
                             ad = dict(act)
                             a_type = str(ad.get("action_type", "apply_effect")).strip().lower()
+
+                            # Clean up action type variations
+                            if a_type in ["score_set", "setscore"]:
+                                a_type = "set_score"
+                            elif a_type in ["score_add", "addscore"]:
+                                a_type = "add_score"
+                            elif a_type in ["score_remove", "removescore", "subtract_score"]:
+                                a_type = "remove_score"
+                            elif a_type in ["score_reset", "resetscore"]:
+                                a_type = "reset_score"
+                            elif a_type in ["score_operation", "operationscore", "score_op", "operation"]:
+                                a_type = "operation_score"
                             ad["action_type"] = a_type
+
                             if ad.get("item"):
                                 iv = str(ad["item"]).strip()
                                 if not iv.startswith("minecraft:") and ":" not in iv:
@@ -546,8 +609,81 @@ Return only JSON matching the required schema.
                                 if not ev.startswith("minecraft:") and ":" not in ev:
                                     ev = f"minecraft:{ev}"
                                 ad["effect"] = ev
-                            if not ad.get("target"):
-                                ad["target"] = "@a"
+
+                            # Score action holder/target synchronization
+                            is_score_action = a_type in [
+                                "set_score", "add_score", "remove_score",
+                                "reset_score", "operation_score"
+                            ]
+                            if is_score_action:
+                                # sync score_holder and target
+                                if not ad.get("target") and ad.get("score_holder"):
+                                    ad["target"] = str(ad["score_holder"]).strip()
+                                elif not ad.get("score_holder") and ad.get("target"):
+                                    ad["score_holder"] = str(ad["target"]).strip()
+                                elif not ad.get("target") and not ad.get("score_holder"):
+                                    ad["target"] = "@s"
+                                    ad["score_holder"] = "@s"
+
+                                # Coerce score_value if string
+                                if "score_value" in ad and ad["score_value"] is not None:
+                                    sv = ad["score_value"]
+                                    if isinstance(sv, str) and sv.strip().lstrip("-").isdigit():
+                                        try:
+                                            ad["score_value"] = int(sv.strip())
+                                        except (ValueError, TypeError):
+                                            pass
+
+                                # Clean operation
+                                if ad.get("operation"):
+                                    ad["operation"] = str(ad["operation"]).strip()
+                                if ad.get("source_holder"):
+                                    ad["source_holder"] = str(ad["source_holder"]).strip()
+                                if ad.get("source_objective"):
+                                    ad["source_objective"] = str(ad["source_objective"]).strip()
+                                if ad.get("objective"):
+                                    ad["objective"] = str(ad["objective"]).strip()
+
+                            else:
+                                if not ad.get("target"):
+                                    ad["target"] = "@a"
+
+                            # Normalize conditions
+                            raw_conds = ad.get("conditions")
+                            if raw_conds is not None:
+                                if isinstance(raw_conds, dict):
+                                    raw_conds = [raw_conds]
+                                if isinstance(raw_conds, list):
+                                    norm_conds = []
+                                    for c in raw_conds:
+                                        if isinstance(c, dict):
+                                            cd = dict(c)
+                                            c_type = str(cd.get("type", "")).strip().lower()
+                                            if c_type in ["score_compare", "compare_score"]:
+                                                cd["type"] = "score_compare"
+                                                if cd.get("operator"):
+                                                    cd["operator"] = str(cd["operator"]).strip()
+                                                if cd.get("target"):
+                                                    cd["target"] = str(cd["target"]).strip()
+                                                if cd.get("source"):
+                                                    cd["source"] = str(cd["source"]).strip()
+                                                if cd.get("target_objective"):
+                                                    cd["target_objective"] = str(cd["target_objective"]).strip()
+                                                if cd.get("source_objective"):
+                                                    cd["source_objective"] = str(cd["source_objective"]).strip()
+                                            elif c_type in ["score", "score_range"]:
+                                                cd["type"] = "score"
+                                                if cd.get("objective"):
+                                                    cd["objective"] = str(cd["objective"]).strip()
+                                                if cd.get("holder"):
+                                                    cd["holder"] = str(cd["holder"]).strip()
+                                                elif cd.get("target"):
+                                                    cd["holder"] = str(cd["target"]).strip()
+                                                if "range" in cd and cd["range"] is not None:
+                                                    cd["range"] = str(cd["range"]).strip()
+                                            norm_conds.append(cd)
+                                    ad["conditions"] = norm_conds
+
                             return ad
                         elif isinstance(act, str):
                             return {
@@ -664,6 +800,19 @@ Return only JSON matching the required schema.
                                 k_str = f"minecraft:{k_str}"
                             clean_key[str(sym)] = k_str
                         mech_dict["key"] = clean_key
+
+                    # Normalize scoreboard_objective fields
+                    if mech_type == "scoreboard_objective":
+                        raw_obj = mech_dict.get("objective") or mech_dict.get("path") or mech_dict.get("target") or mech_dict.get("name")
+                        if raw_obj:
+                            mech_dict["objective"] = str(raw_obj).strip()
+                        raw_crit = mech_dict.get("criteria")
+                        if not raw_crit or not str(raw_crit).strip():
+                            mech_dict["criteria"] = "dummy"
+                        else:
+                            mech_dict["criteria"] = str(raw_crit).strip()
+                        if mech_dict.get("display_slot"):
+                            mech_dict["display_slot"] = str(mech_dict["display_slot"]).strip().lower()
 
                     # Create and validate MechanismSpecification
                     try:
@@ -862,12 +1011,14 @@ Return only JSON matching the required schema.
 def create_plan(
     understanding: Dict[str, Any],
     provider="ollama",
-    version="1.21.11"
+    version="1.21.11",
+    ai_provider=None
 ) -> Dict[str, Any]:
 
     planner = MinecraftPlanner(
         provider=provider,
-        version=version
+        version=version,
+        ai_provider=ai_provider
     )
 
     return planner.plan(understanding)
@@ -880,4 +1031,4 @@ def validate_plan_mechanisms(plan: Dict[str, Any]) -> None:
     """
     for ip in plan.get("implementation_plan", []):
         for mech in ip.get("mechanisms", []):
-            validate_mechanism_specification(mech)
+            validate_mechanism_specification(mech)

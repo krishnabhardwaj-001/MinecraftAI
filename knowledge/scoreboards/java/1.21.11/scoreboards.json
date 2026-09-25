@@ -1,0 +1,424 @@
+[
+  {
+    "category": "criteria",
+    "name": "dummy",
+    "criteria": "dummy",
+    "description": "Standard variable storage criteria. The score only changes through commands (scoreboard players set/add/remove/operation). Does not change automatically by game events. Ideal for state machines, custom variables, timers, flags, and mathematical operations.",
+    "keywords": ["dummy", "variable", "var", "custom", "counter", "state", "timer", "calc"],
+    "read_only": false,
+    "version": "1.21.11",
+    "edition": "Java"
+  },
+  {
+    "category": "criteria",
+    "name": "trigger",
+    "criteria": "trigger",
+    "description": "Special criteria that can be changed by players without operator permissions using the /trigger command. Must be enabled by a command using 'scoreboard players enable <targets> <objective>' before a player can use it. Ideal for player voting, custom menus, and interactive dialogues.",
+    "keywords": ["trigger", "menu", "vote", "dialogue", "choice", "button", "interactive"],
+    "read_only": false,
+    "version": "1.21.11",
+    "edition": "Java"
+  },
+  {
+    "category": "criteria",
+    "name": "deathCount",
+    "criteria": "deathCount",
+    "description": "Automatically increments by 1 every time a player dies. Useful for tracking player deaths, lives systems, and hardcore death counters.",
+    "keywords": ["death", "deaths", "die", "died", "dying", "deathcount", "lives"],
+    "read_only": false,
+    "version": "1.21.11",
+    "edition": "Java"
+  },
+  {
+    "category": "criteria",
+    "name": "playerKillCount",
+    "criteria": "playerKillCount",
+    "description": "Automatically increments by 1 every time a player kills another player. Useful for PvP stats, bounty systems, and killstreaks.",
+    "keywords": ["player_kill", "kill_player", "pvp_kill", "pvp", "playerkillcount"],
+    "read_only": false,
+    "version": "1.21.11",
+    "edition": "Java"
+  },
+  {
+    "category": "criteria",
+    "name": "totalKillCount",
+    "criteria": "totalKillCount",
+    "description": "Automatically increments by 1 every time a player kills any living entity (including mobs and players). Useful for overall combat stats and hunter challenges.",
+    "keywords": ["kill", "kills", "killed", "totalkillcount", "slay", "slayer", "hunter"],
+    "read_only": false,
+    "version": "1.21.11",
+    "edition": "Java"
+  },
+  {
+    "category": "criteria",
+    "name": "health",
+    "criteria": "health",
+    "description": "Automatically mirrors the player's current health (from 0 to 20, or higher with Absorption/Health Boost). Automatically rendered as hearts when displayed with rendertype hearts. Read-only from game events, but can be updated by commands.",
+    "keywords": ["health", "hp", "hearts", "damage", "life"],
+    "read_only": true,
+    "version": "1.21.11",
+    "edition": "Java"
+  },
+  {
+    "category": "criteria",
+    "name": "xp",
+    "criteria": "xp",
+    "description": "Automatically tracks the player's current total experience points. Useful for RPG systems and custom enchanting mechanics.",
+    "keywords": ["xp", "exp", "experience", "points"],
+    "read_only": true,
+    "version": "1.21.11",
+    "edition": "Java"
+  },
+  {
+    "category": "criteria",
+    "name": "level",
+    "criteria": "level",
+    "description": "Automatically tracks the player's current experience level (the number above the XP bar). Useful for level requirements and progression gating.",
+    "keywords": ["level", "lvl", "xp_level", "experience_level"],
+    "read_only": true,
+    "version": "1.21.11",
+    "edition": "Java"
+  },
+  {
+    "category": "criteria",
+    "name": "food",
+    "criteria": "food",
+    "description": "Automatically tracks the player's current hunger/food level (0 to 20). Useful for survival mechanics and starvation events.",
+    "keywords": ["food", "hunger", "starve", "eating"],
+    "read_only": true,
+    "version": "1.21.11",
+    "edition": "Java"
+  },
+  {
+    "category": "criteria",
+    "name": "air",
+    "criteria": "air",
+    "description": "Automatically tracks the player's remaining air supply while underwater (0 to 300 ticks). Useful for underwater survival and drowning events.",
+    "keywords": ["air", "oxygen", "breath", "drown", "underwater"],
+    "read_only": true,
+    "version": "1.21.11",
+    "edition": "Java"
+  },
+  {
+    "category": "criteria",
+    "name": "armor",
+    "criteria": "armor",
+    "description": "Automatically tracks the player's current armor points (0 to 20). Useful for defense stats and gear verification.",
+    "keywords": ["armor", "defense", "protection"],
+    "read_only": true,
+    "version": "1.21.11",
+    "edition": "Java"
+  },
+  {
+    "category": "criteria",
+    "name": "custom_statistic",
+    "criteria": "minecraft.custom:minecraft.<stat>",
+    "description": "Tracks player statistics under minecraft.custom (e.g. minecraft.custom:minecraft.walk_one_cm, minecraft.custom:minecraft.jump, minecraft.custom:minecraft.time_since_death, minecraft.custom:minecraft.play_time, minecraft.custom:minecraft.sneak_time, minecraft.custom:minecraft.damage_dealt, minecraft.custom:minecraft.damage_taken).",
+    "keywords": ["custom_stat", "statistic", "walk", "jump", "play_time", "sneak_time"],
+    "read_only": true,
+    "version": "1.21.11",
+    "edition": "Java"
+  },
+  {
+    "category": "criteria",
+    "name": "item_mined",
+    "criteria": "minecraft.mined:minecraft.<block>",
+    "description": "Tracks the number of times a player mined a specific block (e.g. minecraft.mined:minecraft.diamond_ore).",
+    "keywords": ["mined", "mine", "mining", "break_block", "dug"],
+    "read_only": true,
+    "version": "1.21.11",
+    "edition": "Java"
+  },
+  {
+    "category": "criteria",
+    "name": "item_crafted",
+    "criteria": "minecraft.crafted:minecraft.<item>",
+    "description": "Tracks the number of times a player crafted a specific item (e.g. minecraft.crafted:minecraft.diamond_sword).",
+    "keywords": ["crafted", "craft", "crafting", "make_item"],
+    "read_only": true,
+    "version": "1.21.11",
+    "edition": "Java"
+  },
+  {
+    "category": "criteria",
+    "name": "item_used",
+    "criteria": "minecraft.used:minecraft.<item>",
+    "description": "Tracks the number of times a player used a specific item or placed a block (e.g. minecraft.used:minecraft.carrot_on_a_stick).",
+    "keywords": ["used", "use", "using", "place_block", "interact"],
+    "read_only": true,
+    "version": "1.21.11",
+    "edition": "Java"
+  },
+  {
+    "category": "criteria",
+    "name": "item_broken",
+    "criteria": "minecraft.broken:minecraft.<item>",
+    "description": "Tracks the number of times an item broke from durability exhaustion (e.g. minecraft.broken:minecraft.iron_pickaxe).",
+    "keywords": ["broken", "broke", "durability_exhausted"],
+    "read_only": true,
+    "version": "1.21.11",
+    "edition": "Java"
+  },
+  {
+    "category": "criteria",
+    "name": "item_picked_up",
+    "criteria": "minecraft.picked_up:minecraft.<item>",
+    "description": "Tracks the number of times an item was picked up into player inventory (e.g. minecraft.picked_up:minecraft.gold_ingot).",
+    "keywords": ["picked_up", "pickup", "collect", "gather"],
+    "read_only": true,
+    "version": "1.21.11",
+    "edition": "Java"
+  },
+  {
+    "category": "criteria",
+    "name": "item_dropped",
+    "criteria": "minecraft.dropped:minecraft.<item>",
+    "description": "Tracks the number of times an item was dropped by the player (e.g. minecraft.dropped:minecraft.diamond).",
+    "keywords": ["dropped", "drop_item", "throw", "toss"],
+    "read_only": true,
+    "version": "1.21.11",
+    "edition": "Java"
+  },
+  {
+    "category": "criteria",
+    "name": "mob_killed",
+    "criteria": "minecraft.killed:minecraft.<entity>",
+    "description": "Tracks the number of times the player killed a specific entity type (e.g. minecraft.killed:minecraft.creeper, minecraft.killed:minecraft.zombie).",
+    "keywords": ["kill_mob", "slain_mob", "killed_entity"],
+    "read_only": true,
+    "version": "1.21.11",
+    "edition": "Java"
+  },
+  {
+    "category": "criteria",
+    "name": "killed_by_mob",
+    "criteria": "minecraft.killed_by:minecraft.<entity>",
+    "description": "Tracks the number of times the player was killed by a specific entity type (e.g. minecraft.killed_by:minecraft.skeleton).",
+    "keywords": ["killed_by", "died_to", "killed_by_entity"],
+    "read_only": true,
+    "version": "1.21.11",
+    "edition": "Java"
+  },
+  {
+    "category": "display_slot",
+    "name": "sidebar",
+    "slot": "sidebar",
+    "description": "Renders the objective and scores on the right side of the screen HUD. Can display up to 15 entries simultaneously.",
+    "keywords": ["sidebar", "side", "hud", "right_side", "display", "show"],
+    "version": "1.21.11",
+    "edition": "Java"
+  },
+  {
+    "category": "display_slot",
+    "name": "list",
+    "slot": "list",
+    "description": "Renders the score in the player tab list next to player names when Tab is pressed.",
+    "keywords": ["list", "tab", "tab_list", "player_list"],
+    "version": "1.21.11",
+    "edition": "Java"
+  },
+  {
+    "category": "display_slot",
+    "name": "below_name",
+    "slot": "below_name",
+    "description": "Renders the score directly below player nametags in the 3D world. Visible to other players when looking at the player.",
+    "keywords": ["below_name", "nametag", "under_name", "head", "overhead"],
+    "version": "1.21.11",
+    "edition": "Java"
+  },
+  {
+    "category": "display_slot",
+    "name": "team_sidebar",
+    "slot": "sidebar.team.<color>",
+    "description": "Renders the objective on the sidebar exclusively for players belonging to a specific team color (e.g. sidebar.team.red, sidebar.team.blue).",
+    "keywords": ["team_sidebar", "team_side"],
+    "version": "1.21.11",
+    "edition": "Java"
+  },
+  {
+    "category": "operation",
+    "name": "assign",
+    "operator": "=",
+    "syntax": "scoreboard players operation <targets> <targetObjective> = <source> <sourceObjective>",
+    "description": "Assigns the value of the source score to the target score.",
+    "keywords": ["assign", "copy", "set_to", "="],
+    "version": "1.21.11",
+    "edition": "Java"
+  },
+  {
+    "category": "operation",
+    "name": "addition",
+    "operator": "+=",
+    "syntax": "scoreboard players operation <targets> <targetObjective> += <source> <sourceObjective>",
+    "description": "Adds the value of the source score to the target score (target = target + source).",
+    "keywords": ["add", "plus", "increase", "sum", "+="],
+    "version": "1.21.11",
+    "edition": "Java"
+  },
+  {
+    "category": "operation",
+    "name": "subtraction",
+    "operator": "-=",
+    "syntax": "scoreboard players operation <targets> <targetObjective> -= <source> <sourceObjective>",
+    "description": "Subtracts the value of the source score from the target score (target = target - source).",
+    "keywords": ["subtract", "minus", "decrease", "deduct", "-="],
+    "version": "1.21.11",
+    "edition": "Java"
+  },
+  {
+    "category": "operation",
+    "name": "multiplication",
+    "operator": "*=",
+    "syntax": "scoreboard players operation <targets> <targetObjective> *= <source> <sourceObjective>",
+    "description": "Multiplies the target score by the source score (target = target * source).",
+    "keywords": ["multiply", "multiplication", "times", "product", "scale", "*="],
+    "version": "1.21.11",
+    "edition": "Java"
+  },
+  {
+    "category": "operation",
+    "name": "division",
+    "operator": "/=",
+    "syntax": "scoreboard players operation <targets> <targetObjective> /= <source> <sourceObjective>",
+    "description": "Performs integer division of the target score by the source score (target = target / source). If source is 0, score becomes 0 and a division-by-zero error is logged.",
+    "keywords": ["divide", "division", "quotient", "/="],
+    "version": "1.21.11",
+    "edition": "Java"
+  },
+  {
+    "category": "operation",
+    "name": "modulo",
+    "operator": "%=",
+    "syntax": "scoreboard players operation <targets> <targetObjective> %= <source> <sourceObjective>",
+    "description": "Calculates the remainder of dividing target score by source score (target = target % source). Useful for clock timers and cyclic animations.",
+    "keywords": ["modulo", "mod", "remainder", "%="],
+    "version": "1.21.11",
+    "edition": "Java"
+  },
+  {
+    "category": "operation",
+    "name": "min",
+    "operator": "<",
+    "syntax": "scoreboard players operation <targets> <targetObjective> < <source> <sourceObjective>",
+    "description": "Sets the target score to the smaller of target and source: target = min(target, source).",
+    "keywords": ["min", "minimum", "smaller", "clamp_max"],
+    "version": "1.21.11",
+    "edition": "Java"
+  },
+  {
+    "category": "operation",
+    "name": "max",
+    "operator": ">",
+    "syntax": "scoreboard players operation <targets> <targetObjective> > <source> <sourceObjective>",
+    "description": "Sets the target score to the larger of target and source: target = max(target, source).",
+    "keywords": ["max", "maximum", "larger", "bigger", "clamp_min"],
+    "version": "1.21.11",
+    "edition": "Java"
+  },
+  {
+    "category": "operation",
+    "name": "swap",
+    "operator": "><",
+    "syntax": "scoreboard players operation <targets> <targetObjective> >< <source> <sourceObjective>",
+    "description": "Swaps the score values between the target and the source.",
+    "keywords": ["swap", "exchange", "trade", "><"],
+    "version": "1.21.11",
+    "edition": "Java"
+  },
+  {
+    "category": "comparison",
+    "name": "less_than",
+    "operator": "<",
+    "syntax": "execute if score <target> <targetObjective> < <source> <sourceObjective>",
+    "description": "Evaluates to true if target score is strictly less than source score.",
+    "keywords": ["less", "less_than", "under", "below", "<"],
+    "version": "1.21.11",
+    "edition": "Java"
+  },
+  {
+    "category": "comparison",
+    "name": "less_than_or_equal",
+    "operator": "<=",
+    "syntax": "execute if score <target> <targetObjective> <= <source> <sourceObjective>",
+    "description": "Evaluates to true if target score is less than or equal to source score.",
+    "keywords": ["less_than_or_equal", "at_most", "maximum", "<="],
+    "version": "1.21.11",
+    "edition": "Java"
+  },
+  {
+    "category": "comparison",
+    "name": "equal",
+    "operator": "=",
+    "syntax": "execute if score <target> <targetObjective> = <source> <sourceObjective>",
+    "description": "Evaluates to true if target score equals source score.",
+    "keywords": ["equal", "equals", "same", "=="],
+    "version": "1.21.11",
+    "edition": "Java"
+  },
+  {
+    "category": "comparison",
+    "name": "greater_than_or_equal",
+    "operator": ">=",
+    "syntax": "execute if score <target> <targetObjective> >= <source> <sourceObjective>",
+    "description": "Evaluates to true if target score is greater than or equal to source score.",
+    "keywords": ["greater_than_or_equal", "at_least", "minimum", ">="],
+    "version": "1.21.11",
+    "edition": "Java"
+  },
+  {
+    "category": "comparison",
+    "name": "greater_than",
+    "operator": ">",
+    "syntax": "execute if score <target> <targetObjective> > <source> <sourceObjective>",
+    "description": "Evaluates to true if target score is strictly greater than source score.",
+    "keywords": ["greater", "greater_than", "more", "above", "exceed", ">"],
+    "version": "1.21.11",
+    "edition": "Java"
+  },
+  {
+    "category": "comparison",
+    "name": "range_matches",
+    "operator": "matches",
+    "syntax": "execute if score <target> <targetObjective> matches <range>",
+    "description": "Evaluates to true if target score matches the specified integer range (e.g. 5, 1..10, 10.., ..5).",
+    "keywords": ["matches", "range", "between", "in_range"],
+    "version": "1.21.11",
+    "edition": "Java"
+  },
+  {
+    "category": "best_practice",
+    "name": "global_score_holders",
+    "description": "Use persistent fake player score holders starting with '#' (e.g. '#global', '#state', '#temp') for world-level or environmental logic. Fake players starting with '#' never appear in the player tab list or sidebar.",
+    "keywords": ["global_score", "fake_player", "hash_holder", "global_holder"],
+    "rule": "Global / environmental state must use '#global' in load.mcfunction. Never use '@a' in load.mcfunction as 0 players are connected on server boot.",
+    "version": "1.21.11",
+    "edition": "Java"
+  },
+  {
+    "category": "best_practice",
+    "name": "dynamic_player_initialization",
+    "description": "Initialize player scores dynamically in tick.mcfunction using: 'execute as @a unless score @s <obj> matches 0.. run scoreboard players set @s <obj> 0'. This prevents missing scores for newly joined players without triggering EMPTY_SELECTOR_ON_LOAD warnings.",
+    "keywords": ["player_initialization", "join_init", "tick_init"],
+    "rule": "Per-player state machines must dynamically initialize joiners in tick.mcfunction, never in load.mcfunction.",
+    "version": "1.21.11",
+    "edition": "Java"
+  },
+  {
+    "category": "best_practice",
+    "name": "positive_add_remove_parameters",
+    "description": "In Minecraft Java 1.21.11, 'scoreboard players add' and 'scoreboard players remove' enforce integer min: 0 in the Brigadier parser. Negative numbers cause syntax errors. To subtract, use 'scoreboard players remove <targets> <obj> <positive_int>' or 'scoreboard players operation -= '.",
+    "keywords": ["negative_score_guard", "min_zero", "positive_only"],
+    "rule": "Never pass negative numbers to scoreboard players add or remove.",
+    "version": "1.21.11",
+    "edition": "Java"
+  },
+  {
+    "category": "best_practice",
+    "name": "objective_naming_limits",
+    "description": "Objective names must not exceed 16 characters in length and must only contain alphanumeric characters, underscores, hyphens, periods, or plus signs: [a-zA-Z0-9_.+-].",
+    "keywords": ["name_limit", "16_chars", "max_length"],
+    "rule": "Objective name length <= 16 characters.",
+    "version": "1.21.11",
+    "edition": "Java"
+  }
+]

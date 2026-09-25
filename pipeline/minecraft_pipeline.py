@@ -61,7 +61,7 @@ class MinecraftPipeline:
 
         # Subsystems (supports dependency injection for testing)
         self.ai = ai_provider or AIProvider(provider=provider)
-        self.understanding = understanding_engine or MinecraftUnderstanding(provider=provider)
+        self.understanding = understanding_engine or MinecraftUnderstanding(provider=provider, ai_provider=self.ai)
         self.generator = generator or DatapackGenerator(output_dir=output_dir, version=version)
         self.validator = validator or DatapackValidator(version=version)
         self.repair_loop = repair_loop or AIRepairLoop(
@@ -179,7 +179,7 @@ class MinecraftPipeline:
         # -------------------------------------------------------------
         _log("3/8", "Creating implementation plan...", self.verbose)
         try:
-            plan = create_plan(understanding, provider=self.provider_name, version=self.version)
+            plan = create_plan(understanding, provider=self.provider_name, version=self.version, ai_provider=self.ai)
         except Exception as e:
             err_msg = f"Planner failed: {e}"
             _log("3/8", f"ERROR: {err_msg}", self.verbose)
@@ -288,6 +288,7 @@ class MinecraftPipeline:
                 _log("5/8", f"FAILED: Structural repair loop could not resolve errors after {repair_result.total_attempts} attempt(s).", self.verbose)
                 return PipelineResult(
                     status="failed",
+                    verification_status="verification_failed",
                     minecraft_version=self.version,
                     original_request=request_clean,
                     understanding=understanding,
@@ -400,6 +401,7 @@ class MinecraftPipeline:
             _log("6/8", f"VERIFICATION FAILED: Unresolved QA findings after {qa_attempt} repair attempt(s).", self.verbose)
             return PipelineResult(
                 status="verification_failed",
+                verification_status="qa_failed",
                 minecraft_version=self.version,
                 original_request=request_clean,
                 understanding=understanding,
@@ -425,6 +427,7 @@ class MinecraftPipeline:
             _log("7/8", f"VERIFICATION FAILED: Intent mismatch: {intent_res.reasoning}", self.verbose)
             return PipelineResult(
                 status="verification_failed",
+                verification_status="verification_failed",
                 minecraft_version=self.version,
                 original_request=request_clean,
                 understanding=understanding,
@@ -453,6 +456,7 @@ class MinecraftPipeline:
             _log("8/8", f"VERIFICATION FAILED: Runtime simulation failed: {runtime_res.details}", self.verbose)
             return PipelineResult(
                 status="verification_failed",
+                verification_status="verification_failed",
                 minecraft_version=self.version,
                 original_request=request_clean,
                 understanding=understanding,
@@ -473,6 +477,7 @@ class MinecraftPipeline:
             if not zip_check.is_valid:
                 return PipelineResult(
                     status="verification_failed",
+                    verification_status="verification_failed",
                     minecraft_version=self.version,
                     original_request=request_clean,
                     understanding=understanding,

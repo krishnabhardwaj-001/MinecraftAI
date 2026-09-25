@@ -82,7 +82,7 @@ class PipelineResult(BaseModel):
         description="Runtime simulation or server test outcome"
     )
     verification_status: Optional[str] = Field(
-        default="verified",
+        default=None,
         description="'verified', 'verification_failed', 'structurally_valid', or 'qa_failed'"
     )
     message: Optional[str] = Field(

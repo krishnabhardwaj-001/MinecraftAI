@@ -27,6 +27,7 @@ from generator.models import (
     MechanismSpecification,
     PredicateDefinition,
     RecipeDefinition,
+    ScoreboardObjectiveDefinition,
 )
 
 
@@ -206,6 +207,7 @@ class DatapackGenerator:
         recipes: List[RecipeDefinition] = []
         predicates: List[PredicateDefinition] = []
         state_machines: List[MechanismSpecification] = []
+        scoreboard_objectives: List[ScoreboardObjectiveDefinition] = []
 
         # 0. Check for explicit specifications directly in plan
         if plan:
@@ -259,7 +261,15 @@ class DatapackGenerator:
                     elif isinstance(raw, dict):
                         state_machines.append(MechanismSpecification(**raw))
 
-            if loot_modifications or functions or tags or advancements or recipes or predicates or state_machines:
+            raw_sb = plan.get("scoreboard_objectives") or plan.get("objectives") or plan.get("scoreboards")
+            if raw_sb:
+                for raw in raw_sb:
+                    if isinstance(raw, ScoreboardObjectiveDefinition):
+                        scoreboard_objectives.append(raw)
+                    elif isinstance(raw, dict):
+                        scoreboard_objectives.append(ScoreboardObjectiveDefinition(**raw))
+
+            if loot_modifications or functions or tags or advancements or recipes or predicates or state_machines or scoreboard_objectives:
                 return {
                     "loot_modifications": loot_modifications,
                     "functions": functions,
@@ -268,6 +278,7 @@ class DatapackGenerator:
                     "recipes": recipes,
                     "predicates": predicates,
                     "state_machines": state_machines,
+                    "scoreboard_objectives": scoreboard_objectives,
                 }
 
         # 1. Direct consumption from structured MechanismSpecification in implementation_plan
@@ -325,8 +336,12 @@ class DatapackGenerator:
                     elif any(t in m_type for t in ["predicate", "custom_predicate", "condition"]):
                         if spec.condition_type or spec.condition_params or spec.terms or spec.term or spec.path:
                             predicates.append(spec.to_predicate_definition())
+                    elif any(t in m_type for t in ["scoreboard_objective", "scoreboard", "objective"]) or m_type == "scoreboard":
+                        scoreboard_objectives.append(spec.to_scoreboard_objective_definition())
+                        if spec.actions or spec.commands:
+                            functions.append(spec.to_function_definition())
 
-        if loot_modifications or functions or tags or advancements or recipes or predicates or state_machines:
+        if loot_modifications or functions or tags or advancements or recipes or predicates or state_machines or scoreboard_objectives:
             return {
                 "loot_modifications": loot_modifications,
                 "functions": functions,
@@ -335,6 +350,7 @@ class DatapackGenerator:
                 "recipes": recipes,
                 "predicates": predicates,
                 "state_machines": state_machines,
+                "scoreboard_objectives": scoreboard_objectives,
             }
 
         # 2. Fallback heuristic inspection for minimal or legacy plans
@@ -493,7 +509,9 @@ class DatapackGenerator:
             "tags": tags,
             "advancements": advancements,
             "recipes": recipes,
-            "predicates": predicates
+            "predicates": predicates,
+            "state_machines": state_machines,
+            "scoreboard_objectives": scoreboard_objectives,
         }
 
     def generate(
@@ -508,6 +526,7 @@ class DatapackGenerator:
         recipes: Optional[List[RecipeDefinition]] = None,
         predicates: Optional[List[PredicateDefinition]] = None,
         state_machines: Optional[List[MechanismSpecification]] = None,
+        scoreboard_objectives: Optional[List[ScoreboardObjectiveDefinition]] = None,
         datapack_name: Optional[str] = None,
         description: Optional[str] = None,
         create_zip: bool = True,
@@ -524,6 +543,7 @@ class DatapackGenerator:
         rec_defs: List[RecipeDefinition] = list(recipes) if recipes is not None else []
         pred_defs: List[PredicateDefinition] = list(predicates) if predicates is not None else []
         sm_defs: List[MechanismSpecification] = list(state_machines) if state_machines is not None else []
+        sb_defs: List[ScoreboardObjectiveDefinition] = list(scoreboard_objectives) if scoreboard_objectives is not None else []
 
         # If no explicit mechanism parameters provided, extract generically
         if (
@@ -534,6 +554,7 @@ class DatapackGenerator:
             and recipes is None
             and predicates is None
             and state_machines is None
+            and scoreboard_objectives is None
         ):
             extracted = self.extract_mechanisms(
                 plan=plan,
@@ -547,8 +568,9 @@ class DatapackGenerator:
             rec_defs = extracted.get("recipes", [])
             pred_defs = extracted.get("predicates", [])
             sm_defs = extracted.get("state_machines", [])
+            sb_defs = extracted.get("scoreboard_objectives", [])
 
-        if not (loot_mods or funcs or tag_defs or adv_defs or rec_defs or pred_defs or sm_defs):
+        if not (loot_mods or funcs or tag_defs or adv_defs or rec_defs or pred_defs or sm_defs or sb_defs):
             raise ValueError(
                 "No valid modifications or mechanisms could be determined from the plan and context."
             )
@@ -576,6 +598,12 @@ class DatapackGenerator:
             elif pred_defs:
                 first_pred = pred_defs[0]
                 datapack_name = f"{first_pred.predicate_path}_datapack"
+            elif sm_defs:
+                first_sm = sm_defs[0]
+                datapack_name = f"{first_sm.objective or 'state_machine'}_datapack"
+            elif sb_defs:
+                first_sb = sb_defs[0]
+                datapack_name = f"{first_sb.objective}_scoreboard_datapack"
             else:
                 datapack_name = "minecraft_datapack"
 
@@ -652,6 +680,68 @@ class DatapackGenerator:
         for sm in sm_defs:
             resources.extend(self.state_machine_mech.generate(sm))
 
+        # Consolidate scoreboard objectives and detect conflicts
+        consolidated_sb: Dict[str, ScoreboardObjectiveDefinition] = {}
+        for sb in sb_defs:
+            name = sb.objective
+            if name in consolidated_sb:
+                existing = consolidated_sb[name]
+                if existing.criteria != sb.criteria:
+                    raise ValueError(
+                        f"Conflicting criteria for scoreboard objective '{name}': "
+                        f"'{existing.criteria}' vs '{sb.criteria}'"
+                    )
+                if existing.display_name != sb.display_name:
+                    raise ValueError(
+                        f"Conflicting display_name for scoreboard objective '{name}': "
+                        f"'{existing.display_name}' vs '{sb.display_name}'"
+                    )
+                if existing.display_slot != sb.display_slot:
+                    raise ValueError(
+                        f"Conflicting display_slot for scoreboard objective '{name}': "
+                        f"'{existing.display_slot}' vs '{sb.display_slot}'"
+                    )
+            else:
+                consolidated_sb[name] = sb
+
+        # Validate that state machine objectives do not conflict with declared objectives
+        for sm in sm_defs:
+            sm_obj = (sm.objective or sm.path or "event_state").strip()
+            if sm_obj in consolidated_sb:
+                existing = consolidated_sb[sm_obj]
+                if existing.criteria != "dummy":
+                    raise ValueError(
+                        f"Conflicting criteria for state machine objective '{sm_obj}': "
+                        f"state machine requires 'dummy', but objective defined with '{existing.criteria}'"
+                    )
+
+        # Generate resources for consolidated scoreboard objectives
+        if consolidated_sb:
+            sb_ns = (
+                (sm_defs[0].namespace if sm_defs and sm_defs[0].namespace else None)
+                or (funcs[0].namespace if funcs and funcs[0].namespace else None)
+                or "minecraft_ai"
+            )
+            load_lines = ["# Generated by MinecraftAI - Scoreboard Initialization"]
+            for obj_def in consolidated_sb.values():
+                load_lines.extend(self.function_mech.synthesize_objective_command(obj_def))
+            load_content = "\n".join(load_lines) + "\n"
+            resources.append(
+                DatapackResource(
+                    relative_path=f"data/{sb_ns}/function/load.mcfunction",
+                    content=load_content,
+                    resource_type="function"
+                )
+            )
+            load_tag_json = json.dumps({"values": [f"{sb_ns}:load"]}, indent=2) + "\n"
+            resources.append(
+                DatapackResource(
+                    relative_path="data/minecraft/tags/function/load.json",
+                    content=load_tag_json,
+                    resource_type="function_tag"
+                )
+            )
+
         # Deterministically write all resource files with intelligent consolidation
         for res in resources:
             target_file = datapack_dir / res.relative_path
@@ -683,13 +773,90 @@ class DatapackGenerator:
                 elif res.relative_path.endswith(".mcfunction"):
                     try:
                         existing_text = target_file.read_text(encoding="utf-8")
+                        if res.content.strip() == existing_text.strip():
+                            # Identical function content at same path: keep one
+                            continue
+
+                        # Check if lifecycle function (load.mcfunction or tick.mcfunction)
+                        is_lifecycle = res.relative_path.endswith("load.mcfunction") or res.relative_path.endswith("tick.mcfunction")
+                        if not is_lifecycle:
+                            raise ValueError(
+                                f"Conflicting function content for '{res.relative_path}': "
+                                "multiple mechanisms defined differing content for the same function."
+                            )
+
+                        existing_lines = [l.strip() for l in existing_text.splitlines() if l.strip()]
+                        existing_obj_adds = {}
+                        existing_setdisplays = {}
+                        for el in existing_lines:
+                            m_obj = re.match(r"^scoreboard\s+objectives\s+add\s+([a-zA-Z0-9_.\+\-]+)\s+(\S+)(?:\s+(.*))?$", el)
+                            if m_obj:
+                                existing_obj_adds[m_obj.group(1)] = (m_obj.group(2), (m_obj.group(3) or "").strip(), el)
+                            m_slot = re.match(r"^scoreboard\s+objectives\s+setdisplay\s+(\S+)\s+([a-zA-Z0-9_.\+\-]+)$", el)
+                            if m_slot:
+                                existing_setdisplays[m_slot.group(1)] = (m_slot.group(2), el)
+
                         new_lines = [
                             l for l in res.content.splitlines()
                             if l.strip() and not l.strip().startswith("# Generated by")
                         ]
-                        merged_content = existing_text.rstrip("\n") + "\n" + "\n".join(new_lines) + "\n"
+                        filtered_new_lines = []
+                        for nl in new_lines:
+                            nl_strip = nl.strip()
+                            m_new_obj = re.match(r"^scoreboard\s+objectives\s+add\s+([a-zA-Z0-9_.\+\-]+)\s+(\S+)(?:\s+(.*))?$", nl_strip)
+                            if m_new_obj:
+                                obj_name = m_new_obj.group(1)
+                                crit = m_new_obj.group(2)
+                                disp = (m_new_obj.group(3) or "").strip()
+                                if obj_name in existing_obj_adds:
+                                    ex_crit, ex_disp, ex_cmd = existing_obj_adds[obj_name]
+                                    if ex_crit != crit or ex_disp != disp:
+                                        raise ValueError(
+                                            f"Conflicting scoreboard objective definition for '{obj_name}': "
+                                            f"'{ex_cmd}' vs '{nl_strip}'"
+                                        )
+                                    # Exactly identical definition: deduplicate (keep one)
+                                    continue
+                                else:
+                                    existing_obj_adds[obj_name] = (crit, disp, nl_strip)
+                                    filtered_new_lines.append(nl)
+                                    continue
+
+                            m_new_slot = re.match(r"^scoreboard\s+objectives\s+setdisplay\s+(\S+)\s+([a-zA-Z0-9_.\+\-]+)$", nl_strip)
+                            if m_new_slot:
+                                slot_name = m_new_slot.group(1)
+                                tgt_obj = m_new_slot.group(2)
+                                if slot_name in existing_setdisplays:
+                                    ex_tgt, ex_cmd = existing_setdisplays[slot_name]
+                                    if ex_tgt != tgt_obj:
+                                        raise ValueError(
+                                            f"Conflicting display slot '{slot_name}': "
+                                            f"'{ex_cmd}' vs '{nl_strip}'"
+                                        )
+                                    continue
+                                else:
+                                    existing_setdisplays[slot_name] = (tgt_obj, nl_strip)
+                                    filtered_new_lines.append(nl)
+                                    continue
+
+                            # Diagnostic commands deduplication in lifecycle functions
+                            if nl_strip in existing_lines:
+                                if nl_strip.startswith("scoreboard objectives setdisplay ") or \
+                                   nl_strip.startswith("scoreboard players set #load_ran mcai_debug ") or \
+                                   nl_strip.startswith("scoreboard players set #tick_count mcai_debug ") or \
+                                   nl_strip.startswith("say [MinecraftAI] [LOAD OK]"):
+                                    continue
+
+                            filtered_new_lines.append(nl)
+
+                        if filtered_new_lines:
+                            merged_content = existing_text.rstrip("\n") + "\n" + "\n".join(filtered_new_lines) + "\n"
+                        else:
+                            merged_content = existing_text
                         with open(target_file, "w", encoding="utf-8", newline="\n") as f:
                             f.write(merged_content)
+                    except ValueError:
+                        raise
                     except Exception:
                         with open(target_file, "w", encoding="utf-8", newline="\n") as f:
                             f.write(res.content)
@@ -782,6 +949,7 @@ def generate_datapack(
     recipes: Optional[List[RecipeDefinition]] = None,
     predicates: Optional[List[PredicateDefinition]] = None,
     state_machines: Optional[List[MechanismSpecification]] = None,
+    scoreboard_objectives: Optional[List[ScoreboardObjectiveDefinition]] = None,
     output_dir: Optional[Path] = None,
     datapack_name: Optional[str] = None,
     description: Optional[str] = None,
@@ -802,6 +970,7 @@ def generate_datapack(
         recipes=recipes,
         predicates=predicates,
         state_machines=state_machines,
+        scoreboard_objectives=scoreboard_objectives,
         datapack_name=datapack_name,
         description=description,
         create_zip=create_zip

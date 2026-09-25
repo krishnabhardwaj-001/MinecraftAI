@@ -6,8 +6,8 @@ from ai.schemas import MinecraftUnderstandingResult
 
 class MinecraftUnderstanding:
 
-    def __init__(self, provider="ollama"):
-        self.provider = AIProvider(provider)
+    def __init__(self, provider="ollama", ai_provider=None):
+        self.provider = ai_provider or AIProvider(provider)
 
         self.system_prompt = """
 You are the understanding layer of a Minecraft AI system.

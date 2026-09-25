@@ -1,29 +1,14 @@
 # MinecraftAI Tasks
 
 ## Current
-- [ ] Support advanced scoreboard-based systems and objectives.
-- [ ] Improve generic natural-language numeric interpretation, including multiplier expressions.
-- [ ] Improve generic clarification handling for underspecified properties.
-- [ ] Keep AI context files synchronized after significant changes.
-
-## Completed / established
-- [x] Git repository established and connected to the project workflow.
-- [x] Shared `.ai/` context structure created.
-- [x] `AGENTS.md` added with cross-agent instructions.
-- [x] Command knowledge generated for Minecraft Java 1.21.11.
-- [x] Semantic retrieval traceback fixed.
-- [x] Target validation fixed for targets such as `@s`.
-- [x] Clarification state added for ambiguous requests.
-- [x] Expand Minecraft 1.21.11 knowledge/RAG to entities, items, and loot tables with generic morphological normalization.
-- [x] Build deterministic datapack generator from structured plans (Step 5 - `generator/`).
-- [x] Build deterministic datapack validator/tester (Step 6 - `validator/`).
-- [x] Build structured AI repair loop with retry protection and diagnostic history (Step 7 - `repair/`).
-- [x] Complete end-to-end natural-language → datapack ZIP pipeline (Step 8 Orchestrator - `pipeline/`, `run_pipeline.py`, `test_pipeline.py`).
-- [x] Build user-facing web interface and direct ZIP download endpoint (Step 9 - `web/`, `run_web.py`, `test_web.py`).
-# MinecraftAI Tasks
-
-## Current
-- [ ] Support advanced scoreboard-based systems and objectives.
+- [x] Step 16: Support advanced scoreboard-based systems, objectives, and arithmetic operations.
+  - [x] Step 16.1: Scoreboard domain knowledge registry, indexing, and RAG retrieval.
+  - [x] Step 16.2: Structured data contracts and Pydantic models (ActionSpecification & MechanismSpecification).
+  - [x] Step 16.3: Deterministic scoreboard command compilation and generator integration.
+  - [x] Step 16.4: Deterministic static validation for scoreboard commands.
+  - [x] Step 16.5: QA semantic analysis & runtime simulation for scoreboards.
+  - [x] Step 16.6: Planner system prompt and instruction alignment.
+  - [x] Step 16.7: Automated verification & regression testing.
 - [ ] Improve generic natural-language numeric interpretation, including multiplier expressions.
 - [ ] Improve generic clarification handling for underspecified properties.
 - [ ] Keep AI context files synchronized after significant changes.
@@ -50,6 +35,9 @@
 - [x] Implement Autonomous Datapack QA, Verification & Auto-Repair (Step 14 - `qa/` package, `StaticSemanticAnalyzer`, `AutonomousQAReviewer`, `QARepairEngine`, `RuntimeTestRunner`, bounded QA loop with repeat failure detection, final READY gate, and `test_qa.py`).
 - [x] Strengthen Planner → Generator Boundary with structured declarative ActionSpecifications, deterministic command synthesis, dedicated state machine generator with replace: false function tags, and shared resource consolidation (Step 15 - `generator/models.py`, `generator/mechanisms/function_mech.py`, `generator/mechanisms/state_machine_mech.py`, `ai/planner.py`, `qa/repair.py`, `test_step15_boundary.py`).
 - [x] Function Tag Minimal Formatting, Multi-Datapack Tag Aggregation, and Dangling Reference Sanitization (`generator/mechanisms/tag_mech.py`, `generator/mechanisms/state_machine_mech.py`, `generator/datapack_generator.py`, `validator/datapack_validator.py`, `knowledge/tags/`, `test_generator.py`, `test_mechanisms.py`, `test_validator.py`).
+- [x] Step 16.1: Scoreboard Domain Knowledge and RAG Integration (`knowledge/scoreboards/java/1.21.11/scoreboards.json`, `knowledge_retriever.py`, `ai/context.py`, `test_retrieval.py`).
+- [x] Step 16.2: Structured Data Contracts & Models for Scoreboards (`generator/models.py`, `test_step16_models.py`).
+- [x] Step 16.3: Deterministic Scoreboard Command Generation and Resource Consolidation (`generator/mechanisms/function_mech.py`, `generator/mechanisms/state_machine_mech.py`, `generator/datapack_generator.py`, `test_step16_generator.py`).
 
 ## Rule
 Tasks describe project work, not special cases for individual example prompts. If an example exposes a problem, fix the underlying generic capability.

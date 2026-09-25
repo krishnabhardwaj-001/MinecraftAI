@@ -99,6 +99,93 @@ def test_retriever():
     return all_passed
 
 
+def test_scoreboard_retrieval():
+    retriever = MinecraftKnowledgeRetriever()
+
+    test_cases = [
+        {
+            "query": "track player deaths on sidebar",
+            "expected_criteria": "deathCount",
+            "expected_slot": "sidebar",
+        },
+        {
+            "query": "multiply player score by 2",
+            "expected_operation": "*=",
+        },
+        {
+            "query": "display health below player name",
+            "expected_criteria": "health",
+            "expected_slot": "below_name",
+        },
+        {
+            "query": "player trigger menu",
+            "expected_criteria": "trigger",
+        },
+        {
+            "query": "compare if player score is greater than high score",
+            "expected_operator": ">",
+        }
+    ]
+
+    all_passed = True
+    print("\n" + "=" * 70)
+    print("RUNNING SCOREBOARD KNOWLEDGE RETRIEVAL TEST SUITE")
+    print("=" * 70)
+
+    for case in test_cases:
+        query = case["query"]
+        results = retriever.search(query, limit=5)
+        scoreboards = results.get("scoreboards", [])
+
+        criteria_ok = True
+        if "expected_criteria" in case:
+            criteria_ok = any(
+                s.get("criteria") == case["expected_criteria"] or s.get("name") == case["expected_criteria"]
+                for s in scoreboards
+            )
+
+        slot_ok = True
+        if "expected_slot" in case:
+            slot_ok = any(
+                s.get("slot") == case["expected_slot"] or s.get("name") == case["expected_slot"]
+                for s in scoreboards
+            )
+
+        op_ok = True
+        if "expected_operation" in case:
+            op_ok = any(
+                s.get("operator") == case["expected_operation"]
+                for s in scoreboards
+            )
+
+        comp_ok = True
+        if "expected_operator" in case:
+            comp_ok = any(
+                s.get("operator") == case["expected_operator"]
+                for s in scoreboards
+            )
+
+        case_passed = criteria_ok and slot_ok and op_ok and comp_ok and len(scoreboards) > 0
+        if not case_passed:
+            all_passed = False
+
+        status = "PASS" if case_passed else "FAIL"
+        print(f"\n[{status}] Query: '{query}'")
+        print(f"  Retrieved {len(scoreboards)} scoreboard knowledge items:")
+        for s in scoreboards[:3]:
+            print(f"    - {s.get('name')} ({s.get('category')}): {s.get('description', '')[:60]}...")
+
+    print("\n" + "=" * 70)
+    if all_passed:
+        print("ALL SCOREBOARD RETRIEVAL TESTS PASSED SUCCESSFULLY!")
+    else:
+        print("SOME SCOREBOARD RETRIEVAL TESTS FAILED.")
+    print("=" * 70)
+
+    return all_passed
+
+
 if __name__ == "__main__":
-    success = test_retriever()
-    sys.exit(0 if success else 1)
+    success_loot = test_retriever()
+    success_sb = test_scoreboard_retrieval()
+    sys.exit(0 if (success_loot and success_sb) else 1)
