@@ -63,6 +63,9 @@ class DatapackValidator:
         # Load valid entity IDs from knowledge
         self.valid_entities = self._load_valid_entities()
 
+        # Load valid attribute IDs from knowledge/registries
+        self.valid_attributes = self._load_valid_attributes()
+
         # Vanilla loot tables base directory
         self.vanilla_loot_dir = (
             self.base_dir
@@ -176,6 +179,85 @@ class DatapackValidator:
             pass
 
         return set()
+
+    def _load_valid_attributes(self) -> Set[str]:
+        """
+        Loads all valid Minecraft attribute IDs for 1.21.11 from knowledge assets
+        or registries.json, with aliases for backwards compatibility.
+        """
+        attributes = set()
+        registries_paths = [
+            self.base_dir / "generated" / "reports" / "registries.json",
+            self.base_dir / "source" / "1.21.11" / "generated" / "reports" / "registries.json",
+        ]
+
+        for reg_p in registries_paths:
+            if reg_p.exists():
+                try:
+                    with open(reg_p, "r", encoding="utf-8") as f:
+                        data = json.load(f)
+                    entries = data.get("minecraft:attribute", {}).get("entries", {})
+                    for k in entries.keys():
+                        attributes.add(k.lower())
+                    if attributes:
+                        break
+                except Exception:
+                    pass
+
+        # Complete set of 1.21.11 attributes as guaranteed baseline
+        standard_1_21_attributes = {
+            "minecraft:armor",
+            "minecraft:armor_toughness",
+            "minecraft:attack_damage",
+            "minecraft:attack_knockback",
+            "minecraft:attack_speed",
+            "minecraft:block_break_speed",
+            "minecraft:block_interaction_range",
+            "minecraft:burning_time",
+            "minecraft:camera_distance",
+            "minecraft:entity_interaction_range",
+            "minecraft:explosion_knockback_resistance",
+            "minecraft:fall_damage_multiplier",
+            "minecraft:flying_speed",
+            "minecraft:follow_range",
+            "minecraft:gravity",
+            "minecraft:jump_strength",
+            "minecraft:knockback_resistance",
+            "minecraft:luck",
+            "minecraft:max_absorption",
+            "minecraft:max_health",
+            "minecraft:mining_efficiency",
+            "minecraft:movement_efficiency",
+            "minecraft:movement_speed",
+            "minecraft:oxygen_bonus",
+            "minecraft:safe_fall_distance",
+            "minecraft:scale",
+            "minecraft:sneaking_speed",
+            "minecraft:spawn_reinforcements",
+            "minecraft:step_height",
+            "minecraft:submerged_mining_speed",
+            "minecraft:sweeping_damage_ratio",
+            "minecraft:tempt_range",
+            "minecraft:water_movement_efficiency",
+            "minecraft:waypoint_receive_range",
+            "minecraft:waypoint_transmit_range",
+        }
+        attributes.update(standard_1_21_attributes)
+
+        # Include generic.*, player.*, zombie.* aliases and prefix-less names
+        aliases = set()
+        for attr in attributes:
+            name_part = attr.split(":")[-1]
+            aliases.add(name_part)
+            aliases.add(f"minecraft:generic.{name_part}")
+            aliases.add(f"generic.{name_part}")
+            aliases.add(f"minecraft:player.{name_part}")
+            aliases.add(f"player.{name_part}")
+            aliases.add(f"minecraft:zombie.{name_part}")
+            aliases.add(f"zombie.{name_part}")
+
+        attributes.update(aliases)
+        return attributes
 
     def _validate_score_integer(self, val_str: str, allow_negative: bool = True) -> Optional[str]:
         """
@@ -810,6 +892,301 @@ class DatapackValidator:
                 ]
             )
 
+    def _validate_attribute_command_tokens(
+        self,
+        tokens: List[str],
+        line: str,
+        rel_path: str,
+        line_idx: int,
+        errors: List[ValidationIssue]
+    ) -> int:
+        """
+        Validates tokens of an 'attribute ...' command for Minecraft Java 1.21.11.
+        Returns the number of errors encountered.
+        """
+        err_count = 0
+        if len(tokens) < 3:
+            errors.append(
+                ValidationIssue(
+                    level="error",
+                    code="UNKNOWN_COMMAND",
+                    message=f"Incomplete attribute command at line {line_idx}: '{line}'",
+                    file=rel_path
+                )
+            )
+            return 1
+
+        # 1. Target validation (Minecraft 1.21 attribute requires single entity)
+        target = tokens[1]
+        is_multi_target = False
+        if target in ("@a", "@e"):
+            is_multi_target = True
+        elif target.startswith("@a[") or target.startswith("@e["):
+            if "limit=1" not in target and "c=1" not in target:
+                is_multi_target = True
+
+        if is_multi_target:
+            errors.append(
+                ValidationIssue(
+                    level="error",
+                    code="INVALID_ATTRIBUTE_TARGET",
+                    message=(
+                        f"Attribute command requires a single entity target, but '{target}' may match multiple entities "
+                        f"at line {line_idx}. Wrap with 'execute as {target} run attribute @s ...' or add 'limit=1'."
+                    ),
+                    file=rel_path
+                )
+            )
+            err_count += 1
+
+        # 2. Attribute ID validation
+        attr_raw = tokens[2].lower()
+        is_valid_attr = (
+            attr_raw in self.valid_attributes
+            or f"minecraft:{attr_raw}" in self.valid_attributes
+            or attr_raw.replace("minecraft:generic.", "minecraft:") in self.valid_attributes
+            or attr_raw.replace("generic.", "") in self.valid_attributes
+        )
+        if not is_valid_attr:
+            errors.append(
+                ValidationIssue(
+                    level="error",
+                    code="INVALID_ATTRIBUTE_ID",
+                    message=f"Unknown or invalid attribute ID '{tokens[2]}' at line {line_idx}: '{line}'",
+                    file=rel_path
+                )
+            )
+            err_count += 1
+
+        # 3. Subcommand validation
+        if len(tokens) < 4:
+            errors.append(
+                ValidationIssue(
+                    level="error",
+                    code="UNKNOWN_COMMAND",
+                    message=f"Missing attribute action (base, get, or modifier) at line {line_idx}: '{line}'",
+                    file=rel_path
+                )
+            )
+            return err_count + 1
+
+        sub_cmd = tokens[3].lower()
+        if sub_cmd == "base":
+            if len(tokens) < 5:
+                errors.append(
+                    ValidationIssue(
+                        level="error",
+                        code="UNKNOWN_COMMAND",
+                        message=f"Missing base action (get, set, reset) at line {line_idx}: '{line}'",
+                        file=rel_path
+                    )
+                )
+                return err_count + 1
+            base_act = tokens[4].lower()
+            if base_act == "set":
+                if len(tokens) < 6:
+                    errors.append(
+                        ValidationIssue(
+                            level="error",
+                            code="INVALID_ATTRIBUTE_VALUE",
+                            message=f"Missing value for 'attribute base set' at line {line_idx}: '{line}'",
+                            file=rel_path
+                        )
+                    )
+                    return err_count + 1
+                try:
+                    float(tokens[5])
+                except ValueError:
+                    errors.append(
+                        ValidationIssue(
+                            level="error",
+                            code="INVALID_ATTRIBUTE_VALUE",
+                            message=f"Attribute base set value must be a valid number, got '{tokens[5]}' at line {line_idx}: '{line}'",
+                            file=rel_path
+                        )
+                    )
+                    err_count += 1
+            elif base_act == "get":
+                if len(tokens) >= 6:
+                    try:
+                        float(tokens[5])
+                    except ValueError:
+                        errors.append(
+                            ValidationIssue(
+                                level="error",
+                                code="INVALID_ATTRIBUTE_VALUE",
+                                message=f"Attribute base get scale must be a valid number, got '{tokens[5]}' at line {line_idx}: '{line}'",
+                                file=rel_path
+                            )
+                        )
+                        err_count += 1
+            elif base_act == "reset":
+                pass
+            else:
+                errors.append(
+                    ValidationIssue(
+                        level="error",
+                        code="UNKNOWN_COMMAND",
+                        message=f"Unknown base action '{base_act}' at line {line_idx}: '{line}'",
+                        file=rel_path
+                    )
+                )
+                err_count += 1
+
+        elif sub_cmd == "get":
+            if len(tokens) >= 5:
+                try:
+                    float(tokens[4])
+                except ValueError:
+                    errors.append(
+                        ValidationIssue(
+                            level="error",
+                            code="INVALID_ATTRIBUTE_VALUE",
+                            message=f"Attribute get scale must be a valid number, got '{tokens[4]}' at line {line_idx}: '{line}'",
+                            file=rel_path
+                        )
+                    )
+                    err_count += 1
+
+        elif sub_cmd == "modifier":
+            if len(tokens) < 5:
+                errors.append(
+                    ValidationIssue(
+                        level="error",
+                        code="UNKNOWN_COMMAND",
+                        message=f"Missing modifier action (add, remove, value) at line {line_idx}: '{line}'",
+                        file=rel_path
+                    )
+                )
+                return err_count + 1
+            mod_act = tokens[4].lower()
+            if mod_act == "add":
+                if len(tokens) < 8:
+                    errors.append(
+                        ValidationIssue(
+                            level="error",
+                            code="UNKNOWN_COMMAND",
+                            message=f"Incomplete 'attribute modifier add' command (expected <id> <value> <operation>) at line {line_idx}: '{line}'",
+                            file=rel_path
+                        )
+                    )
+                    return err_count + 1
+                mod_id = tokens[5]
+                if not re.match(r"^[a-z0-9_.-]+(:[a-z0-9_./-]+)?$", mod_id, re.IGNORECASE):
+                    errors.append(
+                        ValidationIssue(
+                            level="error",
+                            code="INVALID_MODIFIER_ID",
+                            message=f"Invalid modifier ID '{mod_id}' at line {line_idx}: must be a valid identifier/resource location",
+                            file=rel_path
+                        )
+                    )
+                    err_count += 1
+                try:
+                    float(tokens[6])
+                except ValueError:
+                    errors.append(
+                        ValidationIssue(
+                            level="error",
+                            code="INVALID_ATTRIBUTE_VALUE",
+                            message=f"Attribute modifier value must be a valid number, got '{tokens[6]}' at line {line_idx}: '{line}'",
+                            file=rel_path
+                        )
+                    )
+                    err_count += 1
+                mod_op = tokens[7].lower()
+                if mod_op not in {"add_value", "add_multiplied_base", "add_multiplied_total"}:
+                    errors.append(
+                        ValidationIssue(
+                            level="error",
+                            code="INVALID_MODIFIER_OPERATION",
+                            message=f"Invalid modifier operation '{tokens[7]}' at line {line_idx}: must be 'add_value', 'add_multiplied_base', or 'add_multiplied_total'",
+                            file=rel_path
+                        )
+                    )
+                    err_count += 1
+
+            elif mod_act == "remove":
+                if len(tokens) < 6:
+                    errors.append(
+                        ValidationIssue(
+                            level="error",
+                            code="INVALID_MODIFIER_ID",
+                            message=f"Missing modifier ID for 'attribute modifier remove' at line {line_idx}: '{line}'",
+                            file=rel_path
+                        )
+                    )
+                    return err_count + 1
+                mod_id = tokens[5]
+                if not re.match(r"^[a-z0-9_.-]+(:[a-z0-9_./-]+)?$", mod_id, re.IGNORECASE):
+                    errors.append(
+                        ValidationIssue(
+                            level="error",
+                            code="INVALID_MODIFIER_ID",
+                            message=f"Invalid modifier ID '{mod_id}' at line {line_idx}: must be a valid identifier/resource location",
+                            file=rel_path
+                        )
+                    )
+                    err_count += 1
+
+            elif mod_act == "value":
+                if len(tokens) < 7 or tokens[5].lower() != "get":
+                    errors.append(
+                        ValidationIssue(
+                            level="error",
+                            code="UNKNOWN_COMMAND",
+                            message=f"Incomplete or unknown modifier value command at line {line_idx}: '{line}'",
+                            file=rel_path
+                        )
+                    )
+                    return err_count + 1
+                mod_id = tokens[6]
+                if not re.match(r"^[a-z0-9_.-]+(:[a-z0-9_./-]+)?$", mod_id, re.IGNORECASE):
+                    errors.append(
+                        ValidationIssue(
+                            level="error",
+                            code="INVALID_MODIFIER_ID",
+                            message=f"Invalid modifier ID '{mod_id}' at line {line_idx}",
+                            file=rel_path
+                        )
+                    )
+                    err_count += 1
+                if len(tokens) >= 8:
+                    try:
+                        float(tokens[7])
+                    except ValueError:
+                        errors.append(
+                            ValidationIssue(
+                                level="error",
+                                code="INVALID_ATTRIBUTE_VALUE",
+                                message=f"Attribute modifier scale must be a valid number, got '{tokens[7]}' at line {line_idx}",
+                                file=rel_path
+                            )
+                        )
+                        err_count += 1
+            else:
+                errors.append(
+                    ValidationIssue(
+                        level="error",
+                        code="UNKNOWN_COMMAND",
+                        message=f"Unknown modifier action '{mod_act}' at line {line_idx}: '{line}'",
+                        file=rel_path
+                    )
+                )
+                err_count += 1
+        else:
+            errors.append(
+                ValidationIssue(
+                    level="error",
+                    code="UNKNOWN_COMMAND",
+                    message=f"Unknown attribute subcommand '{sub_cmd}' at line {line_idx}: '{line}'",
+                    file=rel_path
+                )
+            )
+            err_count += 1
+
+        return err_count
+
     def _validate_zip(self, zip_path: Path) -> ValidationResult:
         """
         Validates a ZIP file safely: checks archive integrity, blocks path traversal,
@@ -1406,6 +1783,7 @@ class DatapackValidator:
         function_files = list(dir_path.rglob("*.mcfunction"))
         func_errors = 0
         scoreboard_errors = 0
+        attribute_errors = 0
 
         # Pass 1: Parse and index all declared scoreboard objectives and display slots
         declared_objectives: Dict[str, Dict[str, Any]] = {}
@@ -1677,7 +2055,17 @@ class DatapackValidator:
                         )
                         scoreboard_errors += sb_cmd_errs
 
-        func_errors += scoreboard_errors
+                    if curr_tokens and curr_tokens[0].lower() == "attribute":
+                        attr_cmd_errs = self._validate_attribute_command_tokens(
+                            tokens=curr_tokens,
+                            line=line,
+                            rel_path=rel_path,
+                            line_idx=line_idx,
+                            errors=errors
+                        )
+                        attribute_errors += attr_cmd_errs
+
+        func_errors += scoreboard_errors + attribute_errors
 
         if function_files:
             checks.append(
@@ -1692,6 +2080,13 @@ class DatapackValidator:
                     name="Scoreboard System & Objective Validation",
                     passed=(scoreboard_errors == 0),
                     message=f"Validated {len(declared_objectives)} scoreboard objective(s) and operations across function files"
+                )
+            )
+            checks.append(
+                ValidationCheck(
+                    name="Attribute Command & Modifier Validation",
+                    passed=(attribute_errors == 0),
+                    message=f"Validated attribute commands and modifiers across function files"
                 )
             )
 

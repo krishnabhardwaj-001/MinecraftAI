@@ -994,7 +994,16 @@ class MechanismSpecification(BaseModel):
         )
 
     def to_function_definition(self) -> FunctionDefinition:
-        f_path = self.path or self.target or "main"
+        f_path = self.path
+        if not f_path or f_path.startswith("@") or " " in f_path or "[" in f_path:
+            prop = getattr(self.property_modification, "property", None) or getattr(self.property_modification, "property_name", None)
+            if prop:
+                clean_prop = re.sub(r'[^a-z0-9_.-]', '_', str(prop).lower())
+                f_path = f"modify_{clean_prop}"
+            elif self.target and not self.target.startswith("@") and " " not in self.target and "[" not in self.target:
+                f_path = self.target
+            else:
+                f_path = "main"
         parsed_actions: List[ActionSpecification] = []
         for act in (self.actions or []):
             if isinstance(act, ActionSpecification):

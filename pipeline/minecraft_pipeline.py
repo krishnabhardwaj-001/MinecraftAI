@@ -126,8 +126,13 @@ class MinecraftPipeline:
 
         if status_und == "needs_clarification" or clarification_req:
             question = ""
+            clarif_reqs = []
             if isinstance(clarification_req, dict):
                 question = clarification_req.get("question") or clarification_req.get("reason", "")
+                clarif_reqs = [clarification_req]
+            elif isinstance(clarification_req, list):
+                question = "; ".join([str(c) for c in clarification_req])
+                clarif_reqs = clarification_req
             elif isinstance(clarification_req, str):
                 question = clarification_req
             else:
@@ -140,6 +145,7 @@ class MinecraftPipeline:
                 original_request=request_clean,
                 understanding=understanding,
                 clarification=question,
+                clarification_requirements=clarif_reqs,
                 execution_summary="Pipeline halted at understanding stage: request requires clarification."
             )
 
@@ -194,9 +200,16 @@ class MinecraftPipeline:
             )
 
         # Check if planner requires clarification
-        if plan.get("status") == "needs_clarification" or plan.get("clarifications"):
+        if plan.get("status") == "needs_clarification" or plan.get("clarifications") or plan.get("clarification_requirements"):
             clarifications = plan.get("clarifications", [])
-            clarif_text = "; ".join(clarifications) if clarifications else "Planner requires clarification on ambiguous parameters."
+            clarif_reqs = plan.get("clarification_requirements", [])
+            if clarifications:
+                clarif_text = "; ".join(clarifications)
+            elif clarif_reqs:
+                clarif_text = "; ".join([c.get("question", "") for c in clarif_reqs if isinstance(c, dict) and c.get("question")]) or "Planner requires clarification on ambiguous parameters."
+            else:
+                clarif_text = "Planner requires clarification on ambiguous parameters."
+
             _log("3/8", f"Clarification requested by planner: {clarif_text}", self.verbose)
             return PipelineResult(
                 status="needs_clarification",
@@ -206,6 +219,7 @@ class MinecraftPipeline:
                 context=context,
                 plan=plan,
                 clarification=clarif_text,
+                clarification_requirements=clarif_reqs,
                 execution_summary="Pipeline halted at planner stage: implementation requires clarification."
             )
 

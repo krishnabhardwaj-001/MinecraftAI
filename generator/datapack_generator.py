@@ -295,7 +295,8 @@ class DatapackGenerator:
                             "target", "item", "commands", "actions", "values", "tag_name", "criteria", "rewards",
                             "result_item", "recipe_type", "ingredients", "pattern", "key",
                             "condition_type", "condition_params", "predicate_path",
-                            "objective", "condition_predicate", "on_enter", "on_exit"
+                            "objective", "condition_predicate", "on_enter", "on_exit",
+                            "property_modification", "implementation"
                         ]
                     )
                     if has_structured_fields:
@@ -321,7 +322,7 @@ class DatapackGenerator:
                     elif any(t in m_type for t in ["function_tag", "tick_tag", "load_tag", "tag"]) or "tag" in m_type:
                         if spec.values:
                             tags.append(spec.to_tag_definition())
-                    elif any(t in m_type for t in ["function", "mcfunction", "command"]):
+                    elif any(t in m_type for t in ["function", "mcfunction", "command", "property_modification", "modify_property"]):
                         if spec.actions or spec.commands:
                             functions.append(spec.to_function_definition())
                     elif any(t in m_type for t in ["loot", "drop", "table"]):
@@ -365,7 +366,7 @@ class DatapackGenerator:
                 mech_type = str(mech.get("type", "")).lower()
                 if any(t in mech_type for t in ["loot", "drop", "table"]):
                     has_loot_mech = True
-                if any(t in mech_type for t in ["function", "mcfunction", "command", "tick", "load", "effect", "scoreboard"]):
+                if any(t in mech_type for t in ["function", "mcfunction", "command", "tick", "load", "effect", "scoreboard", "property_modification", "modify_property", "attribute"]):
                     has_func_mech = True
                 if "tick" in mech_type:
                     has_tick_tag_mech = True

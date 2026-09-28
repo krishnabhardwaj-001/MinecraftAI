@@ -1181,12 +1181,33 @@ Return only JSON matching the required schema.
         else:
             # Check requirements
             for req in understanding.get("requirements", []):
-                if isinstance(req, dict) and "property_modification" in req and req["property_modification"]:
-                    pm = req["property_modification"]
-                    if isinstance(pm, PropertyModification):
-                        mods.append(pm)
-                    elif isinstance(pm, dict):
-                        mods.append(PropertyModification(**pm))
+                if isinstance(req, dict):
+                    if "property_modification" in req and req["property_modification"]:
+                        pm = req["property_modification"]
+                        if isinstance(pm, PropertyModification):
+                            mods.append(pm)
+                        elif isinstance(pm, dict):
+                            mods.append(PropertyModification(**pm))
+                    elif req.get("intent") in ("modify_property", "property_modification") or "property" in req:
+                        try:
+                            val_obj = None
+                            if "value" in req and req["value"] is not None:
+                                val_kind = req.get("value_kind", "absolute")
+                                val_obj = SemanticNumericValue(kind=val_kind, value=req["value"])
+                            extra = {}
+                            if "target" in req and req["target"]:
+                                extra["target"] = req["target"]
+                            mods.append(
+                                PropertyModification(
+                                    property=req.get("property"),
+                                    operation=req.get("operation"),
+                                    value=val_obj,
+                                    missing=req.get("missing", []),
+                                    extra_metadata=extra
+                                )
+                            )
+                        except Exception:
+                            pass
 
             # If still not found, check if understood_request contains property modifications
             if not mods:

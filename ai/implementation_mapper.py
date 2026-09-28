@@ -108,12 +108,14 @@ class ImplementationMapper:
             from knowledge_retriever import load_entity_knowledge
             entities = load_entity_knowledge()
             if isinstance(entities, list):
+                singular = clean[:-1] if clean.endswith("s") and not clean.endswith("ss") else clean
                 for ent in entities:
                     if isinstance(ent, dict):
                         ent_name = ent.get("name", "").lower()
                         ent_id = ent.get("id", "").lower()
-                        if clean in (ent_name, ent_id):
-                            short_id = ent_name or ent_id.split(":")[-1]
+                        display = ent.get("display_name", "").lower()
+                        short_id = ent_name or ent_id.split(":")[-1]
+                        if clean in (ent_name, ent_id, display) or singular in (ent_name, ent_id, display):
                             return f"@e[type={short_id}]", None
         except Exception:
             pass

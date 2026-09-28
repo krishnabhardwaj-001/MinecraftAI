@@ -65,6 +65,9 @@ class StaticSemanticAnalyzer:
         # 6. Check scoreboard semantics & temporal state simulation
         findings.extend(self._check_scoreboard_semantics(datapack_dir, resources))
 
+        # 7. Check attribute command semantics & modifier collisions
+        findings.extend(self._check_attribute_semantics(datapack_dir, resources))
+
         return findings
 
     # -------------------------------------------------------------------------
@@ -422,8 +425,8 @@ class StaticSemanticAnalyzer:
                                 )
 
                         # Check B: Command requiring entity context (@s) without preceding 'as'
-                        # Commands like give @s, clear @s, effect give @s, etc.
-                        entity_cmds = ["give @s", "clear @s", "effect give @s", "effect clear @s", "xp add @s", "tag @s"]
+                        # Commands like give @s, clear @s, effect give @s, attribute @s, etc.
+                        entity_cmds = ["give @s", "clear @s", "effect give @s", "effect clear @s", "xp add @s", "tag @s", "attribute @s"]
                         for e_cmd in entity_cmds:
                             if e_cmd in line_clean:
                                 # Check if line contains "as @" before the entity command
@@ -611,3 +614,132 @@ class StaticSemanticAnalyzer:
     ) -> List[QAFinding]:
         sim = ScoreboardSemanticSimulator(version=self.version)
         return sim.analyze_datapack(datapack_dir)
+
+    # -------------------------------------------------------------------------
+    # 6. Attribute Command Semantics & Modifier Collisions
+    # -------------------------------------------------------------------------
+    def _check_attribute_semantics(
+        self,
+        datapack_dir: Path,
+        resources: Dict[str, Any]
+    ) -> List[QAFinding]:
+        """
+        Inspects functions for Minecraft 1.21.11 attribute command anti-patterns:
+        1. Duplicate modifier ID added to the same target entity without removal.
+        2. Hazardous or illegal attribute values (e.g. max_health <= 0, scale <= 0).
+        """
+        findings: List[QAFinding] = []
+        root = datapack_dir
+
+        for fn_id, fn_p in resources.get("functions", {}).items():
+            if not fn_p or not fn_p.exists():
+                continue
+            rel_fn = str(fn_p.relative_to(root)).replace("\\", "/")
+            try:
+                with open(fn_p, "r", encoding="utf-8") as f:
+                    lines = [l.strip() for l in f.readlines() if l.strip() and not l.strip().startswith("#")]
+
+                # Track active modifier IDs per (target_context, attribute): Set of modifier_ids
+                active_modifiers: Dict[Tuple[str, str], Set[str]] = {}
+
+                for line_idx, line in enumerate(lines, 1):
+                    tokens = line.split()
+                    target_ctx = "@s"
+                    curr_tokens = tokens
+
+                    while curr_tokens and curr_tokens[0].lower() == "execute":
+                        for i, tok in enumerate(curr_tokens[:-1]):
+                            if tok.lower() == "as":
+                                target_ctx = curr_tokens[i + 1]
+                                break
+                        if "run" in [t.lower() for t in curr_tokens]:
+                            lower_tokens = [t.lower() for t in curr_tokens]
+                            run_idx = lower_tokens.index("run")
+                            curr_tokens = curr_tokens[run_idx + 1:]
+                        else:
+                            curr_tokens = []
+                            break
+
+                    if not curr_tokens or curr_tokens[0].lower() != "attribute":
+                        continue
+
+                    if len(curr_tokens) > 1 and curr_tokens[1] != "@s":
+                        target_ctx = curr_tokens[1]
+
+                    attr_id = curr_tokens[2].lower() if len(curr_tokens) > 2 else ""
+
+                    # Check 1: Modifier add / remove
+                    if len(curr_tokens) >= 5 and curr_tokens[3].lower() == "modifier":
+                        mod_act = curr_tokens[4].lower()
+                        if mod_act == "add" and len(curr_tokens) >= 6:
+                            mod_id = curr_tokens[5]
+                            ctx_key = (target_ctx, attr_id)
+                            if ctx_key not in active_modifiers:
+                                active_modifiers[ctx_key] = set()
+
+                            if mod_id in active_modifiers[ctx_key]:
+                                findings.append(
+                                    QAFinding(
+                                        id=f"FIND-ATTR-DUP-MOD-{line_idx}",
+                                        severity=QASeverity.ERROR,
+                                        category=QACategory.COMMAND_SEMANTICS,
+                                        file=rel_fn,
+                                        line_or_reference=f"Line {line_idx}: {line}",
+                                        problem=f"Duplicate attribute modifier ID '{mod_id}' added to {target_ctx} without prior removal.",
+                                        explanation=(
+                                            f"In Minecraft Java Edition, adding an attribute modifier ID that already exists "
+                                            f"on the entity causes the command to fail. Active modifiers with ID '{mod_id}' must be "
+                                            f"removed with 'attribute ... modifier remove {mod_id}' before being re-added."
+                                        ),
+                                        expected_behavior="Ensure modifier IDs are unique or remove prior instance.",
+                                        repair_required=f"Remove existing modifier '{mod_id}' before adding or assign a unique modifier ID."
+                                    )
+                                )
+                            else:
+                                active_modifiers[ctx_key].add(mod_id)
+
+                        elif mod_act == "remove" and len(curr_tokens) >= 6:
+                            mod_id = curr_tokens[5]
+                            ctx_key = (target_ctx, attr_id)
+                            if ctx_key in active_modifiers and mod_id in active_modifiers[ctx_key]:
+                                active_modifiers[ctx_key].discard(mod_id)
+
+                    # Check 2: Hazardous Attribute Values
+                    if len(curr_tokens) >= 6 and curr_tokens[3].lower() == "base" and curr_tokens[4].lower() == "set":
+                        try:
+                            val = float(curr_tokens[5])
+                            norm_attr = attr_id.replace("minecraft:generic.", "minecraft:").replace("generic.", "minecraft:")
+                            if "max_health" in norm_attr and val <= 0.0:
+                                findings.append(
+                                    QAFinding(
+                                        id=f"FIND-ATTR-HAZARD-HEALTH-{line_idx}",
+                                        severity=QASeverity.ERROR,
+                                        category=QACategory.COMMAND_SEMANTICS,
+                                        file=rel_fn,
+                                        line_or_reference=f"Line {line_idx}: {line}",
+                                        problem=f"Hazardous max_health value: base set to {val} <= 0.0.",
+                                        explanation="Setting max_health <= 0 instantly kills entities and may corrupt respawn/death handling.",
+                                        expected_behavior="max_health must be set to a positive value > 0.0.",
+                                        repair_required="Set max_health base value to at least 1.0."
+                                    )
+                                )
+                            elif "scale" in norm_attr and val <= 0.0:
+                                findings.append(
+                                    QAFinding(
+                                        id=f"FIND-ATTR-HAZARD-SCALE-{line_idx}",
+                                        severity=QASeverity.ERROR,
+                                        category=QACategory.COMMAND_SEMANTICS,
+                                        file=rel_fn,
+                                        line_or_reference=f"Line {line_idx}: {line}",
+                                        problem=f"Hazardous scale value: base set to {val} <= 0.0.",
+                                        explanation="In Minecraft Java 1.20.5+, scale attribute must be strictly positive. Values <= 0 cause rendering crashes.",
+                                        expected_behavior="scale must be set to a positive value > 0.0.",
+                                        repair_required="Set scale base value to at least 0.01."
+                                    )
+                                )
+                        except ValueError:
+                            pass
+            except Exception:
+                pass
+
+        return findings

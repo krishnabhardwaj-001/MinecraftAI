@@ -16,6 +16,12 @@
 - [x] Step 17.4: Generic clarification redesign for underspecified properties and magnitudes (ai/clarification.py, test_step17_clarification.py).
 - [x] Step 17.5: Deterministic Minecraft implementation mapping (ImplementationMapper in ai/implementation_mapper.py, test_step17_mapper.py).
   - [x] Step 17.5 Audit Remediation: Generic capability modeling in PropertyCapabilityRegistry, exact (property, operation, value.kind) selection, attribute mechanism mapping for speed multipliers/relatives, strict semantic preservation, structural failure for invalid generator inputs, comparative numeric interpretation, single-target /attribute execution context wrapping, and deterministic unique modifier identities for identical independently intended actions.
+- [x] Step 18: Full End-to-End Property Modification Pipeline, Static Validation & Verification Gate.
+  - [x] Step 18.1: DatapackGenerator extraction of `property_modification` / `modify_property` mechanisms and safe function resource paths (no '@a.mcfunction').
+  - [x] Step 18.2: Deterministic static validation for Minecraft Java 1.21.11 `/attribute` commands, single-entity targets, valid attribute IDs/aliases, operations, values, and modifier IDs (`validator/datapack_validator.py`).
+  - [x] Step 18.3: QA Static Semantic Analysis for attribute command execution context, unanchored `@s` detection, duplicate modifier ID collision detection, and hazardous attribute values (`qa/analyzer.py`).
+  - [x] Step 18.4: Pipeline-level structured clarification propagation (`pipeline/models.py`, `pipeline/minecraft_pipeline.py`).
+  - [x] Step 18.5: Comprehensive Step 18 automated verification test suite (`test_step18_verification.py`, 24 tests).
 - [ ] Keep AI context files synchronized after significant changes.
 
 ## Completed / established

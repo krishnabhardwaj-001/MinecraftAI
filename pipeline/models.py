@@ -103,6 +103,10 @@ class PipelineResult(BaseModel):
         default=None,
         description="Clarification reason/question if the request was ambiguous"
     )
+    clarification_requirements: List[Dict[str, Any]] = Field(
+        default_factory=list,
+        description="Structured clarification requirement items if clarification was required"
+    )
     errors: List[str] = Field(
         default_factory=list,
         description="List of error messages if the pipeline failed or encountered exceptions"

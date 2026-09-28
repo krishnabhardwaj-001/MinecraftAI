@@ -319,3 +319,22 @@ To ensure that two independently intended identical actions (e.g. `speed ×2` + 
    Repeated execution of the same action with the same identity remains 100% deterministic without random UUIDs, timestamps, process IDs, or generator-side state counters.
 4. Caller-Supplied Modifier ID Preservation:
    Explicitly supplied `modifier_id` on actions or `extra_metadata` takes precedence and is preserved verbatim without appending step identity qualifiers.
+
+## D036 — Full End-to-End Property Modification Pipeline, Static Validation & Verification Gate (Step 18)
+To connect the Step 17 semantic and implementation mapping pipeline downstream into deterministic generation, static validation, QA semantic review, and pipeline orchestration:
+1. Generator Mechanism Extraction & Safe Path Derivation:
+   `DatapackGenerator.extract_mechanisms()` was updated to recognize `property_modification` and `modify_property` mechanism types. In `MechanismSpecification.to_function_definition()`, when `self.path` is unset or contains selector characters (`@a`), the function resource path is derived cleanly as `f"modify_{clean_property}"` (e.g. `modify_speed.mcfunction`), preventing invalid filenames.
+2. Deterministic Static `/attribute` Validation:
+   In `DatapackValidator`, added Section 6 attribute command token validation:
+   - Validates target entity count: Minecraft Java 1.21.11 requires a single entity for `/attribute`. Direct `@a` or `@e` targets without `limit=1` are rejected with `INVALID_ATTRIBUTE_TARGET`.
+   - Validates attribute identifiers against 1.21.11 registry entries and canonical aliases (`minecraft:movement_speed`, `minecraft:generic.movement_speed`, `minecraft:attack_damage`, etc.) with `INVALID_ATTRIBUTE_ID`.
+   - Validates subcommands: `base set` numeric values, `base get` scale, `base reset`, `modifier add` operations (`add_value`, `add_multiplied_base`, `add_multiplied_total` via `INVALID_MODIFIER_OPERATION`), numeric values (`INVALID_ATTRIBUTE_VALUE`), modifier identifiers (`INVALID_MODIFIER_ID`), and `modifier remove`.
+   - Records a first-class `ValidationCheck` for "Attribute Command & Modifier Validation".
+3. QA Static Semantic Analysis & Hazard Prevention:
+   In `StaticSemanticAnalyzer`:
+   - Added `"attribute @s"` to commands requiring entity context (`entity_cmds`), flagging unanchored `@s` commands lacking preceding `as <target>`.
+   - Added `_check_attribute_semantics()`: detects duplicate attribute modifier IDs on the same target without prior removal (`FIND-ATTR-DUP-MOD`), and flags hazardous attribute values (`max_health <= 0` with `FIND-ATTR-HAZARD-HEALTH` or `scale <= 0` with `FIND-ATTR-HAZARD-SCALE`).
+4. Pipeline-Level Clarification Propagation:
+   Extended `PipelineResult` with `clarification_requirements: List[Dict[str, Any]]` to surface structured clarification requirements from understanding and planning stages, ensuring callers receive machine-readable clarification metadata.
+5. Automated Verification Gate:
+   Built `test_step18_verification.py` (24 tests) validating all validator invariants, generator extraction, QA analysis, end-to-end pipeline execution, layered failure injection, and exact ZIP-to-folder artifact parity.
