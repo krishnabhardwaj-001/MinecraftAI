@@ -28,6 +28,8 @@ document.addEventListener("DOMContentLoaded", () => {
 
   // Clarification Card Elements
   const clarificationQuestion = document.getElementById("clarificationQuestion");
+  const clarificationOptionsSection = document.getElementById("clarificationOptionsSection");
+  const clarificationOptionsChips = document.getElementById("clarificationOptionsChips");
   const clarifyInput = document.getElementById("clarifyInput");
   const clarifyBtn = document.getElementById("clarifyBtn");
 
@@ -41,15 +43,16 @@ document.addEventListener("DOMContentLoaded", () => {
   const executionSummaryPreview = document.getElementById("executionSummaryPreview");
   const resultMeta = document.getElementById("resultMeta");
 
-  // Stage Elements (1 to 7)
+  // Stage Elements (1 to 8: Authoritative Pipeline)
   const stages = [
     { el: document.getElementById("stage1"), statusEl: document.getElementById("statusStage1"), label: "Understanding" },
     { el: document.getElementById("stage2"), statusEl: document.getElementById("statusStage2"), label: "RAG Retrieval" },
     { el: document.getElementById("stage3"), statusEl: document.getElementById("statusStage3"), label: "Planning" },
     { el: document.getElementById("stage4"), statusEl: document.getElementById("statusStage4"), label: "Generator" },
-    { el: document.getElementById("stage5"), statusEl: document.getElementById("statusStage5"), label: "Validator" },
-    { el: document.getElementById("stage6"), statusEl: document.getElementById("statusStage6"), label: "AI Repair" },
-    { el: document.getElementById("stage7"), statusEl: document.getElementById("statusStage7"), label: "Validated ZIP" },
+    { el: document.getElementById("stage5"), statusEl: document.getElementById("statusStage5"), label: "Validation & Repair" },
+    { el: document.getElementById("stage6"), statusEl: document.getElementById("statusStage6"), label: "Autonomous QA" },
+    { el: document.getElementById("stage7"), statusEl: document.getElementById("statusStage7"), label: "Intent Verification" },
+    { el: document.getElementById("stage8"), statusEl: document.getElementById("statusStage8"), label: "READY Gate" },
   ];
 
   let stageTimer = null;
@@ -180,44 +183,99 @@ document.addEventListener("DOMContentLoaded", () => {
       setStage(0, "done", "Understood");
       setStage(1, "skipped", "Paused");
       setStage(2, "failed", "Needs Input");
-      for (let i = 3; i < 7; i++) setStage(i, "skipped", "Skipped");
+      for (let i = 3; i < 8; i++) setStage(i, "skipped", "Skipped");
 
       clarificationQuestion.textContent = data.clarification || "Please provide more details on ambiguous parameters.";
+
+      // Render dynamic structured clarification options
+      if (clarificationOptionsChips && clarificationOptionsSection) {
+        clarificationOptionsChips.innerHTML = "";
+        const availableOptions = [];
+        const clarReqs = data.clarification_requirements || [];
+        clarReqs.forEach((req) => {
+          const opts = req.options || [];
+          opts.forEach((opt) => {
+            if (opt && !availableOptions.includes(opt)) {
+              availableOptions.push(opt);
+            }
+          });
+        });
+
+        if (availableOptions.length > 0) {
+          availableOptions.forEach((opt) => {
+            const btn = document.createElement("button");
+            btn.type = "button";
+            btn.className = "chip-btn chip-option";
+            btn.textContent = opt;
+            btn.addEventListener("click", async () => {
+              const original = requestInput.value.trim();
+              const refined = `${original} Specifically: ${opt}.`;
+              requestInput.value = refined;
+              clarifyInput.value = "";
+              await executePipeline(refined);
+            });
+            clarificationOptionsChips.appendChild(btn);
+          });
+          clarificationOptionsSection.classList.remove("hidden");
+        } else {
+          clarificationOptionsSection.classList.add("hidden");
+        }
+      }
+
       clarificationCard.classList.remove("hidden");
       resultMeta.textContent = "Clarification required";
       clarifyInput.focus();
       return;
     }
 
-    if (data.status === "failed" || data.status === "error") {
+    if (data.status === "failed" || data.status === "error" || data.status === "verification_failed") {
       setStage(0, "done", "Done");
       setStage(1, "done", "Done");
       setStage(2, "done", "Done");
       setStage(3, "done", "Generated");
-      setStage(4, "failed", "Failed");
-      setStage(5, "failed", "Unresolved");
-      setStage(6, "failed", "Aborted");
+
+      if (data.verification_status === "qa_failed") {
+        setStage(4, "done", "Passed");
+        setStage(5, "failed", "QA Failed");
+        setStage(6, "failed", "Aborted");
+        setStage(7, "failed", "Aborted");
+      } else {
+        setStage(4, "failed", "Failed");
+        setStage(5, "failed", "Unresolved");
+        setStage(6, "failed", "Aborted");
+        setStage(7, "failed", "Aborted");
+      }
 
       showErrorState(data.errors, data.repair);
       resultMeta.textContent = "Pipeline failed";
       return;
     }
 
-    // Success State
-    for (let i = 0; i < 5; i++) setStage(i, "done", "Passed");
+    // Success State across all 8 stages
+    setStage(0, "done", "Passed");
+    setStage(1, "done", "Passed");
+    setStage(2, "done", "Passed");
+    setStage(3, "done", "Generated");
 
-    // Repair state
+    // Stage 5: Validation & Repair
     if (data.repair && data.repair.total_attempts > 0) {
-      setStage(5, "done", `Healed (${data.repair.total_attempts} att)`);
+      setStage(4, "done", `Healed (${data.repair.total_attempts} att)`);
       repairStatusBadge.textContent = `Repaired (${data.repair.total_attempts} attempt${data.repair.total_attempts > 1 ? "s" : ""})`;
       repairStatusBadge.className = "metric-value text-emerald";
     } else {
-      setStage(5, "skipped", "Skipped (0 errors)");
+      setStage(4, "done", "Passed (0 errors)");
       repairStatusBadge.textContent = "Skipped (0 errors)";
       repairStatusBadge.className = "metric-value text-dim";
     }
 
-    setStage(6, "done", "Validated 100%");
+    // Stage 6: Autonomous QA
+    setStage(5, "done", "Passed Cleanly");
+
+    // Stage 7: Intent Verification
+    setStage(6, "done", "Verified 100%");
+
+    // Stage 8: READY Gate
+    setStage(7, "done", "READY & Zipped");
 
     // Fill Success Card
     datapackNameDisplay.textContent = data.zip_filename ? data.zip_filename.replace(".zip", "") : "minecraft_datapack";

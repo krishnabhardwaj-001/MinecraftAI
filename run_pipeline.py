@@ -53,15 +53,49 @@ def run_cli(
             print("\n[!] The AI needs clarification to proceed:")
             print(f"    {result.clarification}")
 
+            # Collect structured choices from clarification requirements
+            available_options: List[str] = []
+            for req in (result.clarification_requirements or []):
+                if isinstance(req, dict):
+                    opts = req.get("options") or []
+                elif hasattr(req, "options"):
+                    opts = getattr(req, "options", [])
+                else:
+                    opts = []
+                for opt in opts:
+                    if opt and str(opt) not in available_options:
+                        available_options.append(str(opt))
+
+            if available_options:
+                print("\n    Available choices:")
+                for opt_idx, opt in enumerate(available_options, 1):
+                    print(f"      [{opt_idx}] {opt}")
+
+            prompt_label = (
+                f"\nSelect a choice [1-{len(available_options)}] or enter custom clarification (or press Enter to cancel): "
+                if available_options
+                else "\nEnter clarification (or press Enter to cancel): "
+            )
+
             try:
-                clarification = input_fn("\nEnter clarification (or press Enter to cancel): ").strip()
+                user_choice = input_fn(prompt_label).strip()
             except (KeyboardInterrupt, EOFError):
                 print("\nAborted.")
                 return 0
 
-            if not clarification:
+            if not user_choice or user_choice.lower() in ("quit", "exit", "cancel", "q"):
                 print("\nClarification cancelled by user.")
                 return 2
+
+            # Check if user selected by index
+            if available_options and user_choice.isdigit():
+                choice_idx = int(user_choice) - 1
+                if 0 <= choice_idx < len(available_options):
+                    clarification = available_options[choice_idx]
+                else:
+                    clarification = user_choice
+            else:
+                clarification = user_choice
 
             # Generic prompt refinement matching web/app.js pattern
             request = f"{request} Specifically: {clarification}."

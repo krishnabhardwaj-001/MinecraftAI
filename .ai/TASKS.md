@@ -22,6 +22,14 @@
   - [x] Step 18.3: QA Static Semantic Analysis for attribute command execution context, unanchored `@s` detection, duplicate modifier ID collision detection, and hazardous attribute values (`qa/analyzer.py`).
   - [x] Step 18.4: Pipeline-level structured clarification propagation (`pipeline/models.py`, `pipeline/minecraft_pipeline.py`).
   - [x] Step 18.5: Comprehensive Step 18 automated verification test suite (`test_step18_verification.py`, 24 tests).
+- [x] Step 19: Pipeline & Interface Alignment (Completed & Remediated).
+  - [x] Step 19.1: Web clarification options exposure and dynamic chip rendering (`web/app.py`, `web/static/js/app.js`, `web/templates/index.html`).
+  - [x] Step 19.2: CLI clarification options display, numbered selection, and request refinement (`run_pipeline.py`).
+  - [x] Step 19.3: Web UI authoritative 8-stage pipeline tracker (`web/templates/index.html`, `web/static/js/app.js`).
+  - [x] Step 19.4: Strengthened QA property modification intent verification against capabilities and generated commands (`qa/reviewer.py`).
+  - [x] Step 19.5: Collision-safe QA structured duplicate modifier repair (`qa/repair.py`).
+  - [x] Step 19.6: Comprehensive Step 19 automated test suite (`test_step19_alignment.py`, 17 tests).
+- [ ] Step 20: Final Project Completion & Verification.
 - [ ] Keep AI context files synchronized after significant changes.
 
 ## Completed / established

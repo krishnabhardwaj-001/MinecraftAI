@@ -105,15 +105,28 @@ class QARepairEngine:
                 diagnoses.append(f"Function tag references non-existent function '{dead_fn}'. Pruning invalid tag entry.")
                 self._repair_dangling_tag_reference(mechanisms_list, dead_fn)
 
+            # Case F: Duplicate attribute modifier ID (Step 19.5)
+            elif f.category == QACategory.COMMAND_SEMANTICS and "FIND-ATTR-DUP-MOD" in f.id:
+                dup_mod_id = None
+                m = re.search(r"modifier ID '([^']+)'", f.problem)
+                if m:
+                    dup_mod_id = m.group(1)
+                diagnoses.append(
+                    f"Duplicate attribute modifier ID '{dup_mod_id or 'unknown'}' detected. "
+                    f"Disambiguating modifier identity across structured actions."
+                )
+                self._repair_duplicate_modifier(mechanisms_list, dup_mod_id)
+
         # Update corrected plan with modified mechanisms
         if "implementation_plan" in corrected_plan:
-            for ip in corrected_plan["implementation_plan"]:
-                ip["mechanisms"] = mechanisms_list
+            if len(corrected_plan["implementation_plan"]) <= 1:
+                for ip in corrected_plan["implementation_plan"]:
+                    ip["mechanisms"] = mechanisms_list
 
         diagnosis_text = " ".join(diagnoses) or "General semantic adjustments to align implementation with user intent."
         repair_plan = QARepairPlan(
             diagnosis=diagnosis_text,
-            summary="Corrected mechanism specifications to resolve execution context and state machine logic.",
+            summary="Corrected mechanism specifications to resolve execution context, state machine logic, or attribute modifier conflicts.",
             mechanism_modifications=mechanisms_list,
             regenerate=True
         )
@@ -242,3 +255,122 @@ class QARepairEngine:
         for m in mechanisms:
             if m.get("type") in ("function_tag", "tag") and "values" in m:
                 m["values"] = [v for v in m["values"] if v != dead_fn]
+
+    def _repair_duplicate_modifier(
+        self,
+        mechanisms: List[Dict[str, Any]],
+        dup_mod_id: Optional[str] = None
+    ) -> None:
+        """
+        Disambiguates duplicate attribute modifier IDs across structured mechanism actions.
+        Ensures all actions have distinct, deterministic, collision-safe modifier IDs
+        by checking against all existing IDs in the plan and incrementing until unused.
+        """
+        clean_target_dup = dup_mod_id.replace("minecraft_ai:", "").strip().lower() if dup_mod_id else None
+
+        # 1. Collect every existing modifier ID from the complete structured implementation plan
+        all_existing_ids: Set[str] = set()
+        for mech in mechanisms:
+            for action_key in ("actions", "on_enter", "on_exit"):
+                actions = mech.get(action_key, [])
+                if not isinstance(actions, list):
+                    continue
+                for action in actions:
+                    act_is_dict = isinstance(action, dict)
+                    act_mod_id = action.get("modifier_id") if act_is_dict else getattr(action, "modifier_id", None)
+                    if act_mod_id:
+                        all_existing_ids.add(str(act_mod_id).strip().lower().replace("minecraft_ai:", ""))
+                    pm = action.get("property_modification") if act_is_dict else getattr(action, "property_modification", None)
+                    if isinstance(pm, dict) and isinstance(pm.get("extra_metadata"), dict):
+                        extra_mid = pm["extra_metadata"].get("modifier_id")
+                        if extra_mid:
+                            all_existing_ids.add(str(extra_mid).strip().lower().replace("minecraft_ai:", ""))
+
+        # 2. Iterate through all actions, preserving first valid occurrence and disambiguating duplicates
+        allocated_ids: Set[str] = set()
+
+        for mech in mechanisms:
+            for action_key in ("actions", "on_enter", "on_exit"):
+                actions = mech.get(action_key, [])
+                if not isinstance(actions, list):
+                    continue
+
+                for action in actions:
+                    act_is_dict = isinstance(action, dict)
+                    act_mod_id = action.get("modifier_id") if act_is_dict else getattr(action, "modifier_id", None)
+                    pm = action.get("property_modification") if act_is_dict else getattr(action, "property_modification", None)
+                    a_type = action.get("action_type") if act_is_dict else getattr(action, "action_type", None)
+
+                    # Only process attribute actions or actions with property modifications / modifier IDs
+                    if not (act_mod_id or pm or a_type in ("property_modification", "attribute", "attribute_modifier")):
+                        continue
+
+                    prop = None
+                    op = None
+                    val_str = None
+                    if isinstance(pm, dict):
+                        prop = pm.get("property")
+                        op = pm.get("operation")
+                        val_obj = pm.get("value")
+                        val_val = val_obj.get("value") if isinstance(val_obj, dict) else getattr(val_obj, "value", val_obj)
+                        val_str = str(val_val) if val_val is not None else None
+                        if not act_mod_id and isinstance(pm.get("extra_metadata"), dict):
+                            act_mod_id = pm["extra_metadata"].get("modifier_id")
+                    elif hasattr(pm, "property"):
+                        prop = getattr(pm, "property", None)
+                        op = getattr(pm, "operation", None)
+                        val_obj = getattr(pm, "value", None)
+                        val_val = getattr(val_obj, "value", val_obj)
+                        val_str = str(val_val) if val_val is not None else None
+
+                    # Determine base modifier identifier
+                    if act_mod_id:
+                        base_id = str(act_mod_id).strip().lower().replace("minecraft_ai:", "")
+                    elif prop:
+                        clean_prop = str(prop).strip().lower().split(".")[-1]
+                        op_tag = str(op or "set").strip().lower()
+                        base_id = f"{clean_prop}_{op_tag}_{val_str or 'val'}"
+                    else:
+                        base_id = "modifier"
+
+                    # If not yet seen in this pass, preserve the first valid occurrence
+                    if base_id not in allocated_ids:
+                        allocated_ids.add(base_id)
+                        continue
+
+                    # Duplicate collision detected: find the next unused deterministic candidate ID
+                    m_step = re.match(r"^(.*)_step_\d+$", base_id)
+                    if m_step:
+                        stem = m_step.group(1)
+                        counter = 0
+                        candidate = f"{stem}_step_{counter}"
+                        while candidate in all_existing_ids or candidate in allocated_ids:
+                            counter += 1
+                            candidate = f"{stem}_step_{counter}"
+                        step_tag = f"step_{counter}"
+                    else:
+                        counter = 1
+                        candidate = f"{base_id}_{counter}"
+                        while candidate in all_existing_ids or candidate in allocated_ids:
+                            counter += 1
+                            candidate = f"{base_id}_{counter}"
+                        step_tag = f"repaired_{counter}"
+
+                    allocated_ids.add(candidate)
+
+                    if act_is_dict:
+                        action["modifier_id"] = candidate
+                        action["step_id"] = step_tag
+                        if isinstance(pm, dict):
+                            if "extra_metadata" not in pm or not isinstance(pm["extra_metadata"], dict):
+                                pm["extra_metadata"] = {}
+                            pm["extra_metadata"]["modifier_id"] = candidate
+                            pm["extra_metadata"]["step_id"] = step_tag
+                    else:
+                        setattr(action, "modifier_id", candidate)
+                        setattr(action, "step_id", step_tag)
+                        if hasattr(pm, "extra_metadata"):
+                            if pm.extra_metadata is None or not isinstance(pm.extra_metadata, dict):
+                                pm.extra_metadata = {}
+                            pm.extra_metadata["modifier_id"] = candidate
+                            pm.extra_metadata["step_id"] = step_tag

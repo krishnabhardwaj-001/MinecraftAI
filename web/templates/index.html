@@ -113,7 +113,7 @@
           <div class="stage-item" id="stage1" data-stage="1">
             <div class="stage-num">1</div>
             <div class="stage-content">
-              <div class="stage-name">AI Understanding</div>
+              <div class="stage-name">Understanding</div>
               <div class="stage-desc">Extracts requirements & intent</div>
             </div>
             <div class="stage-status" id="statusStage1">Idle</div>
@@ -124,7 +124,7 @@
           <div class="stage-item" id="stage2" data-stage="2">
             <div class="stage-num">2</div>
             <div class="stage-content">
-              <div class="stage-name">Minecraft RAG</div>
+              <div class="stage-name">RAG Retrieval</div>
               <div class="stage-desc">Retrieves 1.21.11 knowledge</div>
             </div>
             <div class="stage-status" id="statusStage2">Idle</div>
@@ -135,7 +135,7 @@
           <div class="stage-item" id="stage3" data-stage="3">
             <div class="stage-num">3</div>
             <div class="stage-content">
-              <div class="stage-name">Planner</div>
+              <div class="stage-name">Planning</div>
               <div class="stage-desc">Designs implementation plan</div>
             </div>
             <div class="stage-status" id="statusStage3">Idle</div>
@@ -146,8 +146,8 @@
           <div class="stage-item" id="stage4" data-stage="4">
             <div class="stage-num">4</div>
             <div class="stage-content">
-              <div class="stage-name">Deterministic Generator</div>
-              <div class="stage-desc">Emits pack.mcmeta & loot JSON</div>
+              <div class="stage-name">Generator</div>
+              <div class="stage-desc">Emits deterministic datapack</div>
             </div>
             <div class="stage-status" id="statusStage4">Idle</div>
           </div>
@@ -157,8 +157,8 @@
           <div class="stage-item" id="stage5" data-stage="5">
             <div class="stage-num">5</div>
             <div class="stage-content">
-              <div class="stage-name">Validator</div>
-              <div class="stage-desc">Checks schemas & pack format 94.1</div>
+              <div class="stage-name">Validation & Repair</div>
+              <div class="stage-desc">Validates schemas & heals errors</div>
             </div>
             <div class="stage-status" id="statusStage5">Idle</div>
           </div>
@@ -168,8 +168,8 @@
           <div class="stage-item" id="stage6" data-stage="6">
             <div class="stage-num">6</div>
             <div class="stage-content">
-              <div class="stage-name">AI Repair Loop</div>
-              <div class="stage-desc">Heals invalid packs if needed</div>
+              <div class="stage-name">Autonomous QA</div>
+              <div class="stage-desc">Semantic analysis & logic review</div>
             </div>
             <div class="stage-status" id="statusStage6">Idle</div>
           </div>
@@ -179,10 +179,21 @@
           <div class="stage-item" id="stage7" data-stage="7">
             <div class="stage-num">7</div>
             <div class="stage-content">
-              <div class="stage-name">Validated ZIP</div>
-              <div class="stage-desc">Complete ready-to-play pack</div>
+              <div class="stage-name">Intent Verification</div>
+              <div class="stage-desc">Confirms against user goals</div>
             </div>
             <div class="stage-status" id="statusStage7">Idle</div>
+          </div>
+
+          <div class="stage-connector"></div>
+
+          <div class="stage-item" id="stage8" data-stage="8">
+            <div class="stage-num">8</div>
+            <div class="stage-content">
+              <div class="stage-name">READY Gate</div>
+              <div class="stage-desc">Final verified pack & ZIP</div>
+            </div>
+            <div class="stage-status" id="statusStage8">Idle</div>
           </div>
         </div>
       </section>
@@ -211,7 +222,7 @@
               </svg>
             </div>
             <h3 class="empty-title">Ready to Generate</h3>
-            <p class="empty-desc">Enter your request above and watch the 7-stage deterministic pipeline build and validate your Minecraft 1.21.11 datapack.</p>
+            <p class="empty-desc">Enter your request above and watch the 8-stage deterministic pipeline build and validate your Minecraft 1.21.11 datapack.</p>
           </div>
 
           <!-- Loading State -->
@@ -295,8 +306,14 @@
               <h3 class="clarification-title">Ambiguous Request Detected</h3>
               <p class="clarification-question" id="clarificationQuestion"></p>
 
+              <!-- Dynamic Structured Option Chips -->
+              <div class="clarification-options-section hidden" id="clarificationOptionsSection">
+                <span class="options-label">Select an option:</span>
+                <div class="clarification-options-chips" id="clarificationOptionsChips"></div>
+              </div>
+
               <div class="clarification-refine-box">
-                <label for="clarifyInput" class="refine-label">Specify details or answer the question:</label>
+                <label for="clarifyInput" class="refine-label">Or specify custom details:</label>
                 <div class="refine-row">
                   <input
                     type="text"

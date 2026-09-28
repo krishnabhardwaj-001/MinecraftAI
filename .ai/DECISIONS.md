@@ -338,3 +338,35 @@ To connect the Step 17 semantic and implementation mapping pipeline downstream i
    Extended `PipelineResult` with `clarification_requirements: List[Dict[str, Any]]` to surface structured clarification requirements from understanding and planning stages, ensuring callers receive machine-readable clarification metadata.
 5. Automated Verification Gate:
    Built `test_step18_verification.py` (24 tests) validating all validator invariants, generator extraction, QA analysis, end-to-end pipeline execution, layered failure injection, and exact ZIP-to-folder artifact parity.
+
+## D037 — Pipeline & Interface Alignment (Step 19)
+To align the public interfaces, frontend visualization, QA intent verification, and QA repair with the completed backend pipeline architecture:
+1. Dynamic Web Clarification Interface:
+   `web/app.py` exposes `clarification_requirements` in `/api/generate` responses while preserving backward-compatible `clarification` text. The single-page UI (`web/static/js/app.js` and `web/templates/index.html`) dynamically renders structured clarification options as clickable chip buttons. Selecting an option refines the natural-language query cleanly (`${original_request} Specifically: ${option}.`) and routes through the standard pipeline without hardcoded option values or semantic bypasses.
+2. CLI Interactive Clarification:
+   `run_pipeline.py` extracts structured choices from `clarification_requirements` and presents them as numbered options (`[1] Option A`, `[2] Option B`). The user can select by index number or enter custom text, with clean cancellation on empty input or `quit`/`exit`/`cancel`/`q`.
+3. Authoritative 8-Stage Tracker:
+   Replaced the obsolete 7-stage tracker with the authoritative 8-stage pipeline matching backend reality:
+   (1) Understanding, (2) RAG Retrieval, (3) Planning, (4) Generator, (5) Validation & Repair, (6) Autonomous QA, (7) Intent Verification, (8) READY Gate.
+4. QA Property Intent Verification:
+   In `AutonomousQAReviewer._verify_intent()`, added structured property modification verification using `DEFAULT_PROPERTY_REGISTRY`. Requested property modifications (e.g. speed, health, attack damage) are checked against generated `.mcfunction` commands for matching attribute identifiers, effect names, or scoreboards. If a requested property modification is not actually implemented, QA flags an `INTENT_MISMATCH` failure rather than silently passing.
+5. Structured QA Duplicate Modifier Repair:
+   In `QARepairEngine.diagnose_and_repair()`, added structured handling for `FIND-ATTR-DUP-MOD`. Disambiguates duplicate modifier IDs deterministically across structured mechanism actions (`_repair_duplicate_modifier`) by appending deterministic qualifiers (`f"{base_id}_{count - 1}"` and `step_id = f"repaired_{count - 1}"`). Strictly avoids string replacement on arbitrary generated commands or hardcoded modifier IDs.
+
+## D038 — Strengthened Property Intent Verification & Collision-Safe Modifier Repair (Step 19 Remediation)
+Following the Step 19 completion audit, two final remediation items were implemented:
+1. Deep Semantic Property Intent Verification:
+   `AutonomousQAReviewer._verify_intent()` was strengthened to eliminate superficial identifier-presence checks.
+   - Sourced from `DEFAULT_PROPERTY_REGISTRY` and `ImplementationMapper`, consuming structured `PropertyModification` models from understanding and planning stages.
+   - Compares: property, operation (`set`, `add`, `subtract`, `multiply`, `divide`), value kind (`absolute`, `relative`, `percentage`, `multiplier`), numeric value (e.g. `10x` multiplier mapping to `add_multiplied_total 9.0`), target (`@a`, `@e[type=...]`), and Minecraft mechanism type (`attribute`, `effect`, `scoreboard`).
+   - Rejects mismatched operations (e.g. requested `speed ×10` but generated `speed set 5`), wrong numeric values, wrong value kinds (relative vs percentage), or mismatched targets.
+   - Validates structured `ActionSpecification` in `plan` and parses candidate commands in `.mcfunction` files to ensure end-to-end alignment.
+2. Collision-Safe Duplicate Modifier Repair:
+   `QARepairEngine._repair_duplicate_modifier()` was re-engineered to be 100% collision-safe:
+   - Collects all existing modifier IDs across the complete structured implementation plan.
+   - Preserves the first valid occurrence of any modifier ID in deterministic plan traversal order.
+   - For subsequent duplicate occurrences, generates deterministic candidates (`_step_{counter}` or `_{counter}`) and tests them against BOTH all existing IDs in the plan and newly allocated IDs, incrementing deterministically until an unused ID is found.
+   - Never collides with pre-existing actions in the plan (e.g. `speed_add_5_step_0` duplicate skips `speed_add_5_step_1` when it already exists, assigning `speed_add_5_step_2`).
+   - Preserves unique custom user-provided modifier IDs.
+   - Updates structured action modifier identities and step identities consistently; strictly avoids raw string replacement on `.mcfunction` files and sets `regenerate=True` for clean deterministic synthesis through `DatapackGenerator`.
+   - Verified 100% idempotent across repeated repair passes.

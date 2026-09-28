@@ -145,6 +145,7 @@ async def generate_datapack(payload: GeneratePayload):
         "minecraft_version": pipeline_result.minecraft_version,
         "original_request": pipeline_result.original_request,
         "clarification": pipeline_result.clarification,
+        "clarification_requirements": pipeline_result.clarification_requirements or [],
         "execution_summary": pipeline_result.execution_summary,
         "datapack_path": pipeline_result.final_datapack_path,
         "zip_path": pipeline_result.final_zip_path,
