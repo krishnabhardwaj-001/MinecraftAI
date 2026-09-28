@@ -22,3 +22,8 @@ whitelist.json
 ops.json
 world/
 session.lock
+
+# Python packaging build artifacts
+*.egg-info/
+build/
+dist/

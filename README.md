@@ -430,224 +430,138 @@ The exact project structure may evolve as the system develops.
 
 ---
 
-## Requirements
+## Prerequisites & Requirements
 
-The project is currently designed around:
-
-* Python
-* Minecraft Java Edition
-* Minecraft Java Edition 1.21.11
-* Ollama-compatible local AI models
-* FastAPI for the web interface
-
-A local AI model can be used without requiring a conventional external API key.
+* **Operating System**: Windows, Linux, or macOS
+* **Python**: Version `3.10` or higher (`3.10`, `3.11`, `3.12`, `3.13` supported)
+* **AI Provider**:
+  * **Ollama (Default / Local)**: [Ollama](https://ollama.com) running locally.
+    * Expected local endpoint: `http://localhost:11434` (configurable via `OLLAMA_HOST`)
+    * Recommended model: `ollama pull llama3.1:8b` (configurable via `OLLAMA_MODEL`)
+  * **OpenAI (Alternative)**: Export `OPENAI_API_KEY` to use OpenAI models where configured.
+* **Minecraft Target**: Minecraft Java Edition `1.21.11` (Data Pack version `94.1` / `pack_format: 94`)
+* **Optional Runtime Verification**: Java 21 LTS (64-bit JVM) for automated headless server testing.
 
 ---
 
-## Running MinecraftAI
+## Installation & Setup
 
-Clone the repository and enter the project directory:
+1. **Clone the repository**:
+   ```bash
+   git clone https://github.com/krishnabhardwaj-001/MinecraftAI.git
+   cd MinecraftAI
+   ```
 
+2. **Install the package in editable mode**:
+   ```bash
+   pip install -e .
+   ```
+   This registers the `minecraft-ai` and `minecraft-ai-web` console commands and installs all runtime dependencies (`fastapi`, `uvicorn`, `pydantic`, `ollama`, `jinja2`, `python-dotenv`, `httpx`).
+
+3. **Start Ollama and pull the recommended model**:
+   ```bash
+   ollama serve
+   ollama pull llama3.1:8b
+   ```
+
+---
+
+## Launching MinecraftAI
+
+### Windows Launchers (One-Click)
+Double-click or run from terminal:
+* **`launch_cli.bat`**: Launches the interactive CLI directly.
+* **`launch_web.bat`**: Launches the Obsidian & Emerald Web interface at `http://127.0.0.1:8000`.
+
+### Command-Line Interface (CLI)
+Run using the installed entrypoint or Python runner:
 ```bash
-git clone <repository-url>
-cd MinecraftAI
+# Interactive mode (prompts for request):
+minecraft-ai
+
+# Direct request mode:
+minecraft-ai "When it is raining, give all players a diamond only once when the rain starts."
+
+# Alternatively via python:
+python run_pipeline.py "Make every creeper drop diamonds."
 ```
 
-Install the required Python dependencies:
-
+### Web Interface
+Start the local FastAPI server:
 ```bash
-pip install -r requirements.txt
+# Using installed entrypoint:
+minecraft-ai-web
+
+# Alternatively via python:
+python run_web.py --port 8000
 ```
+Open your browser to `http://127.0.0.1:8000` to access:
+* Visual **8-Stage Pipeline Tracker** (Understanding → RAG → Planning → Generator → Validation & Repair → Autonomous QA → Intent Verification → READY Gate).
+* Interactive **Dynamic Clarification Chips**.
+* Instant **Datapack ZIP Download**.
+* Generated **File Tree & Inspection Panel**.
 
-Make sure Ollama is installed and a supported model is available.
+---
 
-Then MinecraftAI can be run through its CLI or web interface.
+## Key Features & Behaviors
 
-Example CLI request:
+### 1. Authoritative 7 Mechanism Domains
+MinecraftAI deterministically generates and validates:
+* **Loot Tables** (`data/<ns>/loot_table/`): Modifies entity/block drops while strictly preserving vanilla items and conditions.
+* **Functions** (`data/<ns>/function/`): Synthesizes valid `.mcfunction` files with sanitized leading slashes and execution context wrapping (`as @a at @s`).
+* **Function Tags** (`data/<ns>/tags/function/`): Game loop registration (`#minecraft:load`, `#minecraft:tick`), minimal canonical format (`values: [...]`), multi-datapack aggregation, and dangling reference sanitization.
+* **Advancements** (`data/<ns>/advancement/`): Custom triggers, display formatting, and rewards.
+* **Recipes** (`data/<ns>/recipe/`): Modern 1.21+ result structure (`{"id": ..., "count": ...}`), shaped, shapeless, and smelting.
+* **Predicates** (`data/<ns>/predicate/`): All 19 Java 1.21.11 condition types and composite condition trees (`all_of`, `any_of`, `inverted`).
+* **State Machines**: Dedicated generator for global persistent state machines (`#global` scoreboards) and dynamic per-player scoreboards.
 
+### 2. Semantic Property Modifications
+Natural-language modifications (`make me 10 times faster`, `increase speed by 25%`, `set zombie speed to 0.4`):
+* Interprets numeric and comparative semantics without hardcoded mob/item logic.
+* Queries [`PropertyCapabilityRegistry`](ai/property_registry.py) for exact `(property, operation, value.kind)` capability selection.
+* Compiles speed multipliers and relative increments to `/attribute` (`minecraft:generic.movement_speed`) using `add_multiplied_total` and `add_value`/`add_multiplied_base`.
+* Enforces single-entity target constraints (`execute as {target} run attribute @s ...`).
+* Disambiguates modifier IDs deterministically (`minecraft_ai:{property}_{op}_{val}_{step_id}`) to prevent collision while allowing intentional stacking.
+
+### 3. Interactive Clarification
+When requests are underspecified or ambiguous (e.g. `make me faster` without magnitude/duration, or `make the zombie stronger` without specifying health vs attack damage):
+* The pipeline halts early before writing files.
+* **Web UI**: Dynamically renders clickable clarification buttons/chips for rapid selection.
+* **CLI**: Displays numbered choices and accepts index selection or custom refinement.
+
+### 4. Offline Ollama Diagnostics
+If the local Ollama service is not running or unreachable:
+* The CLI and Web interfaces intercept connection failures.
+* Rather than crashing with an unhandled traceback, the system displays clear actionable instructions:
+  * The attempted endpoint (`http://localhost:11434`)
+  * How to start the service (`ollama serve`)
+  * How to pull the required model (`ollama pull llama3.1:8b`)
+  * How to configure alternative providers (`OPENAI_API_KEY`)
+* Web API returns HTTP 503 (Service Unavailable) with structured diagnostic detail.
+
+---
+
+## Verification & Testing
+
+### Automated Regression Suite
+Run all 408+ automated unit, integration, and boundary tests:
 ```bash
-python run_pipeline.py "When it is raining, give every player one diamond."
+python -m unittest discover -s . -p "test_*.py"
 ```
 
-The exact commands and configuration may change as development continues.
-
----
-
-## Design Philosophy
-
-MinecraftAI is built around several important principles.
-
-### Natural Language First
-
-Users should be able to describe behavior naturally rather than manually construct datapack files.
-
-### AI for Understanding, Not Everything
-
-The AI should understand the user's intent and help with reasoning.
-
-It should not be responsible for blindly generating every implementation detail.
-
-### Deterministic Generation
-
-Once a structured plan exists, deterministic code should handle Minecraft implementation wherever possible.
-
-### Version Awareness
-
-Minecraft commands and datapack formats change between versions.
-
-MinecraftAI therefore treats Minecraft version information as an important part of generation and validation.
-
-### Validation Before Delivery
-
-A generated datapack should not simply be returned because it was generated successfully.
-
-It should pass appropriate validation and verification gates.
-
-### Automatic Recovery
-
-When a problem is detected, the system should attempt structured repair and regenerate the datapack rather than immediately failing.
-
-### Generic Behavior
-
-The system should work from general mechanisms rather than hardcoded solutions for individual user phrases or specific entities.
-
----
-
-## Current Development
-
-MinecraftAI is actively being developed.
-
-Current architectural work is focused on strengthening the boundary between the AI Planner and the deterministic Generator.
-
-The goal is for the Planner to describe gameplay behavior using structured specifications while the Generator owns the actual Minecraft command implementation.
-
-This includes improvements such as:
-
-* Structured gameplay actions
-* Deterministic command synthesis
-* State-machine generation
-* Better separation between planning and implementation
-* Structured AI repair
-* Stronger planner/generator validation
-* Maintaining backward compatibility with existing mechanisms
-
-This architecture is intended to make the system more reliable as the number and complexity of supported Minecraft behaviors increase.
-
----
-
-## Future Roadmap
-
-The long-term goal is to make MinecraftAI capable of handling increasingly complex Minecraft datapack requests automatically.
-
-Planned areas include:
-
-### More Minecraft Versions
-
-Expand version-aware generation beyond the current primary target.
-
-### Expanded Minecraft Knowledge
-
-Increase coverage of:
-
-* Commands
-* Entities
-* Items
-* Components
-* Predicates
-* Loot systems
-* Recipes
-* Advancements
-* Other datapack systems
-
-### More Complex Behaviors
-
-Support increasingly complex multi-step mechanics such as:
-
-```text
-Event
-  ↓
-Condition
-  ↓
-State transition
-  ↓
-Multiple actions
-  ↓
-Cooldown
-  ↓
-Repeated/conditional behavior
-```
-
-### Advanced Runtime Testing
-
-Improve automated testing using Minecraft server environments so generated datapacks can be tested against an actual Minecraft runtime.
-
-### Better AI Repair
-
-Improve diagnosis and structured repair for complex datapack failures.
-
-### Improved Web Experience
-
-Future versions may include:
-
-* Better generation interface
-* Generation progress
-* Datapack previews
-* Error explanations
-* Generated-file inspection
-* Easier download and testing workflows
-
-### Larger Mechanism Coverage
-
-Continue expanding support for Minecraft systems so more natural-language requests can be converted into complete datapacks.
-
-### Multi-Mechanism Generation
-
-Improve the ability to combine multiple Minecraft systems into a single coherent datapack.
-
-For example:
-
-```text
-Predicate
-   +
-Advancement
-   +
-Function
-   +
-Scoreboard State
-   +
-Loot Table
-```
-
-while maintaining correct references and behavior between them.
-
----
-
-## Project Vision
-
-The long-term vision of MinecraftAI is:
-
-> **Describe the Minecraft behavior you want. Let AI understand it. Let deterministic systems build it. Let automated verification check it.**
-
-The goal is not simply to generate Minecraft commands.
-
-The goal is to build an intelligent system capable of turning a player's idea into a **complete, reliable, version-aware, and verified Minecraft datapack**.
-
----
-
-## Status
-
-**Active Development**
-
-Current primary target:
-
-```text
-Minecraft Java Edition 1.21.11
-```
-
-The project is continuously evolving as new mechanisms, validation methods, AI capabilities, and testing systems are added.
+### Verification Boundary: Headless vs In-Game Client
+
+MinecraftAI enforces a strict distinction between automated headless testing and interactive client playtesting:
+
+1. **Automated Headless Server Verification (Empirically Verified)**:
+   * Tested via `qa/runtime.py` and `test_step20_golden.py` using Java 21 LTS and Mojang's official `server-1.21.11.jar` in an isolated sandbox.
+   * Proves: Exact version `1.21.11` boot, native ZIP discovery and loading, automatic boot load execution, 20Hz automatic tick loop advancement, rain state-machine transitions (0 -> 1 -> 0), `/attribute` modifier application on live entities, duplicate modifier coexistence, tag integrity on `/reload`, and clean shutdown with exit code `0`.
+2. **Optional In-Game Client Verification (Manual)**:
+   * Visual and audio rendering (camera FOV changes, particle swirls, sound chimes), GUI advancement window (`L` key), scoreboard sidebar HUD, and crafting table inventory slot synchronization require a human player in an interactive Minecraft 1.21.11 client.
+   * Full protocol and regression checklist documented in [`.ai/REAL_MINECRAFT_VERIFICATION.md`](.ai/REAL_MINECRAFT_VERIFICATION.md).
 
 ---
 
 ## License
 
-License information will be added as the project reaches its intended release stage.
+MIT License. See project files for details.

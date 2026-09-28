@@ -45,6 +45,14 @@ The deterministic generator and validator support 7 first-class mechanism domain
 - Empirically verifies server boot, datapack discovery, ZIP installation, load function execution, 20Hz tick loop advancement, rain state-machine transitions, attribute modifiers, duplicate modifier coexistence, tag integrity on `/reload`, and clean shutdown with exit code 0.
 - Authoritative manual verification protocol documented in `.ai/REAL_MINECRAFT_VERIFICATION.md` for in-game client verification (advancement screen GUI, scoreboard sidebar display, visual FOV/particle feel).
 
+## Packaging & Distribution Architecture
+- Standard `pyproject.toml` specification utilizing `setuptools>=61.0`.
+- Python runtime requirement `>=3.10` (supporting 3.10, 3.11, 3.12, 3.13).
+- Explicit minimal runtime dependencies (`pydantic>=2.0.0`, `fastapi>=0.100.0`, `uvicorn>=0.20.0`, `jinja2>=3.1.0`, `ollama>=0.2.0`, `openai>=1.0.0`, `python-dotenv>=1.0.0`, `httpx>=0.24.0`).
+- Console script entry points: `minecraft-ai` (`run_pipeline:main`) and `minecraft-ai-web` (`run_web:main`).
+- Windows launchers: `launch_cli.bat` and `launch_web.bat` with directory anchoring (`cd /d "%~dp0"`), python environment verification, and clean parameter forwarding.
+- Editable installation supported via `pip install -e .` without altering repository layout.
+
 ## Important design requirement
 The system supports arbitrary user requests. It does not implement individual examples with hardcoded `if/else` mappings or special files such as `zombie.json` or `chicken.json`. Examples are regression tests, not special-case code.
 

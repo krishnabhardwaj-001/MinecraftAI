@@ -406,3 +406,18 @@ To complete release hardening and consolidate the verified work from `feature/st
    Consolidated local `main` with `feature/step-17-semantics` via a clean fast-forward merge, preserving the linear history of atomic commits (`6691f1e`, `f049717`, `f71efa0`, `a2defbd`, and the Step 21 release commit) without intermediate merge commits.
 4. Release Boundary:
    Consolidated on local `main` with 408 passing tests. No remote pushes or release tags were created, keeping the repository ready for authorized release and deployment workflows.
+
+## D041 — Production Packaging, Distribution Launchers & Installation Hardening (Step 22A)
+To ensure reliable installation, packaging standard compliance, and user-friendly execution:
+1. Standard Packaging without Architecture Reorganization:
+   Implemented a standard `pyproject.toml` using `setuptools>=61.0`. Rather than forcing an artificial `src/` layout migration that would disrupt existing imports and tests, setuptools package discovery was configured via `[tool.setuptools.packages.find]` including all first-party packages (`ai*`, `generator*`, `validator*`, `repair*`, `pipeline*`, `qa*`, `web*`). Dynamic template and static assets were declared via `[tool.setuptools.package-data]`.
+2. Python Version & Minimal Runtime Dependencies:
+   Declared Python requirement `>=3.10` based on project language features (type unions, match patterns, modern type hints). Declared explicit runtime dependencies grounded strictly in actual imports (`pydantic>=2.0.0`, `fastapi>=0.100.0`, `uvicorn>=0.20.0`, `jinja2>=3.1.0`, `ollama>=0.2.0`, `openai>=1.0.0`, `python-dotenv>=1.0.0`, `httpx>=0.24.0`).
+3. Console Script Entry Points:
+   Exposed public CLI entry point `minecraft-ai = "run_pipeline:main"` and Web server entry point `minecraft-ai-web = "run_web:main"`. This provides standard command-line access upon package installation while maintaining 100% backward compatibility for direct script invocations (`python run_pipeline.py`, `python run_web.py`).
+4. Robust Windows Launchers:
+   Created `launch_cli.bat` and `launch_web.bat` anchoring execution directory to the script's directory (`cd /d "%~dp0"`), validating Python presence in PATH, forwarding CLI arguments (`%*`), and propagating the exit code.
+5. Editable Installation & Build Artifact Exclusion:
+   Verified editable installation with `pip install -e .`. Added `*.egg-info/`, `build/`, and `dist/` to `.gitignore` to prevent generated packaging artifacts from polluting version control.
+6. Documentation & Verification Separation:
+   Documented user quickstart in `README.md` and created automated packaging test suite `test_step22a_packaging.py` validating package imports, configuration, CLI/Web entry points, launcher batch scripts, and console scripts. Re-verified headless real-Minecraft 1.21.11 runtime execution without regressions.

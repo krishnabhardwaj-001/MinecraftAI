@@ -83,15 +83,23 @@
   5. Post-Merge Verification (Step 21.5): Verified clean `git status`, log history, diff check, 408/408 full test suite pass rate, and live headless Minecraft 1.21.11 server verification on local `main`.
   6. Strict Release Boundary: Consolidated strictly on local `main`. No commits were pushed to remote and no release tags were created.
 
+- Production Packaging & Distribution Hardening (Step 22A) operational:
+  1. Python Packaging (`pyproject.toml`): Created standard `pyproject.toml` specification utilizing `setuptools>=61.0`. Declares project metadata, Python `>=3.10` requirement, minimal runtime dependencies (`pydantic>=2.0.0`, `fastapi>=0.100.0`, `uvicorn>=0.20.0`, `jinja2>=3.1.0`, `ollama>=0.2.0`, `openai>=1.0.0`, `python-dotenv>=1.0.0`, `httpx>=0.24.0`), and dev dependencies. Supports editable installation via `pip install -e .` without altering existing repository structure.
+  2. Console Entry Points: Registered `minecraft-ai = "run_pipeline:main"` and `minecraft-ai-web = "run_web:main"` in `project.scripts`.
+  3. Windows Launchers (`launch_cli.bat`, `launch_web.bat`): Created simple, robust batch launchers that anchor execution to the repository root (`cd /d "%~dp0"`), verify Python availability in PATH with clear user-friendly guidance, forward all command-line arguments (`%*`), and return the child process exit code.
+  4. Quickstart Documentation (`README.md`): Updated user quickstart covering prerequisites, Python environment, local Ollama requirements (`http://localhost:11434`, `llama3.1:8b`), installation, CLI launch, Web launch, Minecraft 1.21.11 support, generated ZIP output, clarification chips/options, offline diagnostics, and explicitly distinguished headless server verification from optional graphical client verification.
+  5. Packaging & Launcher Verification (`test_step22a_packaging.py`): Added 7 automated tests verifying package imports, `pyproject.toml` schema, CLI entry point, Web entry point, Windows batch launcher contents and execution, and console script installation.
+  6. Regression Verification: Full regression test suite passing 415/415 tests. Step 20 headless Minecraft 1.21.11 verification passing 17/17 tests. `git diff --check` clean.
+
 ## Known issues / gaps
-- None. Full pipeline passes all static, semantic, QA, intent, and live headless Minecraft 1.21.11 runtime verification.
+- None. Full pipeline passes all static, semantic, QA, intent, headless Minecraft 1.21.11 runtime, and packaging verification.
 
 ## Current priority
-Step 21 complete. Full 408-test regression suite passing (408/408), real-Minecraft 1.21.11 headless server verified live, offline diagnostics hardened, documentation synchronized, `git diff --check` clean, and feature branch consolidated into local `main`.
+Step 22A complete. Packaging, Windows launchers, quickstart documentation, and installation verification finalized and verified. Full test suite passing (415/415), headless Minecraft 1.21.11 verified (17/17), `git diff --check` clean.
 
 ## Next logical work
-1. Deliver Step 21 Final Report to user.
-2. Maintain local repository in clean, verified state.
+1. Deliver Step 22A Final Report to user.
+2. Await user instruction before proceeding to Step 22B.
 3. Keep shared AI context synchronized for Antigravity and ChatGPT/Codex.
 
 ## Agent handoff rule

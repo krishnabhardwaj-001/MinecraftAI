@@ -41,7 +41,17 @@
   - [x] Step 21.4: Local mainline consolidation (fast-forward `feature/step-17-semantics` into local `main`).
   - [x] Step 21.5: Post-merge verification on local `main` (status, log, diff check, full suite, headless server verification).
   - [x] Step 21.6: Release documentation (`.ai/CHANGELOG.md`, `.ai/DECISIONS.md`, `.ai/STATE.md`, `.ai/TASKS.md`).
+- [x] Step 22A: Production Packaging & Distribution Hardening.
+  - [x] Step 22A.1: Standard `pyproject.toml` specification (`setuptools>=61.0`, Python `>=3.10`, runtime dependencies, entry points `minecraft-ai` and `minecraft-ai-web`, package inclusion).
+  - [x] Step 22A.2: Windows batch launchers `launch_cli.bat` and `launch_web.bat` (`%~dp0` directory anchoring, Python availability check, argument forwarding `%*`).
+  - [x] Step 22A.3: User quickstart in `README.md` (prerequisites, Ollama, CLI/Web launch, headless vs in-game verification).
+  - [x] Step 22A.4: Package installation & launcher verification test suite (`test_step22a_packaging.py`, 7 tests).
+  - [x] Step 22A.5: Full regression suite verification (415/415 PASS).
+  - [x] Step 22A.6: Headless Minecraft 1.21.11 live server verification (`test_step20_golden.py`, 17/17 PASS).
+  - [x] Step 22A.7: Packaging documentation & context synchronization (`.ai/PROJECT.md`, `.ai/STATE.md`, `.ai/TASKS.md`, `.ai/DECISIONS.md`, `.ai/CHANGELOG.md`).
+- [ ] Step 22B: (Not started).
 - [x] Keep AI context files synchronized after significant changes.
+
 
 ## Completed / established
 - [x] Git repository established and connected to the project workflow.
