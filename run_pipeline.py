@@ -1,8 +1,87 @@
+import os
 import sys
 from pathlib import Path
 from typing import Any, Callable, List, Optional
 
 from pipeline import run_minecraft_pipeline
+
+
+def is_ollama_unreachable_error(exc: Optional[BaseException]) -> bool:
+    """
+    Determines whether an exception indicates that the Ollama service
+    is offline, unreachable, not running, or failed to connect.
+    """
+    if exc is None:
+        return False
+
+    exc_name = type(exc).__name__
+    if exc_name in (
+        "ConnectError",
+        "ConnectTimeout",
+        "ConnectionRefusedError",
+        "RequestError",
+        "ReadTimeout",
+    ):
+        return True
+
+    try:
+        import httpx
+        if isinstance(exc, (httpx.ConnectError, httpx.ConnectTimeout)):
+            return True
+    except ImportError:
+        pass
+
+    try:
+        import ollama
+        if hasattr(ollama, "RequestError") and isinstance(exc, ollama.RequestError):
+            return True
+    except ImportError:
+        pass
+
+    if isinstance(exc, (ConnectionRefusedError, ConnectionError)):
+        return True
+
+    msg = str(exc).lower()
+    indicators = [
+        "connection refused",
+        "connecterror",
+        "failed to connect",
+        "11434",
+        "winerror 10061",
+        "all connection attempts failed",
+        "target machine actively refused",
+        "is ollama running",
+        "no such host",
+    ]
+    if any(ind in msg for ind in indicators):
+        return True
+
+    if exc.__cause__ and is_ollama_unreachable_error(exc.__cause__):
+        return True
+    if exc.__context__ and is_ollama_unreachable_error(exc.__context__):
+        return True
+
+    return False
+
+
+def get_ollama_diagnostic_message(endpoint: Optional[str] = None) -> str:
+    """
+    Returns an actionable diagnostic message explaining that Ollama is unreachable,
+    displaying the endpoint, explaining how to start Ollama, and noting external
+    provider alternatives.
+    """
+    resolved_endpoint = endpoint or os.getenv("OLLAMA_HOST") or "http://localhost:11434"
+    return (
+        f"The AI provider (Ollama) is unreachable or not running at {resolved_endpoint}.\n\n"
+        "To resolve this issue:\n"
+        "  1. Ensure Ollama is installed (https://ollama.com).\n"
+        "  2. Start the Ollama service by running:\n"
+        "       ollama serve\n"
+        "     or launch the Ollama desktop application.\n"
+        "  3. Ensure the required model is pulled (e.g. 'ollama pull llama3.1:8b').\n"
+        "  4. Alternatively, configure an external AI provider if supported "
+        "(such as setting the OPENAI_API_KEY environment variable for OpenAI)."
+    )
 
 
 def run_cli(
@@ -36,13 +115,24 @@ def run_cli(
 
     while True:
         print()
-        result = pipeline_fn(
-            request=request,
-            minecraft_version="1.21.11",
-            provider="ollama",
-            create_zip=True,
-            verbose=True
-        )
+        try:
+            result = pipeline_fn(
+                request=request,
+                minecraft_version="1.21.11",
+                provider="ollama",
+                create_zip=True,
+                verbose=True
+            )
+        except Exception as e:
+            if is_ollama_unreachable_error(e):
+                print("\n" + "=" * 70)
+                print("[!] OLLAMA SERVICE UNREACHABLE")
+                print("=" * 70)
+                print(get_ollama_diagnostic_message())
+                print("=" * 70)
+                return 1
+            print(f"\n[-] Unexpected pipeline execution error: {e}")
+            return 1
 
         print("\n" + "=" * 70)
         print("PIPELINE EXECUTION SUMMARY")

@@ -1,5 +1,6 @@
 import os
 import re
+import sys
 from pathlib import Path
 from typing import Any, Dict, List, Optional
 from fastapi import FastAPI, HTTPException, Request
@@ -9,10 +10,13 @@ from fastapi.staticfiles import StaticFiles
 from fastapi.templating import Jinja2Templates
 from pydantic import BaseModel, Field
 
-from pipeline import run_minecraft_pipeline
-
 # Directory configurations
 BASE_DIR = Path(__file__).resolve().parent.parent
+if str(BASE_DIR) not in sys.path:
+    sys.path.insert(0, str(BASE_DIR))
+
+from pipeline import run_minecraft_pipeline
+from run_pipeline import is_ollama_unreachable_error, get_ollama_diagnostic_message
 GENERATED_DIR = BASE_DIR / "generated"
 STATIC_DIR = Path(__file__).resolve().parent / "static"
 TEMPLATES_DIR = Path(__file__).resolve().parent / "templates"
@@ -92,6 +96,11 @@ async def generate_datapack(payload: GeneratePayload):
             verbose=False
         )
     except Exception as e:
+        if is_ollama_unreachable_error(e):
+            raise HTTPException(
+                status_code=503,
+                detail=get_ollama_diagnostic_message()
+            )
         raise HTTPException(status_code=500, detail=f"Pipeline execution encountered an unexpected error: {str(e)}")
 
     # Extract clean download URL and filename

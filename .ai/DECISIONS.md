@@ -395,3 +395,14 @@ To establish final end-to-end golden verification, live automated headless Minec
    Dedicated test suite `test_step20_golden.py` exercises the complete, unmocked 8-stage pipeline across all 7 mechanism domains, all 6 property modification scenarios, genuine clarification halts, and byte-for-byte reproducible ZIP creation.
 5. Explicit Verification Boundary:
    `.ai/REAL_MINECRAFT_VERIFICATION.md` establishes a strict distinction between automated headless verified items (demonstrated live with server console logs) and manual in-game required items (requiring an interactive client player for visual FOV, particle/sound rendering, and inventory GUIs).
+
+## D040 — Release Hardening, Offline Diagnostics, and Mainline Consolidation (Step 21)
+To complete release hardening and consolidate the verified work from `feature/step-17-semantics` into local `main`:
+1. Context & Architecture Alignment:
+   Updated `.ai/PROJECT.md`, `.ai/STATE.md`, and `.ai/TASKS.md` to accurately describe the completed 8-stage pipeline, target Minecraft Java 1.21.11, 7 authoritative mechanism domains, semantic property modification pipeline, deterministic generation, validation/repair, autonomous QA, intent verification, READY gate, and headless Minecraft verification, reconciling obsolete early-project notes.
+2. Offline Ollama Diagnostic Hardening:
+   Implemented user-facing diagnostic detection and actionable messaging in `run_pipeline.py` and `web/app.py` (`is_ollama_unreachable_error`, `get_ollama_diagnostic_message`). When the local Ollama service is unreachable or offline, the system avoids raw tracebacks and returns clear instructions: the target endpoint (default `http://localhost:11434` or `OLLAMA_HOST`), instructions to start the service (`ollama serve`), model pulling (`ollama pull llama3.1:8b`), and external provider configuration alternatives (`OPENAI_API_KEY`). The web API returns HTTP 503 with structured detail.
+3. Fast-Forward Local Mainline Consolidation:
+   Consolidated local `main` with `feature/step-17-semantics` via a clean fast-forward merge, preserving the linear history of atomic commits (`6691f1e`, `f049717`, `f71efa0`, `a2defbd`, and the Step 21 release commit) without intermediate merge commits.
+4. Release Boundary:
+   Consolidated on local `main` with 408 passing tests. No remote pushes or release tags were created, keeping the repository ready for authorized release and deployment workflows.

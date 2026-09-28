@@ -885,6 +885,9 @@ class TestStep20HeadlessMinecraftServer(unittest.TestCase):
                 "scoreboard players get #load_ran mcai_debug",
                 # Item E & G: verify initial automatic tick counter
                 "scoreboard players get #tick_count mcai_debug",
+                # Item H & I: entity setup early so chunk and entity are loaded
+                "forceload add 0 0",
+                'execute in minecraft:overworld run summon pig 0 4 0 {NoAI:1b,Tags:["test_pig"]}',
                 # Item F: verify initial rain state is 0
                 "scoreboard players get #global rain_state",
                 # Item F: trigger rain
@@ -897,9 +900,7 @@ class TestStep20HeadlessMinecraftServer(unittest.TestCase):
                 "weather clear",
                 # Item F: verify rain state reset to 0
                 "scoreboard players get #global rain_state",
-                # Item H & I: entity setup and property modifiers
-                "forceload add 0 0",
-                'execute in minecraft:overworld run summon pig 0 4 0 {NoAI:1b,Tags:["test_pig"]}',
+                # Item H & I: property modifiers on the loaded entity
                 "execute in minecraft:overworld run attribute @e[type=pig,limit=1] minecraft:movement_speed modifier add minecraft_ai:speed_10x 9.0 add_multiplied_total",
                 "execute in minecraft:overworld run attribute @e[type=pig,limit=1] minecraft:movement_speed modifier value get minecraft_ai:speed_10x",
                 "execute in minecraft:overworld run attribute @e[type=pig,limit=1] minecraft:movement_speed modifier add minecraft_ai:speed_2x 1.0 add_multiplied_total",

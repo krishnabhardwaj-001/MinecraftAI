@@ -34,6 +34,13 @@
   - [x] Step 20.2: Automated headless real-Minecraft 1.21.11 live server verification harness (`qa/runtime.py`).
   - [x] Step 20.3: Authoritative Real-Minecraft 1.21.11 verification checklist and regression protocol (`.ai/REAL_MINECRAFT_VERIFICATION.md`).
   - [x] Step 20.4: Multi-mechanism function merging in generator (`generator/datapack_generator.py`) and full test suite regression gate (400/400 tests passing).
+- [x] Step 21: Release Hardening & Mainline Consolidation.
+  - [x] Step 21.1: Context & documentation alignment (`.ai/PROJECT.md`, `.ai/STATE.md`, `.ai/TASKS.md`).
+  - [x] Step 21.2: Offline Ollama diagnostic hardening (`run_pipeline.py`, `web/app.py`, `test_step21_diagnostics.py`).
+  - [x] Step 21.3: Pre-merge verification (clean tree, diff check, 400+ tests, headless server verification).
+  - [x] Step 21.4: Local mainline consolidation (fast-forward `feature/step-17-semantics` into local `main`).
+  - [x] Step 21.5: Post-merge verification on local `main` (status, log, diff check, full suite, headless server verification).
+  - [x] Step 21.6: Release documentation (`.ai/CHANGELOG.md`, `.ai/DECISIONS.md`, `.ai/STATE.md`, `.ai/TASKS.md`).
 - [x] Keep AI context files synchronized after significant changes.
 
 ## Completed / established

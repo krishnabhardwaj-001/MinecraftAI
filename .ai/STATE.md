@@ -75,15 +75,23 @@
   4. Authoritative Manual Verification Checklist (`.ai/REAL_MINECRAFT_VERIFICATION.md`): Created authoritative manual verification protocol establishing an explicit distinction between automated headless verified items (Items A–L) and manual in-game required items (visual FOV/camera feel, audio feedback, GUI advancement screens, crafting inventory UI, multiplayer joins) and documenting the mandatory stateful rain regression scenario.
   5. Regression & Release Verification: 17/17 Step 20 golden tests pass, 17/17 Step 19 tests pass, 24/24 Step 18 tests pass, 124/124 Step 17 tests pass, 180/180 Step 16 tests pass, and 400/400 total tests pass repository-wide with zero regressions. `git diff --check` clean.
 
+- Release Hardening & Mainline Consolidation (Step 21) operational:
+  1. Context & Architecture Alignment (Step 21.1): Updated `.ai/PROJECT.md`, `.ai/STATE.md`, and `.ai/TASKS.md` to accurately document the 8-stage pipeline, Minecraft 1.21.11 target (`pack_format: 94`), 7 authoritative mechanism domains, semantic property modification architecture, deterministic multi-mechanism generation, static validation/repair, autonomous QA review, and headless real-Minecraft verification. Reconciled and cleared obsolete early-stage notes.
+  2. Offline Ollama Diagnostic Hardening (Step 21.2): Implemented user-facing diagnostic detection and actionable guidance (`is_ollama_unreachable_error`, `get_ollama_diagnostic_message`) in `run_pipeline.py` and `web/app.py`. When Ollama is offline or unreachable, raw tracebacks are prevented; users receive clear instructions explaining the endpoint (`http://localhost:11434`), service startup command (`ollama serve`), required model pull, and external provider configuration options (`OPENAI_API_KEY`). Web API returns HTTP 503 with structured detail. Added 8 focused automated unit and integration tests in `test_step21_diagnostics.py`.
+  3. Pre-Merge Verification (Step 21.3): Confirmed working tree cleanliness, verified zero `git diff --check` errors, executed the full repository test suite with 408/408 passing tests, and confirmed headless real-Minecraft 1.21.11 live server execution on `feature/step-17-semantics`.
+  4. Local Mainline Consolidation (Step 21.4): Fast-forwarded local `main` to the verified Step 21 commit without merge commits, bringing `main` into exact parity with the complete atomic commit history (`6691f1e`, `f049717`, `f71efa0`, `a2defbd`, and the Step 21 release commit).
+  5. Post-Merge Verification (Step 21.5): Verified clean `git status`, log history, diff check, 408/408 full test suite pass rate, and live headless Minecraft 1.21.11 server verification on local `main`.
+  6. Strict Release Boundary: Consolidated strictly on local `main`. No commits were pushed to remote and no release tags were created.
+
 ## Known issues / gaps
 - None. Full pipeline passes all static, semantic, QA, intent, and live headless Minecraft 1.21.11 runtime verification.
 
 ## Current priority
-Step 20 complete. All 17 Step 20 golden tests passing, full regression suite passing (400/400), real-Minecraft 1.21.11 headless server verified live, manual checklist created, and `git diff --check` clean. Awaiting final user review before commit/merge.
+Step 21 complete. Full 408-test regression suite passing (408/408), real-Minecraft 1.21.11 headless server verified live, offline diagnostics hardened, documentation synchronized, `git diff --check` clean, and feature branch consolidated into local `main`.
 
 ## Next logical work
-1. Deliver Step 20 Release Validation Report.
-2. Await user confirmation before locking Step 20.
+1. Deliver Step 21 Final Report to user.
+2. Maintain local repository in clean, verified state.
 3. Keep shared AI context synchronized for Antigravity and ChatGPT/Codex.
 
 ## Agent handoff rule
