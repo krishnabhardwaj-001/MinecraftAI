@@ -370,3 +370,28 @@ Following the Step 19 completion audit, two final remediation items were impleme
    - Preserves unique custom user-provided modifier IDs.
    - Updates structured action modifier identities and step identities consistently; strictly avoids raw string replacement on `.mcfunction` files and sets `regenerate=True` for clean deterministic synthesis through `DatapackGenerator`.
    - Verified 100% idempotent across repeated repair passes.
+
+## D039 — Golden End-to-End Integration, Real-Minecraft Verification & Release Lockdown (Step 20)
+To establish final end-to-end golden verification, live automated headless Minecraft runtime execution, and release lockdown:
+1. Headless Real-Minecraft 1.21.11 Verification Harness:
+   `qa/runtime.py` implements safe, automated headless verification:
+   - Discovered that `versions/1.21.11/server-1.21.11.jar` requires external classpath dependencies found in `libraries/` (`net/sf/jopt-simple`, `gson`, `guava`, `brigadier`, `netty`, etc.). Java 21 LTS executes `java -cp libraries/**/*.jar;server-1.21.11.jar net.minecraft.server.Main --nogui` cleanly.
+   - Proved running process reports `Starting minecraft server version 1.21.11` matching internal `version.json` (`id: 1.21.11`, `world_version: 4671`, `protocol_version: 774`, `pack_format: 94`).
+   - Strictly isolates the server in a temporary directory (`tempfile.mkdtemp()`), accepts EULA only inside the temp directory, configures headless `server.properties` (`level-type=flat`, `pause-when-empty-seconds=-1`), installs the generated datapack as a ZIP archive, boots the server, verifies datapack loading (`datapack list`), executes interactive test commands with tick pauses, executes `/reload`, and halts cleanly via `/stop`.
+   - Empirically verifies Items A through K: exact version 1.21.11, ZIP installation, absence of broken function tags, load function execution, automatic tick-loop execution, rain state-machine transitions (0 -> 1 -> 0), property modifier application on a live entity, and duplicate modifier coexistence without collision.
+   - Never alters the user's Minecraft installation, personal worlds, or persistent filesystem outside the isolated temp directory.
+2. Authoritative Seven Mechanism Domains:
+   Grounded strictly in the project's existing mechanism registry and generators:
+   (1) `loot_table` (`LootTableMechanismGenerator`)
+   (2) `function` (`FunctionMechanismGenerator`)
+   (3) `function_tag` (`FunctionTagMechanismGenerator`)
+   (4) `advancement` (`AdvancementMechanismGenerator`)
+   (5) `recipe` (`RecipeMechanismGenerator`)
+   (6) `predicate` (`PredicateMechanismGenerator`)
+   (7) `state_machine` (`StateMachineMechanismGenerator`)
+3. Multi-Mechanism Function Merging:
+   Updated `DatapackGenerator` conflict checking to recognize `/function/modify_` paths as mergeable alongside `load.mcfunction` and `tick.mcfunction`. When compound property modifications target the same property (e.g. independent speed modifiers), commands merge cleanly into a single `modify_{property}.mcfunction`, stripping duplicate comment headers while preserving deterministic execution order.
+4. Golden End-to-End Pipeline Invariants:
+   Dedicated test suite `test_step20_golden.py` exercises the complete, unmocked 8-stage pipeline across all 7 mechanism domains, all 6 property modification scenarios, genuine clarification halts, and byte-for-byte reproducible ZIP creation.
+5. Explicit Verification Boundary:
+   `.ai/REAL_MINECRAFT_VERIFICATION.md` establishes a strict distinction between automated headless verified items (demonstrated live with server console logs) and manual in-game required items (requiring an interactive client player for visual FOV, particle/sound rendering, and inventory GUIs).

@@ -1,5 +1,30 @@
 # AI Change Log
 
+- Implemented STEP 20: Golden End-to-End Integration, Real-Minecraft Verification & Release Lockdown (`qa/runtime.py`, `generator/datapack_generator.py`, `.ai/REAL_MINECRAFT_VERIFICATION.md`, `test_step20_golden.py`, `.ai/TASKS.md`, `.ai/STATE.md`, `.ai/DECISIONS.md`):
+  1. Golden Integration Suite (`test_step20_golden.py`): Created dedicated 17-test suite exercising the complete, unmocked 8-stage pipeline (Understanding -> RAG Retrieval -> Planning -> Implementation Mapping -> Deterministic Generation -> Static Validation -> Autonomous QA -> Intent Verification -> READY Gate -> Deterministic ZIP Generation). Verified:
+     - All 7 authoritative mechanisms: `loot_table` (creeper drops diamonds), `function` (regeneration effect command synthesis), `function_tag` (custom tick tag), `advancement` (netherite sword custom advancement), `recipe` (shaped diamond sword from sticks), `predicate` (raining weather predicate), and `state_machine` (rain transition counter state machine).
+     - All 6 property modification scenarios: speed ×10 (`add_multiplied_total 9.0`), speed +5 (`add_value 5.0`), speed +25% (`add_multiplied_base 0.25`), explicit absolute speed (`base set 0.2`), target-specific property modification (zombie speed 2x wrapping `as @e[type=zombie]`), and duplicate independent modifier stacking (coexisting modifier IDs on the same target).
+     - Genuine clarification halts: qualitative underspecified requests (`make me faster` -> missing duration/magnitude) and missing property requests (`make the zombie stronger` -> missing target property).
+     - Deterministic reproducibility: byte-for-byte identical ZIP generation from identical inputs.
+     - Live headless real-Minecraft server verification.
+  2. Headless Real-Minecraft 1.21.11 Verification Harness (`qa/runtime.py`):
+     - Discovered Java 21 LTS (`21.0.12`), `versions/1.21.11/server-1.21.11.jar`, and runtime classpath dependencies in `libraries/`.
+     - Confirmed running server process reports exact string `Starting minecraft server version 1.21.11` (resolving previous report typographical ambiguity).
+     - Built safe, automated headless verification: runs in isolated temporary directories (`tempfile.mkdtemp`), accepts EULA strictly inside temp directory, generates headless `server.properties` (`level-type=flat`, `pause-when-empty-seconds=-1`), installs datapack ZIP archive directly to world directory, boots server headlessly with `--nogui`, captures console output, verifies datapack discovery (`/datapack list`) and load function execution (`#load_ran has 1 [mcai_debug]`), verifies automatic tick loop execution (`#tick_count` advances in game loop), verifies rain state machine transition (0 -> 1 on rain -> 0 on clear), verifies property modifier application on a live entity (`The value of modifier ... is 9.0`), verifies duplicate modifier coexistence without collision, verifies `/reload` with zero broken function tags or missing functions, and cleanly stops server with returncode 0.
+  3. Multi-Mechanism Function Merging (`generator/datapack_generator.py`):
+     - Expanded `is_mergeable` function path criteria to include `/function/modify_` paths alongside `load.mcfunction` and `tick.mcfunction`.
+     - Enables compound property modifications targeting the same property to merge commands cleanly into a single `modify_{property}.mcfunction`, stripping duplicate comment headers while preserving deterministic execution order.
+  4. Authoritative Manual Verification Checklist (`.ai/REAL_MINECRAFT_VERIFICATION.md`):
+     - Created comprehensive manual verification protocol establishing an explicit distinction between automated headless verified items (Items A–L) and manual in-game required items (visual FOV/camera feel, audio feedback, GUI advancement screens, crafting inventory UI, multiplayer joins) and documenting the mandatory stateful rain regression scenario.
+  5. Regression & Release Verification:
+     - `test_step20_*.py`: 17/17 PASS
+     - `test_step19_*.py`: 17/17 PASS
+     - `test_step18_*.py`: 24/24 PASS
+     - `test_step17_*.py`: 124/124 PASS
+     - `test_step16_*.py`: 180/180 PASS
+     - Full project repository (`test_*.py`): 400/400 PASS
+     - `git diff --check`: clean (0 errors)
+
 - Remediated STEP 19: Strengthened Property Intent Verification & Collision-Safe Duplicate Repair (`qa/reviewer.py`, `qa/repair.py`, `test_step19_alignment.py`):
   1. Strengthened Property Intent Verification (Remediation Item 1): Re-architected `AutonomousQAReviewer._verify_intent()` and introduced `_verify_property_modification()`. Uses `DEFAULT_PROPERTY_REGISTRY` and `ImplementationMapper` as authoritative sources of truth. Eliminates weak identifier-presence passes; strictly verifies property, operation (`set`, `add`, `subtract`, `multiply`, `divide`), value kind (`absolute`, `relative`, `percentage`, `multiplier`), numeric value (e.g. `10x` multiplier mapping to `add_multiplied_total 9.0`), target (`@a`, `@e[type=...]`), and mechanism type against structured `ActionSpecification` in `plan` and generated `.mcfunction` commands. Produces specific `INTENT_MISMATCH` failures on operation, value, value kind, or target mismatches (e.g. rejecting `speed set 5` when `speed ×10` was requested).
   2. Collision-Safe Duplicate Modifier Repair (Remediation Item 2): Re-engineered `QARepairEngine._repair_duplicate_modifier()` in `qa/repair.py` to be 100% collision-safe. Scans the entire structured plan upfront to collect `all_existing_ids`, preserves the first valid occurrence of every modifier ID in deterministic plan traversal order, and for duplicate occurrences, generates deterministic candidates (`_step_{counter}` or `_{counter}`) that check against both all existing IDs and newly allocated IDs, incrementing deterministically until an unused ID is found. Guarantees zero ID collisions even when existing actions already occupy subsequent candidate slots. Preserves unique custom user modifier IDs. Strictly avoids raw string replacement on `.mcfunction` files and sets `regenerate=True` for clean generator synthesis. Verified 100% idempotent across repeated repair passes.

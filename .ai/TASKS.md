@@ -29,8 +29,12 @@
   - [x] Step 19.4: Strengthened QA property modification intent verification against capabilities and generated commands (`qa/reviewer.py`).
   - [x] Step 19.5: Collision-safe QA structured duplicate modifier repair (`qa/repair.py`).
   - [x] Step 19.6: Comprehensive Step 19 automated test suite (`test_step19_alignment.py`, 17 tests).
-- [ ] Step 20: Final Project Completion & Verification.
-- [ ] Keep AI context files synchronized after significant changes.
+- [x] Step 20: Final Project Completion & Verification.
+  - [x] Step 20.1: Golden end-to-end integration suite across 7 authoritative mechanisms, property modifications, and clarifications (`test_step20_golden.py`).
+  - [x] Step 20.2: Automated headless real-Minecraft 1.21.11 live server verification harness (`qa/runtime.py`).
+  - [x] Step 20.3: Authoritative Real-Minecraft 1.21.11 verification checklist and regression protocol (`.ai/REAL_MINECRAFT_VERIFICATION.md`).
+  - [x] Step 20.4: Multi-mechanism function merging in generator (`generator/datapack_generator.py`) and full test suite regression gate (400/400 tests passing).
+- [x] Keep AI context files synchronized after significant changes.
 
 ## Completed / established
 - [x] Git repository established and connected to the project workflow.
