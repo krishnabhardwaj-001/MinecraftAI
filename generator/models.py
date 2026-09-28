@@ -4,6 +4,8 @@ from typing import Any, Dict, List, Optional, Union
 # pyrefly: ignore [missing-import]
 from pydantic import BaseModel, Field, ConfigDict, field_validator, model_validator
 
+from ai.semantic_models import PropertyModification
+
 
 class LootTableModification(BaseModel):
     model_config = ConfigDict(extra="allow")
@@ -297,6 +299,7 @@ class ScoreboardObjectiveDefinition(BaseModel):
 
 
 ALLOWED_ACTION_TYPES = {
+    "modify_property", "property_modification",
     "apply_effect", "effect", "give_effect",
     "clear_effect", "remove_effect",
     "give_item", "give", "item",
@@ -341,9 +344,34 @@ class ActionSpecification(BaseModel):
         description="Optional execution conditions (predicate checks or scoreboard checks)"
     )
 
+    # Semantic property modification parameters (Step 17.3)
+    property_modification: Optional[PropertyModification] = Field(
+        default=None,
+        description="Structured semantic property modification"
+    )
+    implementation: Optional[str] = Field(
+        default=None,
+        description="Structural Minecraft implementation mechanism ('effect', 'attribute', 'scoreboard', etc.)"
+    )
+    modifier_id: Optional[str] = Field(
+        default=None,
+        description="Explicit deterministic modifier ID for attribute actions (e.g. 'speed_bonus_1')"
+    )
+    step_id: Optional[str] = Field(
+        default=None,
+        description="Deterministic step identity (e.g. 'step_0')"
+    )
+    action_id: Optional[str] = Field(
+        default=None,
+        description="Deterministic action identity (e.g. 'act_0')"
+    )
+
     # Item parameters
     item: Optional[str] = Field(default=None, description="Resource ID of item (e.g. 'minecraft:diamond')")
     count: Optional[int] = Field(default=1, description="Item quantity")
+
+    # Entity parameters
+    entity: Optional[str] = Field(default=None, description="Resource ID of entity (e.g. 'minecraft:zombie')")
 
     # Effect parameters
     effect: Optional[str] = Field(default=None, description="Resource ID of effect (e.g. 'minecraft:speed')")
@@ -761,6 +789,16 @@ class MechanismSpecification(BaseModel):
     target: Optional[str] = Field(
         default=None,
         description="Target resource identifier or file (e.g. 'entities/creeper.json')"
+    )
+
+    # Semantic property modification parameters (Step 17.3)
+    property_modification: Optional[PropertyModification] = Field(
+        default=None,
+        description="Structured semantic property modification"
+    )
+    implementation: Optional[str] = Field(
+        default=None,
+        description="Structural Minecraft implementation category ('effect', 'attribute', 'scoreboard', etc.)"
     )
 
     # Loot table parameters
@@ -1260,6 +1298,19 @@ def validate_mechanism_specification(spec: Union[MechanismSpecification, Dict[st
                     pass
                 else:
                     raise ValueError(f"Invalid action item in scoreboard mechanism: {type(act).__name__}")
+
+    # 10. Property modification (Step 17.3)
+    elif spec_type in ["property_modification", "modify_property"]:
+        prop_mod = spec.property_modification if isinstance(spec, MechanismSpecification) else spec.get("property_modification")
+        actions = spec.actions if isinstance(spec, MechanismSpecification) else spec.get("actions")
+        if prop_mod is None and not actions:
+            raise ValueError(
+                "Incomplete property_modification specification: must provide 'property_modification' or 'actions'."
+            )
+        if actions:
+            for act in actions:
+                if isinstance(act, dict):
+                    ActionSpecification(**act)
 
     else:
         raise ValueError(f"Unsupported mechanism specification type: '{spec_type}'")

@@ -220,3 +220,102 @@ To prove the entire Step 16 scoreboard architecture works as a coherent pipeline
 5. Repair Loop Verification: Autonomous repair loop is verified for both failure exhaustion (aborting with `failed`/`verification_failed` and preserving attempt history when errors are unrepairable) and repair success (re-planning structured mechanisms, deterministically regenerating, re-validating, re-reviewing via QA, and achieving `status='success'`, `verification_status='verified'`).
 6. Real-Minecraft Boundary: The automated gate covers structural validity, static semantic simulation, intent verification, and ZIP integrity. Full 20Hz server runtime verification (player joins, world physics, continuous game loop) is explicitly documented as a manual step outside the automated gate.
 7. Ollama-Dependent Tests: Pre-existing `test_pipeline.py` tests that call Ollama without mock injection are known environment-conditional integration tests. Their failure when Ollama is unavailable is not a regression — they are not within the Step 16.7 automated gate scope.
+
+## D029 — Semantic Property Modification & Planner Integration Contract (Step 17.3)
+To consume structured semantic property modifications cleanly in the Planner without leaking command syntax or collapsing numeric meaning:
+1. Strict Layer Separation:
+   Natural language → Understanding → Numeric Semantic Interpreter → PropertyModification → Planner → Minecraft implementation decision (Attribute / Effect / Scoreboard) → ActionSpecification / MechanismSpecification → Deterministic Generator.
+2. First-Class Semantic Representation:
+   The Planner accepts `PropertyModification` models (from Step 17.1/17.2) directly as first-class planning inputs via `plan_property_modification()` and attaches them to `ImplementationPlan`, `MechanismSpecification`, and `ActionSpecification`.
+3. Preservation of Value Kinds:
+   The Planner strictly preserves the semantic nature of `value.kind` (`absolute`, `relative`, `percentage`, `multiplier`, `range`, `qualitative`) and numerical `value.value`. It explicitly does NOT convert multipliers (e.g. `10x speed`) into effect amplifier 9, nor does it flatten structured models into strings.
+4. Minecraft Implementation Boundary:
+   The Planner maps properties structurally to implementation categories (`speed` -> `effect`, `attack_damage` -> `attribute`, etc.) via the `implementation` field, but emits no raw Minecraft command syntax (`/effect`, `/attribute`, `/scoreboard`) from the semantic layer. Command compilation remains the exclusive duty of downstream generator mechanisms.
+5. Unresolved Semantics & Dynamic Clarification:
+   Unresolved semantic inputs (missing property e.g. `make the zombie stronger`, missing value e.g. `increase speed`, or ambiguous requests e.g. `make me faster by 10`) are preserved without inventing arbitrary numbers or guessing properties. The Planner marks the plan `status: "needs_clarification"` and attaches targeted clarification prompts.
+6. Compound Request Support:
+   Requests combining property modifications and unrelated actions (e.g. `make me 10 times faster and give me a netherite sword`) preserve all components as distinct plan entries without discarding or mangling either.
+
+## D030 — Semantic Contract & Planner Robustness Hardening (Step 17.3 Audit Blocker Remediation)
+To ensure the semantic-to-planner boundary is robust and unblocked prior to Step 17.4:
+1. Declared Extra Metadata Contract:
+   `PropertyModification` defines `extra_metadata: Dict[str, Any] = Field(default_factory=dict)`. Instantiating semantic models without keyword arguments never causes `AttributeError` when accessed in planner components.
+2. Honest Qualitative Representation:
+   Qualitative requests (e.g. "make me faster", "make the zombie stronger") naturally describe directional intent rather than arithmetic transformations. The semantic interpreter preserves `operation=None` rather than fabricating arithmetic operations (`add`). The Pydantic validator allows `operation=None` for `kind='qualitative'` without requiring `missing=['operation']`. If an arithmetic operation is genuinely required but missing (e.g. `attack_damage = 10`), the planner halts for clarification instead of defaulting to `'set'`.
+3. Data-Driven Capability Registry:
+   The inline if-else mechanism guesser is replaced by `PropertyCapabilityRegistry` (`ai/property_registry.py`). Properties map to known Minecraft capabilities (`effect`, `attribute`). Unrecognized or unsupported properties (e.g. `unknown_property`) are never guessed as attributes; they are preserved on the plan and routed to `needs_clarification`.
+4. Generic Compound Request Planning:
+   Decomposed non-property requirements in compound requests are routed dynamically through `MinecraftKnowledgeRetriever` to resolve item IDs (e.g. `minecraft:bow`, `minecraft:netherite_sword`) and entity IDs (e.g. `minecraft:zombie`), completely removing hardcoded item keyword matching.
+
+## D031 — Structured Clarification Boundary Redesign (Step 17.4)
+To ensure clarification asks for specific missing semantic parameters rather than producing generic or overly broad ambiguity strings:
+1. Clean Architectural Separation of Concerns:
+   Separation into distinct architectural components:
+   - Semantic Interpretation: `ai/numeric_interpreter.py` extracts `PropertyModification` models with typed missing parameters and ambiguity metadata.
+   - Clarification Analysis: `ClarificationAnalyzer` in `ai/clarification.py` performs purely semantic analysis, identifying specific issues (`missing_property`, `missing_value`, `missing_operation`, `ambiguous_value`, `unknown_property`) without text templating.
+   - Clarification Question Generation: `ClarificationQuestionGenerator` in `ai/clarification.py` generates targeted user-facing questions and actionable options without generic ambiguity strings.
+   - Orchestration & Planning: `SemanticClarificationEngine` coordinates analysis and generation; `MinecraftPlanner` consumes it to populate both `clarifications` (human-readable string list) and `clarification_requirements` (structured `ClarificationRequirement` models).
+2. Structured Machine-Readable Clarification Model:
+   Clarification requirements are expressed via `ClarificationRequirement` (BaseModel) with typed fields: `parameter`, `reason`, `question`, `options`, `source_text`, and `metadata`. Both `ImplementationPlan` and `PlannerResult` expose `clarification_requirements`.
+3. Distinct Qualitative Intent vs Incomplete Modification:
+   Valid qualitative requests (e.g. `make me faster`) are explicitly recognized as complete without requiring arithmetic operations or forcing the user to choose `set/add/multiply`. In contrast, incomplete numeric modifications (e.g. `increase speed` -> missing value; `change speed by 10` -> missing operation) halt at clarification without defaulting to `set`.
+4. Preservation of Semantic Integrity:
+   Neither the clarification engine nor the planner invent missing properties (such as health, attack damage, or equipment) or guess numeric values. Unknown properties are reported as unrecognized and preserved in `missing_knowledge`.
+
+## D032 — Deterministic Minecraft Implementation Mapping Architecture (Step 17.5)
+To translate validated semantic `PropertyModification` models into concrete Minecraft mechanisms deterministically without violating architectural boundaries:
+1. Dedicated Mapping Layer (`ImplementationMapper`):
+   Created `ImplementationMapper` and `MappedImplementation` in `ai/implementation_mapper.py`. Sits between the semantic planning layer and the deterministic command generator.
+2. Single Authoritative Capability Registry:
+   The mapper does not possess an internal table or hardcoded `if/elif` dictionary mapping properties to mechanisms (`effect`, `attribute`, `scoreboard`). All mechanism mappings, operations, and default values are queried strictly from `PropertyCapabilityRegistry`.
+3. No Natural Language Re-interpretation:
+   The mapper operates exclusively on structured models (`property`, `operation`, `value`, `target`, `extra_metadata`). It never scans or re-parses `source_text`.
+4. Strict Semantic Value Preservation:
+   `MappedImplementation` preserves `value.kind` (`absolute`, `relative`, `percentage`, `multiplier`, `qualitative`) and numerical `value.value`. Value transformations (such as mapping 1-based level multiplier 10 to 0-based effect amplifier 9, or converting relative increments into attribute modifiers) are strictly forbidden in the mapping layer and belong exclusively to the deterministic generator (`generator/mechanisms/function_mech.py`).
+5. Generic Target Handling:
+   Entity targets (e.g. `@s`, `player`, `zombie`, `skeleton`, `creeper`) are handled uniformly and generically through selector normalization without hardcoded mob logic.
+6. Structured Unresolved States:
+   Unknown properties, missing operations, missing values, or unsupported qualitative mappings return structured unresolved `MappedImplementation` objects (`status="unresolved"`, `unresolved_reason="..."`) rather than silently guessing defaults or failing with uncaught exceptions.
+7. Generator Command Synthesis Boundary:
+   No raw Minecraft commands exist in the AI semantic or mapping layers. All Minecraft command syntax synthesis is strictly confined to `generator/mechanisms/function_mech.py`.
+
+## D033 — Exact Capability Matching and Semantic Fidelity (Step 17.5 Remediation)
+Following the final read-only audit of Step 17.5, the capability model and implementation mapping was upgraded to enforce exact semantic fidelity:
+1. Generic Capability Modeling:
+   `PropertyCapabilityRegistry` was upgraded with `MechanismCapability` defining exact `(mechanism, supported_operations, supported_value_kinds, operation_value_kinds)`. It serves as the single source of truth; no duplicate capability tables exist in `ImplementationMapper`.
+2. Exact (Property, Operation, Value Kind) Selection:
+   `ImplementationMapper.map_modification` uses `cap.find_mechanism_for(operation, value_kind, preferred)`. A mechanism is selected ONLY if it genuinely supports the exact operation and value kind. Ad-hoc overrides (`if impl == "effect" and mod.operation == "set"`) are eliminated.
+3. Attribute Mechanism for Relative and Multiplier Speed:
+   Speed modifications with `multiply + multiplier` or `add/subtract + relative/percentage` are mapped to `attribute` (`minecraft:generic.movement_speed`), preserving exact semantics. The generator compiles multiplier M into Minecraft's `add_multiplied_total` modifier with amount M - 1.0, and relative increments into `add_value` or `add_multiplied_base`.
+4. Preservation of Qualitative Values and Refusal to Guess Magnitude:
+   Qualitative requests (e.g. `make me faster`) without explicit magnitude or duration cannot be deterministically implemented by any Minecraft mechanism without choosing arbitrary numbers. The mapper returns an unresolved status requiring clarification. The generator fails structurally (`None`) if unquantified qualitative actions reach it.
+5. Refusal to Invent Duration:
+   The generator does not invent a default duration (such as 30 seconds) for property modifications. If an effect implementation requires a duration and none is present in the semantic input, it fails structurally.
+6. Refusal to Reinterpret Semantics in Generator:
+   The generator never converts multipliers to effect amplifiers (e.g. 10x to amplifier 9) or relative increments to absolute effect levels (e.g. +5 to amplifier 4). If an unsupported semantic combination reaches the generator, it fails structurally.
+7. Compound Request Independence:
+   Compound requests evaluate each sub-request independently. An unresolved sub-request does not invalidate or mutate another ready sub-request.
+
+## D034 — Remediation of Comparative Semantics, Modifier Collision, and /attribute Target Handling (Step 17.5 Remediation 2)
+Following the final read-only audit of Step 17.5, three specific blockers were remediated:
+1. Comparative Numeric Semantics:
+   Natural language comparative expressions (`make me 5 faster` -> `operation="add"`, `kind="relative"`; `make me 5 slower` -> `operation="subtract"`, `kind="relative"`) were previously intercepted by a greedy `make <number>` absolute regex fallback. Added dedicated comparative pattern detection before the fallback so comparative adjectives map cleanly to relative addition/subtraction, while absolute requests (`set my speed to 5`) preserve `operation="set"`.
+2. Deterministic Modifier IDs & Collision Prevention:
+   Attribute modifier IDs in Minecraft 1.21.11 must be valid namespaced identifiers (`minecraft_ai:{name}`). Static IDs (`minecraft_ai:speed_mod`) collide when multiple modifiers are applied to the same entity. Upgraded modifier ID synthesis to incorporate property, operation tag, and value (`minecraft_ai:{clean_prop}_{op_tag}_{val_str}{qualifier}`). This guarantees that `speed +5`, `speed +2`, `speed ×2`, and `speed ×3` generate distinct IDs and can coexist on an entity. Extended `ActionSpecification` with `modifier_id` to permit intentional repeated stacking.
+3. Single-Entity Target Constraints for `/attribute`:
+   Minecraft Java 1.21.11 `/attribute` command requires a single target entity. Running `attribute @a ...` or `attribute @e ...` fails Brigadier parser validation when multiple entities match. Upgraded `FunctionMechanismGenerator` to wrap multi-entity and player selectors (`@a`, `@p`, `@e[...]`) in `execute as {target} run attribute @s ...`. Direct `@s` commands remain unwrapped (`attribute @s ...`). Entity references (`zombie`) are resolved via Minecraft entity knowledge into valid selectors (`@e[type=zombie]`), while unresolvable entity names fail safely to unresolved status with `missing=["target"]`.
+
+## D035 — Deterministic Unique Modifier Identity for Identical Actions (Step 17.5 Final Remediation)
+To ensure that two independently intended identical actions (e.g. `speed ×2` + `speed ×2`, `speed +5` + `speed +5`, or compound request `make me 2 times faster and make me 2 times faster`) can coexist on an entity without colliding on identical modifier IDs:
+1. End-to-End Stable Identity Propagation:
+   The Planner already maintains stable action identity via `requirement_index` and `PlanStep.id` (`step_{requirement_index}`). Plumbed `step_id` from `MinecraftPlanner.plan_property_modification()` into `ImplementationMapper.map_modification(step_id=...)`, which populates `ActionSpecification.step_id` and `ActionSpecification.action_id`.
+2. Deterministic Disambiguated Modifier Synthesis:
+   In `FunctionMechanismGenerator._build_modifier_id()`, inspected `action.step_id` / `action.action_id` (and `extra_metadata`) before building the modifier ID. If present, the step/action identity is appended as a clean qualifier (`minecraft_ai:{clean_prop}_{op_tag}_{val_str}_{step_id}`).
+   - `speed ×2`, `step_0` -> `minecraft_ai:speed_mult_2_step_0`
+   - `speed ×2`, `step_1` -> `minecraft_ai:speed_mult_2_step_1`
+   - `speed +5`, `step_0` -> `minecraft_ai:speed_add_5_step_0`
+   - `speed +5`, `step_1` -> `minecraft_ai:speed_add_5_step_1`
+3. Determinism & Isolation:
+   Repeated execution of the same action with the same identity remains 100% deterministic without random UUIDs, timestamps, process IDs, or generator-side state counters.
+4. Caller-Supplied Modifier ID Preservation:
+   Explicitly supplied `modifier_id` on actions or `extra_metadata` takes precedence and is preserved verbatim without appending step identity qualifiers.

@@ -9,8 +9,13 @@
   - [x] Step 16.5: QA semantic analysis & runtime simulation for scoreboards.
   - [x] Step 16.6: Planner system prompt and instruction alignment.
   - [x] Step 16.7: Automated verification & regression testing.
-- [ ] Improve generic natural-language numeric interpretation, including multiplier expressions.
-- [ ] Improve generic clarification handling for underspecified properties.
+- [x] Step 17.1: Semantic property modification models (PropertyModification, SemanticNumericValue, SemanticValue).
+- [x] Step 17.2: Generic natural-language numeric interpretation (NumericSemanticInterpreter).
+- [x] Step 17.3: Planner semantic property-modification integration (plan_property_modification, action & mechanism specs).
+  - [x] Step 17.3 Audit Blocker Remediation: extra_metadata contract, qualitative operation=None, data-driven PropertyCapabilityRegistry, generic compound request planning.
+- [x] Step 17.4: Generic clarification redesign for underspecified properties and magnitudes (ai/clarification.py, test_step17_clarification.py).
+- [x] Step 17.5: Deterministic Minecraft implementation mapping (ImplementationMapper in ai/implementation_mapper.py, test_step17_mapper.py).
+  - [x] Step 17.5 Audit Remediation: Generic capability modeling in PropertyCapabilityRegistry, exact (property, operation, value.kind) selection, attribute mechanism mapping for speed multipliers/relatives, strict semantic preservation, structural failure for invalid generator inputs, comparative numeric interpretation, single-target /attribute execution context wrapping, and deterministic unique modifier identities for identical independently intended actions.
 - [ ] Keep AI context files synchronized after significant changes.
 
 ## Completed / established

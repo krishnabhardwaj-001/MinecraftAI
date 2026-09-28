@@ -165,6 +165,191 @@ class FunctionMechanismGenerator(BaseMechanismGenerator):
                 prefix = "unless" if inv else "if"
                 if obj:
                     return f"{prefix} score {holder} {obj} matches {matches}"
+    @staticmethod
+    def _format_modifier_val(val: Any) -> str:
+        try:
+            f = float(val)
+            if f.is_integer():
+                i = int(f)
+                return f"neg_{abs(i)}" if i < 0 else str(i)
+            s = str(abs(f)).replace(".", "_")
+            return f"neg_{s}" if f < 0 else s
+        except (ValueError, TypeError):
+            clean = re.sub(r"[^a-z0-9_.-]", "_", str(val).lower())
+            return clean or "val"
+
+    def _build_modifier_id(
+        self,
+        action: ActionSpecification,
+        mod: Any,
+        op_tag: str,
+        val: Any,
+    ) -> str:
+        # 1. Explicit modifier_id on action
+        act_mod_id = getattr(action, "modifier_id", None)
+        if act_mod_id:
+            custom = str(act_mod_id).strip().lower()
+            if ":" in custom:
+                return custom
+            clean = re.sub(r"[^a-z0-9_.-]", "_", custom)
+            return f"minecraft_ai:{clean}"
+
+        # 2. Explicit modifier_id in extra_metadata
+        extra_meta = getattr(mod, "extra_metadata", None) or {}
+        if isinstance(extra_meta, dict) and extra_meta.get("modifier_id"):
+            custom = str(extra_meta["modifier_id"]).strip().lower()
+            if ":" in custom:
+                return custom
+            clean = re.sub(r"[^a-z0-9_.-]", "_", custom)
+            return f"minecraft_ai:{clean}"
+
+        # 3. Deterministic semantic modifier ID
+        prop = mod.property or "property"
+        clean_prop = re.sub(r"[^a-z0-9_.-]", "_", prop.strip().lower().split(".")[-1])
+        val_str = self._format_modifier_val(val)
+
+        # Optional step or action qualifier if present
+        qualifier = ""
+        q = getattr(action, "step_id", None) or getattr(action, "action_id", None)
+        if not q and isinstance(extra_meta, dict):
+            q = extra_meta.get("step_id") or extra_meta.get("action_id")
+        if q:
+            clean_q = re.sub(r"[^a-z0-9_.-]", "_", str(q).strip().lower())
+            qualifier = f"_{clean_q}"
+
+        return f"minecraft_ai:{clean_prop}_{op_tag}_{val_str}{qualifier}"
+
+    def _generate_property_modification(self, action: ActionSpecification, target: str) -> Optional[str]:
+        mod = action.property_modification
+        if not mod or not mod.property:
+            return None
+        from ai.property_registry import DEFAULT_PROPERTY_REGISTRY
+        cap = DEFAULT_PROPERTY_REGISTRY.lookup(mod.property)
+        impl = action.implementation or (cap.primary_mechanism if cap else "attribute")
+
+        extra_meta = getattr(mod, "extra_metadata", None) or {}
+        if not isinstance(extra_meta, dict):
+            extra_meta = {}
+
+        identifier = None
+        if cap:
+            mech_cap = cap.get_mechanism(impl)
+            if mech_cap and mech_cap.minecraft_identifier:
+                identifier = mech_cap.minecraft_identifier
+            elif cap.minecraft_identifier:
+                identifier = cap.minecraft_identifier
+
+        # 1. Attribute mechanism
+        if impl == "attribute":
+            attr_name = self._normalize_id(identifier or f"minecraft:generic.{mod.property}")
+            if not mod.value or getattr(mod.value, "kind", None) == "qualitative":
+                return None
+
+            op = mod.operation or "set"
+            val_kind = getattr(mod.value, "kind", "absolute")
+
+            inner_cmd: Optional[str] = None
+
+            if op == "set" and val_kind == "absolute":
+                val = mod.value.value
+                inner_cmd = f"attribute @s {attr_name} base set {val}"
+
+            elif op in ("add", "subtract"):
+                val = float(mod.value.value)
+                if op == "subtract":
+                    val = -val
+                if val_kind == "percentage":
+                    val = val / 100.0
+                    mod_type = "add_multiplied_base"
+                    op_tag = "add_pct" if op == "add" else "sub_pct"
+                elif val_kind == "relative":
+                    mod_type = "add_value"
+                    op_tag = "add" if op == "add" else "sub"
+                else:
+                    return None
+                mod_id = self._build_modifier_id(action, mod, op_tag, mod.value.value)
+                inner_cmd = f"attribute @s {attr_name} modifier add {mod_id} {val} {mod_type}"
+
+            elif op == "multiply" and val_kind == "multiplier":
+                mult = float(mod.value.value)
+                # Minecraft add_multiplied_total multiplies total by (1 + amount).
+                # To multiply by M, modifier amount must be M - 1.0.
+                amount = mult - 1.0
+                mod_id = self._build_modifier_id(action, mod, "mult", mod.value.value)
+                inner_cmd = f"attribute @s {attr_name} modifier add {mod_id} {amount} add_multiplied_total"
+
+            elif op == "divide" and val_kind == "multiplier":
+                div = float(mod.value.value)
+                if div == 0:
+                    return None
+                amount = (1.0 / div) - 1.0
+                mod_id = self._build_modifier_id(action, mod, "div", mod.value.value)
+                inner_cmd = f"attribute @s {attr_name} modifier add {mod_id} {amount} add_multiplied_total"
+
+            if not inner_cmd:
+                return None
+
+            if target == "@s":
+                return inner_cmd
+            else:
+                return f"execute as {target} run {inner_cmd}"
+
+        # 2. Effect mechanism
+        elif impl == "effect":
+            eff_name = self._normalize_id(identifier or f"minecraft:{mod.property}")
+
+            # Effect CANNOT represent relative, multiplier, or qualitative semantics
+            val_kind = getattr(mod.value, "kind", None) if mod.value else None
+            if val_kind in ("multiplier", "relative", "qualitative"):
+                return None
+
+            if mod.operation not in ("set", None):
+                return None
+
+            # Effect CANNOT invent duration
+            raw_duration = action.duration if action.duration is not None else extra_meta.get("duration")
+            if raw_duration is None:
+                return None
+
+            if raw_duration == "infinite":
+                dur_str = "infinite"
+            else:
+                try:
+                    dur_str = str(int(raw_duration))
+                except (ValueError, TypeError):
+                    return None
+
+            # Absolute level handling
+            if mod.value and val_kind == "absolute":
+                try:
+                    val = float(mod.value.value)
+                    amplifier = max(0, int(val) - 1)
+                except (ValueError, TypeError):
+                    amplifier = 0
+            else:
+                amplifier = max(0, int(action.amplifier or 0))
+
+            hide_particles = "false" if action.show_particles else "true"
+            return f"effect give {target} {eff_name} {dur_str} {amplifier} {hide_particles}"
+
+        # 3. Scoreboard mechanism
+        elif impl == "scoreboard":
+            obj_name = mod.property or "property"
+            op = mod.operation or "set"
+            if not mod.value or getattr(mod.value, "kind", None) == "qualitative":
+                return None
+            try:
+                val = int(mod.value.value)
+            except (ValueError, TypeError):
+                return None
+
+            if op == "set":
+                return f"scoreboard players set {target} {obj_name} {val}"
+            elif op == "add":
+                return f"scoreboard players add {target} {obj_name} {val}"
+            elif op == "subtract":
+                return f"scoreboard players remove {target} {obj_name} {val}"
+
         return None
 
     def synthesize_action(self, action: ActionSpecification) -> Optional[str]:
@@ -199,8 +384,12 @@ class FunctionMechanismGenerator(BaseMechanismGenerator):
 
         cmd_body = ""
 
+        # Property modification actions (Step 17.5)
+        if a_type in ("modify_property", "property_modification"):
+            cmd_body = self._generate_property_modification(action, target) or ""
+
         # 1. Effect actions
-        if a_type in ("apply_effect", "effect", "give_effect"):
+        elif a_type in ("apply_effect", "effect", "give_effect"):
             eff_name = self._normalize_id(action.effect or "minecraft:speed")
             amplifier = max(0, int(action.amplifier or 0))
             hide_particles = "true" if not action.show_particles else "false"
@@ -267,7 +456,15 @@ class FunctionMechanismGenerator(BaseMechanismGenerator):
             escaped_msg = msg.replace('"', '\\"')
             cmd_body = f'tellraw {target} {{"text": "{escaped_msg}"}}'
 
-        # 6. Raw command escape hatch (audited)
+        # 6. Entity summoning
+        elif a_type in ("summon_entity", "summon"):
+            entity_id = self._normalize_id(action.entity or "minecraft:zombie")
+            if target in ("@a", "@p", "@s") or target.startswith("@"):
+                cmd_body = f"execute at {target} run summon {entity_id} ~ ~ ~"
+            else:
+                cmd_body = f"summon {entity_id} ~ ~ ~"
+
+        # 7. Raw command escape hatch (audited)
         elif a_type == "raw_command":
             raw = (action.raw_command or "").strip()
             if raw.startswith("/") and not raw.startswith("//"):

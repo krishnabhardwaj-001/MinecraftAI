@@ -1,11 +1,23 @@
 import json
+import re
 from typing import Any, Dict, List, Optional
 
 from pydantic import BaseModel, Field
 
 from ai.provider import AIProvider
 from ai.context import retrieve_minecraft_context
+from ai.semantic_models import PropertyModification
+from ai.numeric_interpreter import NumericSemanticInterpreter, extract_property_modifications
+from ai.property_registry import DEFAULT_PROPERTY_REGISTRY, PropertyCapabilityRegistry
+from ai.clarification import (
+    ClarificationRequirement,
+    DEFAULT_CLARIFICATION_ENGINE,
+    SemanticClarificationEngine,
+)
+from ai.implementation_mapper import ImplementationMapper
+from knowledge_retriever import MinecraftKnowledgeRetriever
 from generator.models import (
+    ActionSpecification,
     MechanismSpecification,
     validate_mechanism_specification,
 )
@@ -33,6 +45,12 @@ class ImplementationPlan(BaseModel):
     steps: List[PlanStep] = Field(default_factory=list)
     constraints: List[str] = Field(default_factory=list)
     missing_knowledge: List[str] = Field(default_factory=list)
+    clarifications: List[str] = Field(default_factory=list)
+    clarification_requirements: List[ClarificationRequirement] = Field(default_factory=list)
+    property_modification: Optional[PropertyModification] = Field(
+        default=None,
+        description="Structured semantic property modification"
+    )
 
 
 
@@ -43,12 +61,23 @@ class PlannerResult(BaseModel):
     implementation_plan: List[ImplementationPlan] = Field(default_factory=list)
     missing_knowledge: List[str] = Field(default_factory=list)
     clarifications: List[str] = Field(default_factory=list)
+    clarification_requirements: List[ClarificationRequirement] = Field(default_factory=list)
 
 
 class MinecraftPlanner:
-    def __init__(self, provider="ollama", version="1.21.11", ai_provider=None):
+    def __init__(
+        self,
+        provider="ollama",
+        version="1.21.11",
+        ai_provider=None,
+        property_registry=None,
+        clarification_engine=None,
+    ):
         self.version = version
         self.ai = ai_provider or AIProvider(provider=provider)
+        self.property_registry = property_registry or DEFAULT_PROPERTY_REGISTRY
+        self.clarification_engine = clarification_engine or DEFAULT_CLARIFICATION_ENGINE
+        self.implementation_mapper = ImplementationMapper(registry=self.property_registry)
 
     def _schema(self) -> Dict[str, Any]:
         return PlannerResult.model_json_schema()
@@ -153,6 +182,11 @@ RULES:
       * Comparison operands are missing (e.g. 'Compare the score.' -> ask which score/objective and against what).
       * Operation is ambiguous (e.g. 'Change score A using score B.' -> ask which operation: set, add, subtract, multiply, divide, modulo, min, max, swap).
       * Temporal behavior is unclear (e.g. 'Give me points when it rains.' -> ask whether once when rain starts or repeatedly while raining).
+31. Property Modification & Semantic Requests (Step 17.3):
+    - For property modification requests (e.g. modifying speed, attack damage, health, or entity attributes):
+      * Use mechanism type 'property_modification' with 'property_modification' carrying the structured semantic model, or populate 'actions' with action_type 'modify_property' and 'implementation' ('attribute', 'effect', 'scoreboard').
+      * Preserve the semantic representation (property, operation, value kind, value magnitude). Do NOT generate command syntax or calculate effect amplifiers (e.g. '10 times faster' stays value=10, NOT amplifier=9).
+      * If the target property is missing (e.g. 'make the zombie stronger') or value is missing/ambiguous, set status to 'needs_clarification' and populate 'clarifications'.
 
 STRUCTURED MECHANISM SPECIFICATIONS:
 Each entry in "mechanisms" should specify a "type" and its structured parameters:
@@ -238,6 +272,13 @@ Each entry in "mechanisms" should specify a "type" and its structured parameters
    - "display_name": optional display name string or text component (e.g. "Deaths")
    - "display_slot": optional display slot ("sidebar", "list", "below_name", "sidebar.team.<color>")
    - "actions": optional list of structured initial score actions to run during load (e.g. [{{"action_type": "set_score", "target": "#global", "objective": "points", "score_value": 0}}])
+
+10. Property Modification Mechanism:
+   - "type": "property_modification"
+   - "target": target entity or selector (e.g. "@a", "zombie")
+   - "property_modification": semantic property modification object
+   - "implementation": structural Minecraft category ("effect", "attribute", "scoreboard")
+   - "actions": optional list of structured actions with action_type "modify_property"
 
 OUTPUT:
 
@@ -578,7 +619,16 @@ Return only JSON matching the required schema.
                         mech_type = "continuous_action"
                     elif mech_type in ["scoreboard", "scoreboard_objective", "objective", "scoreboards"]:
                         mech_type = "scoreboard_objective"
+                    elif mech_type in ["property_modification", "modify_property"]:
+                        mech_type = "property_modification"
                     mech_dict["type"] = mech_type
+
+                    if mech_dict.get("property_modification"):
+                        pm = mech_dict["property_modification"]
+                        if isinstance(pm, PropertyModification):
+                            mech_dict["property_modification"] = pm.model_dump()
+                    if mech_dict.get("implementation"):
+                        mech_dict["implementation"] = str(mech_dict["implementation"]).strip().lower()
 
                     # Helper to normalize action dictionaries
                     def _norm_action(act: Any) -> Dict[str, Any]:
@@ -597,7 +647,16 @@ Return only JSON matching the required schema.
                                 a_type = "reset_score"
                             elif a_type in ["score_operation", "operationscore", "score_op", "operation"]:
                                 a_type = "operation_score"
+                            elif a_type in ["modify_property", "property_modification"]:
+                                a_type = "modify_property"
                             ad["action_type"] = a_type
+
+                            if ad.get("property_modification"):
+                                pm = ad["property_modification"]
+                                if isinstance(pm, PropertyModification):
+                                    ad["property_modification"] = pm.model_dump()
+                            if ad.get("implementation"):
+                                ad["implementation"] = str(ad["implementation"]).strip().lower()
 
                             if ad.get("item"):
                                 iv = str(ad["item"]).strip()
@@ -948,7 +1007,7 @@ Return only JSON matching the required schema.
             if not isinstance(plan_missing, list):
                 plan_missing = [str(plan_missing)]
 
-            normalized_plan.append({
+            plan_entry = {
                 "requirement_index": requirement_index,
                 "objective": str(objective),
                 "mechanisms": normalized_mechanisms,
@@ -957,21 +1016,310 @@ Return only JSON matching the required schema.
                 "missing_knowledge": [
                     str(x) for x in plan_missing
                 ]
-            })
+            }
+            if plan.get("property_modification"):
+                pm = plan["property_modification"]
+                if isinstance(pm, dict):
+                    plan_entry["property_modification"] = pm
+                elif isinstance(pm, PropertyModification):
+                    plan_entry["property_modification"] = pm.model_dump()
+            if plan.get("clarifications"):
+                plan_entry["clarifications"] = plan["clarifications"]
+            if plan.get("clarification_requirements"):
+                plan_entry["clarification_requirements"] = plan["clarification_requirements"]
+
+            normalized_plan.append(plan_entry)
 
         result["implementation_plan"] = normalized_plan
 
+        if "clarification_requirements" not in result:
+            result["clarification_requirements"] = []
+
         return result
+
+    def plan_property_modification(
+        self,
+        mod: PropertyModification,
+        requirement_index: int = 0,
+        default_target: Optional[str] = None,
+    ) -> ImplementationPlan:
+        """
+        Converts a PropertyModification semantic contract into a structured ImplementationPlan
+        preserving all semantic details without command generation or amplifier calculations.
+        Delegates clarification analysis and question generation to SemanticClarificationEngine.
+        """
+        extra_meta = getattr(mod, "extra_metadata", None) or {}
+        raw_target = (
+            (extra_meta.get("target") if isinstance(extra_meta, dict) else None)
+            or default_target
+            or "@a"
+        )
+        if raw_target in ("player", "me", "my"):
+            target = "@a"
+        else:
+            target = raw_target
+
+        explicit_step_id = (
+            extra_meta.get("step_id")
+            or extra_meta.get("action_id")
+            if isinstance(extra_meta, dict) else None
+        )
+        step_id = explicit_step_id or f"step_{requirement_index}"
+
+        # 1. Delegate clarification analysis to the clarification engine
+        clarification_req = self.clarification_engine.analyze_modification(
+            mod, registry=self.property_registry
+        )
+
+        if clarification_req is not None:
+            is_unknown = (
+                clarification_req.metadata.get("unknown", False)
+                or clarification_req.metadata.get("issue_type") == "unknown_property"
+            )
+            missing_know = [mod.property] if (is_unknown and mod.property) else []
+            return ImplementationPlan(
+                requirement_index=requirement_index,
+                objective=f"Modify {mod.property or 'property'} for {target} ({clarification_req.reason})",
+                mechanisms=[
+                    MechanismSpecification(
+                        type="property_modification",
+                        target=target,
+                        property_modification=mod,
+                        implementation=None,
+                        description=f"Unresolved semantic modification: {clarification_req.reason}",
+                    )
+                ],
+                property_modification=mod,
+                constraints=[],
+                missing_knowledge=missing_know,
+                clarifications=[clarification_req.question],
+                clarification_requirements=[clarification_req],
+            )
+
+        # 2. Delegate deterministic implementation mapping to ImplementationMapper
+        mapping = self.implementation_mapper.map_modification(
+            mod,
+            default_target=target,
+            registry=self.property_registry,
+            step_id=step_id,
+        )
+
+        if mapping.status != "ready":
+            return ImplementationPlan(
+                requirement_index=requirement_index,
+                objective=f"Modify {mod.property or 'property'} for {mapping.target} ({mapping.reason})",
+                mechanisms=[
+                    MechanismSpecification(
+                        type="property_modification",
+                        target=mapping.target,
+                        property_modification=mod,
+                        implementation=None,
+                        description=f"Unresolved semantic modification: {mapping.reason}",
+                    )
+                ],
+                property_modification=mod,
+                constraints=[],
+                missing_knowledge=mapping.missing_knowledge,
+                clarifications=[mapping.reason] if mapping.reason else [],
+                clarification_requirements=[],
+            )
+
+        is_qualitative = mod.value is not None and getattr(mod.value, "kind", None) == "qualitative"
+        obj_action = mod.operation if mod.operation else (f"qualitative ({mod.value.value})" if is_qualitative else "modify")
+        return ImplementationPlan(
+            requirement_index=requirement_index,
+            objective=f"Apply {obj_action} {mod.property} on {mapping.target}",
+            mechanisms=[mapping.mechanism_spec],
+            steps=[PlanStep(id=f"step_{requirement_index}", action=f"modify_{mod.property}")],
+            constraints=[],
+            missing_knowledge=[],
+            property_modification=mod,
+            clarifications=[],
+            clarification_requirements=[],
+        )
 
     def plan(
         self,
-        understanding: Dict[str, Any]
+        understanding: Dict[str, Any],
+        property_modifications: Optional[List[PropertyModification]] = None,
     ) -> Dict[str, Any]:
 
         if not isinstance(understanding, dict):
             raise ValueError(
                 "Understanding must be a dictionary."
             )
+
+        # Early exit if understanding already halted at clarification
+        if understanding.get("status") == "needs_clarification":
+            clar_text = ""
+            if isinstance(understanding.get("clarification"), dict):
+                clar_text = understanding["clarification"].get("question", "")
+            elif isinstance(understanding.get("clarification"), str):
+                clar_text = understanding["clarification"]
+            clars = understanding.get("clarifications") or ([clar_text] if clar_text else ["Clarification requested."])
+            if isinstance(clars, str):
+                clars = [clars]
+            return {
+                "status": "needs_clarification",
+                "minecraft_version": self.version,
+                "summary": understanding.get("understood_request", ""),
+                "implementation_plan": [],
+                "missing_knowledge": [],
+                "clarifications": [str(c) for c in clars],
+            }
+
+        # Step 17.3: Check for semantic property modifications
+        mods: List[PropertyModification] = []
+        if property_modifications:
+            mods = list(property_modifications)
+        elif "property_modifications" in understanding and understanding["property_modifications"]:
+            for item in understanding["property_modifications"]:
+                if isinstance(item, PropertyModification):
+                    mods.append(item)
+                elif isinstance(item, dict):
+                    mods.append(PropertyModification(**item))
+        else:
+            # Check requirements
+            for req in understanding.get("requirements", []):
+                if isinstance(req, dict) and "property_modification" in req and req["property_modification"]:
+                    pm = req["property_modification"]
+                    if isinstance(pm, PropertyModification):
+                        mods.append(pm)
+                    elif isinstance(pm, dict):
+                        mods.append(PropertyModification(**pm))
+
+            # If still not found, check if understood_request contains property modifications
+            if not mods:
+                req_text = understanding.get("understood_request", "")
+                if req_text:
+                    try:
+                        extracted = extract_property_modifications(req_text)
+                        if extracted:
+                            mods.extend(extracted)
+                    except Exception:
+                        pass
+
+        if mods:
+            req_text = understanding.get("understood_request", "")
+            other_requirements: List[str] = []
+            if req_text:
+                try:
+                    compound_res = NumericSemanticInterpreter().interpret_compound(req_text)
+                    other_requirements = compound_res.get("other_requirements", [])
+                except Exception:
+                    pass
+
+            retriever = MinecraftKnowledgeRetriever(version=self.version)
+            plans: List[ImplementationPlan] = []
+            clarifications: List[str] = []
+            structured_clarifications: List[ClarificationRequirement] = []
+            status = "ready"
+
+            for idx, mod in enumerate(mods):
+                ip = self.plan_property_modification(mod, requirement_index=idx)
+                plans.append(ip)
+
+                if ip.clarification_requirements or ip.clarifications:
+                    status = "needs_clarification"
+                    for cr in ip.clarification_requirements:
+                        if cr not in structured_clarifications:
+                            structured_clarifications.append(cr)
+                        if cr.question not in clarifications:
+                            clarifications.append(cr.question)
+                    for c in ip.clarifications:
+                        if c not in clarifications:
+                            clarifications.append(c)
+
+            # Handle non-property requirements from compound requests generically via Minecraft knowledge
+            for other_idx, other_req in enumerate(other_requirements, start=len(plans)):
+                clean_req = other_req.strip().lower()
+                other_actions: List[ActionSpecification] = []
+                missing_knowledge_items: List[str] = []
+
+                # Query generic Minecraft knowledge for relevant items, entities, commands
+                retrieval = retriever.search(clean_req)
+                items = retrieval.get("items", [])
+                entities = retrieval.get("entities", [])
+
+                # Determine target if mentioned
+                req_target = "@a"
+                if "me" in clean_req or "player" in clean_req or "@a" in clean_req:
+                    req_target = "@a"
+
+                # 1. Check for summon / spawn entity intent
+                if re.search(r"\b(?:summon|spawn|create)\b", clean_req):
+                    if entities:
+                        top_entity = entities[0]["id"]
+                        other_actions.append(
+                            ActionSpecification(
+                                action_type="summon_entity",
+                                target=req_target,
+                                entity=top_entity,
+                            )
+                        )
+                    else:
+                        missing_knowledge_items.append(f"entity for '{other_req}'")
+
+                # 2. Check for give / grant item intent (or items retrieved)
+                elif re.search(r"\b(?:give|get|grant|receive|drop|take|holding)\b", clean_req) or items:
+                    if items:
+                        top_item = items[0]["id"]
+                        count = 1
+                        m_count = re.search(r"\b(\d+)\b", clean_req)
+                        if m_count:
+                            try:
+                                count = max(1, int(m_count.group(1)))
+                            except (ValueError, TypeError):
+                                count = 1
+                        other_actions.append(
+                            ActionSpecification(
+                                action_type="give_item",
+                                target=req_target,
+                                item=top_item,
+                                count=count,
+                            )
+                        )
+                    else:
+                        missing_knowledge_items.append(f"item for '{other_req}'")
+
+                # 3. Fallback: if entities matched
+                elif entities:
+                    other_actions.append(
+                        ActionSpecification(
+                            action_type="summon_entity",
+                            target=req_target,
+                            entity=entities[0]["id"],
+                        )
+                    )
+
+                mech = MechanismSpecification(
+                    type="function",
+                    path=f"action_{other_idx}",
+                    actions=other_actions,
+                    description=f"Requirement: {other_req}"
+                ) if other_actions else None
+
+                plans.append(
+                    ImplementationPlan(
+                        requirement_index=other_idx,
+                        objective=other_req,
+                        mechanisms=[mech] if mech else [],
+                        steps=[PlanStep(id=f"step_{other_idx}", action=other_req)],
+                        missing_knowledge=missing_knowledge_items,
+                    )
+                )
+
+            result = {
+                "status": status,
+                "minecraft_version": self.version,
+                "summary": understanding.get("understood_request", "Property modification plan"),
+                "implementation_plan": [p.model_dump() for p in plans],
+                "missing_knowledge": [],
+                "clarifications": clarifications,
+                "clarification_requirements": [cr.model_dump() for cr in structured_clarifications],
+            }
+            validated = PlannerResult.model_validate(result)
+            return validated.model_dump()
 
         context = retrieve_minecraft_context(
             understanding,
@@ -1012,16 +1360,21 @@ def create_plan(
     understanding: Dict[str, Any],
     provider="ollama",
     version="1.21.11",
-    ai_provider=None
+    ai_provider=None,
+    property_modifications=None,
+    property_registry=None,
+    clarification_engine=None,
 ) -> Dict[str, Any]:
 
     planner = MinecraftPlanner(
         provider=provider,
         version=version,
-        ai_provider=ai_provider
+        ai_provider=ai_provider,
+        property_registry=property_registry,
+        clarification_engine=clarification_engine,
     )
 
-    return planner.plan(understanding)
+    return planner.plan(understanding, property_modifications=property_modifications)
 
 
 def validate_plan_mechanisms(plan: Dict[str, Any]) -> None:
