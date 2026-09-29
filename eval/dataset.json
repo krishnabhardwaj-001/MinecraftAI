@@ -1,0 +1,512 @@
+[
+  {
+    "id": "case_01_loot_creeper_diamond",
+    "category": "mob_loot",
+    "request": "Make every creeper drop diamonds.",
+    "description": "Custom drop on creeper entity death",
+    "expected_mechanism": "loot_table",
+    "expected_target": "creeper",
+    "metadata": {"item": "minecraft:diamond"}
+  },
+  {
+    "id": "case_02_loot_skeleton_iron",
+    "category": "mob_loot",
+    "request": "Make skeletons drop iron ingots.",
+    "description": "Custom drop on skeleton entity death",
+    "expected_mechanism": "loot_table",
+    "expected_target": "skeleton",
+    "metadata": {"item": "minecraft:iron_ingot"}
+  },
+  {
+    "id": "case_03_loot_zombie_gold",
+    "category": "mob_loot",
+    "request": "Make zombies drop golden apples.",
+    "description": "Custom drop on zombie entity death",
+    "expected_mechanism": "loot_table",
+    "expected_target": "zombie",
+    "metadata": {"item": "minecraft:golden_apple"}
+  },
+  {
+    "id": "case_04_loot_spider_emerald",
+    "category": "mob_loot",
+    "request": "Make spiders drop emeralds.",
+    "description": "Custom drop on spider entity death",
+    "expected_mechanism": "loot_table",
+    "expected_target": "spider",
+    "metadata": {"item": "minecraft:emerald"}
+  },
+  {
+    "id": "case_05_func_regeneration_30s",
+    "category": "functions",
+    "request": "Give all players regeneration effect for 30 seconds.",
+    "description": "Timed status effect function command",
+    "expected_mechanism": "function",
+    "expected_target": "@a",
+    "metadata": {"effect": "minecraft:regeneration", "duration": 30}
+  },
+  {
+    "id": "case_06_func_night_vision_60s",
+    "category": "functions",
+    "request": "Give player night vision for 60 seconds.",
+    "description": "Player night vision function command",
+    "expected_mechanism": "function",
+    "expected_target": "@p",
+    "metadata": {"effect": "minecraft:night_vision", "duration": 60}
+  },
+  {
+    "id": "case_07_func_clear_effects",
+    "category": "functions",
+    "request": "Clear all effects from all players.",
+    "description": "Effect clearing function command",
+    "expected_mechanism": "function",
+    "expected_target": "@a",
+    "metadata": {"action": "clear_effect"}
+  },
+  {
+    "id": "case_08_tag_tick_loop",
+    "category": "function_tags",
+    "request": "Run custom function on tick.",
+    "description": "Registration of function to #minecraft:tick game loop tag",
+    "expected_mechanism": "function_tag",
+    "metadata": {"tag": "tick", "canonical_path": "data/minecraft/tags/function/tick.json"}
+  },
+  {
+    "id": "case_09_tag_load_boot",
+    "category": "function_tags",
+    "request": "Execute initialization function on load.",
+    "description": "Registration of function to #minecraft:load lifecycle tag",
+    "expected_mechanism": "function_tag",
+    "metadata": {"tag": "load", "canonical_path": "data/minecraft/tags/function/load.json"}
+  },
+  {
+    "id": "case_10_tag_custom_utility",
+    "category": "function_tags",
+    "request": "Add custom function to custom utility tag.",
+    "description": "Custom namespaced function tag definition",
+    "expected_mechanism": "function_tag",
+    "metadata": {"tag": "custom"}
+  },
+  {
+    "id": "case_11_pred_weather_rain",
+    "category": "predicates",
+    "request": "Add a predicate that checks if it is raining.",
+    "description": "Environmental weather check condition predicate",
+    "expected_mechanism": "predicate",
+    "metadata": {"condition": "minecraft:weather_check", "param": "raining"}
+  },
+  {
+    "id": "case_12_pred_time_night",
+    "category": "predicates",
+    "request": "Check if the time of day is night.",
+    "description": "Time of day condition predicate",
+    "expected_mechanism": "predicate",
+    "metadata": {"condition": "minecraft:time_check"}
+  },
+  {
+    "id": "case_13_pred_entity_sneaking",
+    "category": "predicates",
+    "request": "Predicate checking if the entity is sneaking.",
+    "description": "Entity property condition predicate",
+    "expected_mechanism": "predicate",
+    "metadata": {"condition": "minecraft:entity_properties"}
+  },
+  {
+    "id": "case_14_adv_kill_zombie",
+    "category": "advancements",
+    "request": "Add an advancement for killing a zombie.",
+    "description": "Entity kill trigger advancement",
+    "expected_mechanism": "advancement",
+    "metadata": {"trigger": "minecraft:player_killed_entity", "entity": "minecraft:zombie"}
+  },
+  {
+    "id": "case_15_adv_obtain_diamond",
+    "category": "advancements",
+    "request": "Grant an advancement when a player acquires a diamond.",
+    "description": "Inventory acquisition advancement",
+    "expected_mechanism": "advancement",
+    "metadata": {"trigger": "minecraft:inventory_changed", "item": "minecraft:diamond"}
+  },
+  {
+    "id": "case_16_adv_craft_netherite",
+    "category": "advancements",
+    "request": "Custom advancement for acquiring netherite.",
+    "description": "Item acquisition milestone advancement",
+    "expected_mechanism": "advancement",
+    "metadata": {"trigger": "minecraft:inventory_changed"}
+  },
+  {
+    "id": "case_17_recipe_shaped_sword",
+    "category": "recipes",
+    "request": "Craft a diamond sword from dirt and a stick.",
+    "description": "Shaped crafting recipe with 1.21+ result structure",
+    "expected_mechanism": "recipe",
+    "metadata": {"recipe_type": "minecraft:crafting_shaped", "result_item": "minecraft:diamond_sword"}
+  },
+  {
+    "id": "case_18_recipe_shapeless_nuggets",
+    "category": "recipes",
+    "request": "Shapeless recipe crafting 9 iron nuggets into 1 iron ingot.",
+    "description": "Shapeless crafting recipe",
+    "expected_mechanism": "recipe",
+    "metadata": {"recipe_type": "minecraft:crafting_shapeless", "result_item": "minecraft:iron_ingot"}
+  },
+  {
+    "id": "case_19_recipe_smelting_iron",
+    "category": "recipes",
+    "request": "Smelt raw iron into iron ingot in furnace.",
+    "description": "Smelting recipe",
+    "expected_mechanism": "recipe",
+    "metadata": {"recipe_type": "minecraft:smelting", "result_item": "minecraft:iron_ingot"}
+  },
+  {
+    "id": "case_20_state_rain_diamond",
+    "category": "state_machines",
+    "request": "When it is raining give all players a diamond only once when the rain starts.",
+    "description": "Global persistent state machine for rising-edge rain event",
+    "expected_mechanism": "state_machine",
+    "metadata": {"state_scope": "global", "objective": "rain_state", "item": "minecraft:diamond"}
+  },
+  {
+    "id": "case_21_state_night_vision",
+    "category": "state_machines",
+    "request": "When it becomes night give every player night vision effect only once when night starts.",
+    "description": "Global state machine for rising-edge night transition",
+    "expected_mechanism": "state_machine",
+    "metadata": {"state_scope": "global", "objective": "night_state", "effect": "minecraft:night_vision"}
+  },
+  {
+    "id": "case_22_state_thunder_resistance",
+    "category": "state_machines",
+    "request": "When it is thundering give all players resistance effect only once when the thunder starts.",
+    "description": "Global state machine for rising-edge thunder transition",
+    "expected_mechanism": "state_machine",
+    "metadata": {"state_scope": "global", "objective": "thunder_state", "effect": "minecraft:resistance"}
+  },
+  {
+    "id": "case_23_score_death_counter",
+    "category": "scoreboard_operations",
+    "request": "Create a death counter scoreboard objective displayed on the sidebar.",
+    "description": "Scoreboard objective declaration with display slot",
+    "expected_mechanism": "scoreboard_objective",
+    "metadata": {"criteria": "deathCount", "display_slot": "sidebar"}
+  },
+  {
+    "id": "case_24_score_add_points",
+    "category": "scoreboard_operations",
+    "request": "Add 10 points to player score.",
+    "description": "Structured scoreboard add action with non-negative bounds",
+    "expected_mechanism": "function",
+    "metadata": {"action": "add_score", "score_value": 10}
+  },
+  {
+    "id": "case_25_score_multiply_points",
+    "category": "scoreboard_operations",
+    "request": "Multiply player score by 2.",
+    "description": "Scoreboard operation arithmetic (*=)",
+    "expected_mechanism": "function",
+    "metadata": {"action": "operation_score", "operation": "*="}
+  },
+  {
+    "id": "case_26_score_reset_on_death",
+    "category": "scoreboard_operations",
+    "request": "Reset player score on death.",
+    "description": "Scoreboard reset action",
+    "expected_mechanism": "function",
+    "metadata": {"action": "reset_score"}
+  },
+  {
+    "id": "case_27_prop_mult_speed_10x",
+    "category": "property_multipliers",
+    "request": "Make me 10 times faster.",
+    "description": "Speed multiplier 10x compiled to /attribute add_multiplied_total 9.0",
+    "expected_mechanism": "attribute",
+    "expected_property": "speed",
+    "expected_operation": "multiply",
+    "expected_value_kind": "multiplier",
+    "expected_value": 10.0,
+    "expected_target": "player",
+    "metadata": {"compiled_amount": 9.0, "modifier_operation": "add_multiplied_total"}
+  },
+  {
+    "id": "case_28_prop_mult_speed_2x",
+    "category": "property_multipliers",
+    "request": "Make me 2x faster.",
+    "description": "Speed multiplier 2x compiled to /attribute add_multiplied_total 1.0",
+    "expected_mechanism": "attribute",
+    "expected_property": "speed",
+    "expected_operation": "multiply",
+    "expected_value_kind": "multiplier",
+    "expected_value": 2.0,
+    "expected_target": "player",
+    "metadata": {"compiled_amount": 1.0, "modifier_operation": "add_multiplied_total"}
+  },
+  {
+    "id": "case_29_prop_mult_damage_3x",
+    "category": "property_multipliers",
+    "request": "Triple my attack damage.",
+    "description": "Attack damage multiplier 3x compiled to /attribute",
+    "expected_mechanism": "attribute",
+    "expected_property": "attack_damage",
+    "expected_operation": "multiply",
+    "expected_value_kind": "multiplier",
+    "expected_value": 3.0,
+    "expected_target": "player"
+  },
+  {
+    "id": "case_30_prop_mult_zombie_speed_3x",
+    "category": "property_multipliers",
+    "request": "Make zombie speed 3 times faster.",
+    "description": "Targeted mob speed multiplier 3x with execution context wrapping",
+    "expected_mechanism": "attribute",
+    "expected_property": "speed",
+    "expected_operation": "multiply",
+    "expected_value_kind": "multiplier",
+    "expected_value": 3.0,
+    "expected_target": "zombie"
+  },
+  {
+    "id": "case_31_prop_rel_speed_add5",
+    "category": "property_relative",
+    "request": "Make me 5 faster.",
+    "description": "Comparative relative speed addition compiled to /attribute add_value 5.0",
+    "expected_mechanism": "attribute",
+    "expected_property": "speed",
+    "expected_operation": "add",
+    "expected_value_kind": "relative",
+    "expected_value": 5.0,
+    "expected_target": "player",
+    "metadata": {"compiled_amount": 5.0, "modifier_operation": "add_value"}
+  },
+  {
+    "id": "case_32_prop_rel_damage_add4",
+    "category": "property_relative",
+    "request": "Increase attack damage by 4.",
+    "description": "Relative attack damage increment",
+    "expected_mechanism": "attribute",
+    "expected_property": "attack_damage",
+    "expected_operation": "add",
+    "expected_value_kind": "relative",
+    "expected_value": 4.0
+  },
+  {
+    "id": "case_33_prop_rel_health_sub2",
+    "category": "property_relative",
+    "request": "Decrease health by 2.",
+    "description": "Relative health decrement",
+    "expected_mechanism": "attribute",
+    "expected_property": "health",
+    "expected_operation": "subtract",
+    "expected_value_kind": "relative",
+    "expected_value": 2.0
+  },
+  {
+    "id": "case_34_prop_pct_speed_25",
+    "category": "property_percentage",
+    "request": "Increase speed by 25%.",
+    "description": "Speed percentage increment compiled to /attribute add_multiplied_base 0.25",
+    "expected_mechanism": "attribute",
+    "expected_property": "speed",
+    "expected_operation": "add",
+    "expected_value_kind": "percentage",
+    "expected_value": 25.0,
+    "metadata": {"compiled_amount": 0.25, "modifier_operation": "add_multiplied_base"}
+  },
+  {
+    "id": "case_35_prop_pct_damage_50",
+    "category": "property_percentage",
+    "request": "Increase attack damage by 50 percent.",
+    "description": "Attack damage percentage increment",
+    "expected_mechanism": "attribute",
+    "expected_property": "attack_damage",
+    "expected_operation": "add",
+    "expected_value_kind": "percentage",
+    "expected_value": 50.0
+  },
+  {
+    "id": "case_36_prop_pct_speed_sub10",
+    "category": "property_percentage",
+    "request": "Decrease my speed by 10%.",
+    "description": "Movement speed percentage decrement",
+    "expected_mechanism": "attribute",
+    "expected_property": "speed",
+    "expected_operation": "subtract",
+    "expected_value_kind": "percentage",
+    "expected_value": 10.0,
+    "expected_target": "player"
+  },
+  {
+    "id": "case_37_prop_abs_speed_02",
+    "category": "property_absolute",
+    "request": "Set my speed to 0.2.",
+    "description": "Absolute speed assignment compiled to /attribute base set 0.2",
+    "expected_mechanism": "attribute",
+    "expected_property": "speed",
+    "expected_operation": "set",
+    "expected_value_kind": "absolute",
+    "expected_value": 0.2,
+    "expected_target": "player",
+    "metadata": {"subcommand": "base set"}
+  },
+  {
+    "id": "case_38_prop_abs_scale_20",
+    "category": "property_absolute",
+    "request": "Set zombie scale to 2.0.",
+    "description": "Entity scale property set to 2.0",
+    "expected_mechanism": "attribute",
+    "expected_property": "scale",
+    "expected_operation": "set",
+    "expected_value_kind": "absolute",
+    "expected_value": 2.0,
+    "expected_target": "zombie"
+  },
+  {
+    "id": "case_39_prop_abs_health_40",
+    "category": "property_absolute",
+    "request": "Set player max health to 40.",
+    "description": "Max health absolute assignment",
+    "expected_mechanism": "attribute",
+    "expected_property": "health",
+    "expected_operation": "set",
+    "expected_value_kind": "absolute",
+    "expected_value": 40.0,
+    "expected_target": "player"
+  },
+  {
+    "id": "case_40_target_skeleton_speed_3x",
+    "category": "entity_specific_targets",
+    "request": "Make skeletons 3 times faster.",
+    "description": "Entity specific selector resolution with multiplier",
+    "expected_mechanism": "attribute",
+    "expected_property": "speed",
+    "expected_operation": "multiply",
+    "expected_value_kind": "multiplier",
+    "expected_value": 3.0,
+    "expected_target": "skeletons"
+  },
+  {
+    "id": "case_41_target_creeper_speed_pct",
+    "category": "entity_specific_targets",
+    "request": "Increase creeper movement speed by 50%.",
+    "description": "Entity specific selector resolution with percentage",
+    "expected_mechanism": "attribute",
+    "expected_property": "speed",
+    "expected_operation": "add",
+    "expected_value_kind": "percentage",
+    "expected_value": 50.0,
+    "expected_target": "creeper"
+  },
+  {
+    "id": "case_42_target_spider_damage_8",
+    "category": "entity_specific_targets",
+    "request": "Set spider attack damage to 8.",
+    "description": "Entity specific selector resolution with absolute value",
+    "expected_mechanism": "attribute",
+    "expected_property": "attack_damage",
+    "expected_operation": "set",
+    "expected_value_kind": "absolute",
+    "expected_value": 8.0,
+    "expected_target": "spider"
+  },
+  {
+    "id": "case_43_compound_speed_and_sword",
+    "category": "compound_requests",
+    "request": "Make me 10 times faster and give me a diamond sword.",
+    "description": "Compound multi-intent request (property modification + item give action)",
+    "expected_mechanism": "attribute",
+    "expected_property": "speed",
+    "is_compound": true,
+    "metadata": {"subparts": ["property_modification", "give_item"]}
+  },
+  {
+    "id": "case_44_compound_skeleton_and_creeper",
+    "category": "compound_requests",
+    "request": "Make skeletons drop iron ingots and make creepers drop diamonds.",
+    "description": "Compound multi-entity loot table modifications",
+    "expected_mechanism": "loot_table",
+    "is_compound": true,
+    "metadata": {"subparts": ["loot_skeleton", "loot_creeper"]}
+  },
+  {
+    "id": "case_45_compound_speed_and_damage",
+    "category": "compound_requests",
+    "request": "Make me 2 times faster and increase attack damage by 5.",
+    "description": "Compound multi-property modifications",
+    "expected_mechanism": "attribute",
+    "is_compound": true,
+    "metadata": {"subparts": ["speed_2x", "damage_add5"]}
+  },
+  {
+    "id": "case_46_clarify_make_me_faster",
+    "category": "clarification_required",
+    "request": "Make me faster.",
+    "description": "Qualitative request without magnitude or duration halts at clarification",
+    "expected_property": "speed",
+    "expected_value_kind": "qualitative",
+    "requires_clarification": true,
+    "expected_clarification_parameter": "magnitude",
+    "metadata": {"is_qualitative": true}
+  },
+  {
+    "id": "case_47_clarify_zombie_stronger",
+    "category": "clarification_required",
+    "request": "Make the zombie stronger.",
+    "description": "Underspecified property ambiguity halts at clarification",
+    "requires_clarification": true,
+    "expected_clarification_parameter": "property",
+    "metadata": {"missing": ["property"]}
+  },
+  {
+    "id": "case_48_clarify_increase_speed",
+    "category": "clarification_required",
+    "request": "Increase speed.",
+    "description": "Missing magnitude value halts at clarification",
+    "expected_property": "speed",
+    "requires_clarification": true,
+    "expected_clarification_parameter": "value",
+    "metadata": {"missing": ["value"]}
+  },
+  {
+    "id": "case_49_clarify_change_speed_10",
+    "category": "clarification_required",
+    "request": "Change speed by 10.",
+    "description": "Ambiguous arithmetic operation halts at clarification",
+    "expected_property": "speed",
+    "requires_clarification": true,
+    "expected_clarification_parameter": "operation",
+    "metadata": {"missing": ["operation"]}
+  },
+  {
+    "id": "case_50_clarify_more_powerful",
+    "category": "clarification_required",
+    "request": "Make me more powerful.",
+    "description": "Broad qualitative request halts at clarification",
+    "requires_clarification": true,
+    "expected_clarification_parameter": "property",
+    "metadata": {"missing": ["property"]}
+  },
+  {
+    "id": "case_51_invalid_rocket_moon",
+    "category": "invalid_unsupported",
+    "request": "Fly to the moon with a rocket ship.",
+    "description": "Unsupported Minecraft capability safely flagged",
+    "is_supported": false,
+    "expect_validation_success": false
+  },
+  {
+    "id": "case_52_invalid_hazard_negative_health",
+    "category": "invalid_unsupported",
+    "request": "Set player health to -5.",
+    "description": "Hazardous negative attribute detected by QA semantic analysis",
+    "is_supported": false,
+    "expect_validation_success": false,
+    "metadata": {"expected_hazard": "FIND-ATTR-HAZARD-HEALTH"}
+  },
+  {
+    "id": "case_53_invalid_gibberish",
+    "category": "invalid_unsupported",
+    "request": "asdfghjkl qwertyuiop zxcvbnm.",
+    "description": "Nonsensical input unrecognized by semantic understanding",
+    "is_supported": false,
+    "expect_validation_success": false
+  }
+]

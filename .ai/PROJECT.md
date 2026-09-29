@@ -49,9 +49,15 @@ The deterministic generator and validator support 7 first-class mechanism domain
 - Standard `pyproject.toml` specification utilizing `setuptools>=61.0`.
 - Python runtime requirement `>=3.10` (supporting 3.10, 3.11, 3.12, 3.13).
 - Explicit minimal runtime dependencies (`pydantic>=2.0.0`, `fastapi>=0.100.0`, `uvicorn>=0.20.0`, `jinja2>=3.1.0`, `ollama>=0.2.0`, `openai>=1.0.0`, `python-dotenv>=1.0.0`, `httpx>=0.24.0`).
-- Console script entry points: `minecraft-ai` (`run_pipeline:main`) and `minecraft-ai-web` (`run_web:main`).
+- Console script entry points: `minecraft-ai` (`run_pipeline:main`), `minecraft-ai-web` (`run_web:main`), and `minecraft-ai-eval` (`eval.benchmark:main`).
 - Windows launchers: `launch_cli.bat` and `launch_web.bat` with directory anchoring (`cd /d "%~dp0"`), python environment verification, and clean parameter forwarding.
 - Editable installation supported via `pip install -e .` without altering repository layout.
+
+## CI/CD & Automated Evaluation Benchmark (Step 22B)
+- GitHub Actions CI matrix workflow (`.github/workflows/ci.yml`) validating Python 3.10, 3.11, 3.12, and 3.13 on push/PR with `pip install -e ".[dev]"`, `git diff --check`, full unit test suite (425 tests), automated evaluation benchmark, and environment-aware headless Minecraft testing.
+- Structured evaluation dataset (`eval/dataset.json`) containing 53 diverse cases covering 16 capability domains (`mob_loot`, `functions`, `function_tags`, `predicates`, `advancements`, `recipes`, `state_machines`, `scoreboard_operations`, `property_multipliers`, `property_relative`, `property_percentage`, `property_absolute`, `entity_specific_targets`, `compound_requests`, `clarification_required`, `invalid_unsupported`).
+- Deterministic benchmark runner (`eval/benchmark.py`) evaluating semantic interpretation, clarification engine, mechanism mapping, static validation, and QA simulation.
+- Rigorous separation between offline deterministic regression benchmarks and external model-dependent evaluations; no claim of arbitrary natural-language perfection.
 
 ## Important design requirement
 The system supports arbitrary user requests. It does not implement individual examples with hardcoded `if/else` mappings or special files such as `zombie.json` or `chicken.json`. Examples are regression tests, not special-case code.

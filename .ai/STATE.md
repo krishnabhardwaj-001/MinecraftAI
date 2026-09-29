@@ -91,15 +91,23 @@
   5. Packaging & Launcher Verification (`test_step22a_packaging.py`): Added 7 automated tests verifying package imports, `pyproject.toml` schema, CLI entry point, Web entry point, Windows batch launcher contents and execution, and console script installation.
   6. Regression Verification: Full regression test suite passing 415/415 tests. Step 20 headless Minecraft 1.21.11 verification passing 17/17 tests. `git diff --check` clean.
 
+- CI/CD & Automated Evaluation Benchmark (Step 22B) operational:
+  1. GitHub Actions CI/CD Workflow (`.github/workflows/ci.yml`): Runs on push and PR across supported Python matrix (`3.10`, `3.11`, `3.12`, `3.13`). Installs dependencies via `pip install -e ".[dev]"`, runs `git diff --check` whitespace validation, runs the full unit test suite (425 tests), runs the evaluation benchmark (`python -m eval.benchmark`), and performs environment-aware headless Minecraft testing (reporting unavailable environment cleanly in constrained CI without failing or faking verification, while maintaining 17/17 PASS in environments with Java 21 LTS).
+  2. Environment-Aware Headless Testing (`test_step20_golden.py`): Verified local Java 21+ availability on PATH; skips cleanly if unavailable while preserving live Minecraft 1.21.11 execution (17/17 PASS locally).
+  3. Structured Evaluation Dataset (`eval/dataset.json`, `eval/models.py`): Defined 53 benchmark cases covering 16 capability domains (`mob_loot`, `functions`, `function_tags`, `predicates`, `advancements`, `recipes`, `state_machines`, `scoreboard_operations`, `property_multipliers`, `property_relative`, `property_percentage`, `property_absolute`, `entity_specific_targets`, `compound_requests`, `clarification_required`, `invalid_unsupported`). Validated via Pydantic models `BenchmarkCase`, `CaseEvaluationResult`, and `BenchmarkSummary`.
+  4. Deterministic Benchmark Runner (`eval/benchmark.py`): Implemented deterministic evaluation of semantic interpretation, clarification engine, mechanism mapping, static validation, and QA simulation. Registered console entry point `minecraft-ai-eval` in `pyproject.toml`. Slices by limit, filters by category, outputs clean summary and breakdown tables with 100% pass rate (53/53 cases passing).
+  5. Benchmark Test Suite (`test_step22b_benchmark.py`): Added 10 automated tests verifying dataset schema, required fields, category coverage (all 16 categories with >=3 cases), deterministic execution, clarification behavior, semantic IR structure, mechanism selection, validator/QA outcomes, absence of hardcoded shortcuts, and stable summary reporting.
+  6. Full Regression Verification: 425/425 unit tests passing cleanly across the repository. Step 20 headless real-Minecraft 1.21.11 verification passing 17/17 tests. `git diff --check` clean.
+
 ## Known issues / gaps
-- None. Full pipeline passes all static, semantic, QA, intent, headless Minecraft 1.21.11 runtime, and packaging verification.
+- None. Full pipeline passes all static, semantic, QA, intent, headless Minecraft 1.21.11 runtime, packaging, CI/CD, and evaluation benchmark tests.
 
 ## Current priority
-Step 22A complete. Packaging, Windows launchers, quickstart documentation, and installation verification finalized and verified. Full test suite passing (415/415), headless Minecraft 1.21.11 verified (17/17), `git diff --check` clean.
+Step 22B complete. CI/CD workflow, evaluation benchmark system (53 cases, 16 categories), deterministic runner (`minecraft-ai-eval`), and benchmark test suite (10 tests) implemented and verified. Full test suite passing (425/425), headless Minecraft 1.21.11 verified (17/17), benchmark passing (53/53), `git diff --check` clean.
 
 ## Next logical work
-1. Deliver Step 22A Final Report to user.
-2. Await user instruction before proceeding to Step 22B.
+1. Deliver Step 22B Final Report to user.
+2. Await user instruction before proceeding to Step 23.
 3. Keep shared AI context synchronized for Antigravity and ChatGPT/Codex.
 
 ## Agent handoff rule

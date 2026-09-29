@@ -421,3 +421,18 @@ To ensure reliable installation, packaging standard compliance, and user-friendl
    Verified editable installation with `pip install -e .`. Added `*.egg-info/`, `build/`, and `dist/` to `.gitignore` to prevent generated packaging artifacts from polluting version control.
 6. Documentation & Verification Separation:
    Documented user quickstart in `README.md` and created automated packaging test suite `test_step22a_packaging.py` validating package imports, configuration, CLI/Web entry points, launcher batch scripts, and console scripts. Re-verified headless real-Minecraft 1.21.11 runtime execution without regressions.
+
+## D042 — CI/CD Workflow & Deterministic Evaluation Benchmark Architecture (Step 22B)
+To establish continuous automated regression protection and structured natural-language evaluation without changing established pipeline semantics:
+1. GitHub Actions CI Matrix & Environment-Aware Verification:
+   Created `.github/workflows/ci.yml` running across supported Python versions (`3.10`, `3.11`, `3.12`, `3.13`) on `ubuntu-latest`. The workflow installs the project via `pip install -e ".[dev]"`, verifies whitespace formatting with `git diff --check`, runs the complete unit test suite (425 tests), runs the evaluation benchmark (`python -m eval.benchmark`), and performs headless Minecraft verification.
+   In `test_step20_golden.py`, headless Minecraft server verification was made environment-aware: checks for Java executable on PATH, validates returncode 0 and major version >= 21, and skips cleanly with informative notices when Java or server JAR is unavailable in CI environments. In environments with Java 21 LTS, it runs and passes all 17/17 checks cleanly.
+2. Structured Natural-Language Benchmark Dataset (`eval/`):
+   Created `eval/dataset.json` containing 53 diverse requests covering 16 capability domains (`mob_loot`, `functions`, `function_tags`, `predicates`, `advancements`, `recipes`, `state_machines`, `scoreboard_operations`, `property_multipliers`, `property_relative`, `property_percentage`, `property_absolute`, `entity_specific_targets`, `compound_requests`, `clarification_required`, `invalid_unsupported`).
+   Structured contracts defined via Pydantic in `eval/models.py`: `BenchmarkCase`, `CaseEvaluationResult`, and `BenchmarkSummary`.
+3. Deterministic Benchmark Runner (`eval/benchmark.py`):
+   Built deterministic runner exercising existing pipeline components (`NumericSemanticInterpreter`, `SemanticClarificationEngine`, `ImplementationMapper`, `DatapackGenerator`, `DatapackValidator`, `AutonomousQAReviewer`). Slices by limit, filters by category, distinguishes semantic interpretation, clarification correctness, mechanism mapping, static validation, and QA simulation. Registered console script `minecraft-ai-eval` in `pyproject.toml`.
+4. Determinism & Anti-Hardcoding Invariants:
+   Benchmark runner and test suite contain zero hardcoded case ID checks or prompt matching. Tests verify all 16 categories contain >=3 cases, schema validity, deterministic execution across repeated runs, and absence of hardcoded shortcuts.
+5. Strict Benchmark Purpose & Limitations:
+   Explicitly documented in `README.md` and `.ai/PROJECT.md` that the benchmark evaluates supported MinecraftAI capabilities and regression invariants. It does not measure general AI intelligence or arbitrary natural-language perfection. Fully runnable offline without external API keys.

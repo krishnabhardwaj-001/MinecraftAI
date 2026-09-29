@@ -49,7 +49,15 @@
   - [x] Step 22A.5: Full regression suite verification (415/415 PASS).
   - [x] Step 22A.6: Headless Minecraft 1.21.11 live server verification (`test_step20_golden.py`, 17/17 PASS).
   - [x] Step 22A.7: Packaging documentation & context synchronization (`.ai/PROJECT.md`, `.ai/STATE.md`, `.ai/TASKS.md`, `.ai/DECISIONS.md`, `.ai/CHANGELOG.md`).
-- [ ] Step 22B: (Not started).
+- [x] Step 22B: CI/CD & Automated Evaluation Benchmark.
+  - [x] Step 22B.1: GitHub Actions CI workflow (`.github/workflows/ci.yml`) with Python 3.10-3.13 matrix, packaging install, diff check, full suite, benchmark, and headless server verification.
+  - [x] Step 22B.2: Evaluation benchmark dataset (`eval/dataset.json`, `eval/models.py`) with 53 cases across 16 capability categories.
+  - [x] Step 22B.3: Deterministic benchmark runner (`eval/benchmark.py`) and console entry point `minecraft-ai-eval`.
+  - [x] Step 22B.4: Benchmark reproducibility (deterministic execution, no random IDs/timestamps, zero external API keys).
+  - [x] Step 22B.5: Benchmark test suite (`test_step22b_benchmark.py`, 10 tests).
+  - [x] Step 22B.6: Full test suite regression gate (425/425 PASS) & headless Minecraft (17/17 PASS).
+  - [x] Step 22B.7: Documentation synchronization (`README.md`, `.ai/PROJECT.md`, `.ai/STATE.md`, `.ai/TASKS.md`, `.ai/DECISIONS.md`, `.ai/CHANGELOG.md`).
+- [ ] Step 23: (Not started).
 - [x] Keep AI context files synchronized after significant changes.
 
 

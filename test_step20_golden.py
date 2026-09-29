@@ -27,7 +27,9 @@ Step 20 verification gate covering:
 import hashlib
 import json
 import os
+import re
 import shutil
+import subprocess
 import tempfile
 import unittest
 import zipfile
@@ -825,6 +827,18 @@ class TestStep20HeadlessMinecraftServer(unittest.TestCase):
             self.skipTest(f"Minecraft server JAR not found at '{self.server_jar}'.")
         if not self.libraries_dir.exists():
             self.skipTest(f"Libraries directory not found at '{self.libraries_dir}'.")
+        if not shutil.which("java"):
+            self.skipTest("Java runtime ('java') not found on PATH.")
+        try:
+            java_check = subprocess.run(["java", "-version"], capture_output=True, text=True, timeout=5)
+            if java_check.returncode != 0:
+                self.skipTest(f"Java execution failed with returncode {java_check.returncode}.")
+            out = (java_check.stderr or "") + (java_check.stdout or "")
+            m = re.search(r'version\s+"(\d+)', out)
+            if m and int(m.group(1)) < 21:
+                self.skipTest(f"Java 21+ required for Minecraft 1.21.11, found Java {m.group(1)}.")
+        except Exception as e:
+            self.skipTest(f"Java runtime verification skipped: {e}")
 
         # 2. Generate a valid composite test datapack with predicate, state machine, and tags
         temp_out = Path(tempfile.mkdtemp(prefix="mc_headless_dp_"))
@@ -944,7 +958,6 @@ class TestStep20HeadlessMinecraftServer(unittest.TestCase):
 
             # Item E: automatic tick behavior verified (counter advances in game loop)
             self.assertIn("[TICK OK]", logs_str)
-            import re
             tick_matches = re.findall(r"#tick_count has (\d+) \[mcai_debug\]", logs_str)
             self.assertTrue(len(tick_matches) >= 2, "Tick counter should be queried at least twice")
             counts = [int(c) for c in tick_matches]

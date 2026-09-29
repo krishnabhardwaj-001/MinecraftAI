@@ -40,11 +40,13 @@ dev = [
 [project.scripts]
 minecraft-ai = "run_pipeline:main"
 minecraft-ai-web = "run_web:main"
+minecraft-ai-eval = "eval.benchmark:main"
 
 [tool.setuptools.packages.find]
 where = ["."]
-include = ["ai*", "generator*", "validator*", "repair*", "pipeline*", "qa*", "web*"]
+include = ["ai*", "generator*", "validator*", "repair*", "pipeline*", "qa*", "web*", "eval*"]
 
 [tool.setuptools.package-data]
 web = ["templates/*", "static/**/*"]
+eval = ["dataset.json"]
 "*" = ["*.json", "*.jsonl"]

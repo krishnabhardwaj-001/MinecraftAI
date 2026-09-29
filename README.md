@@ -541,13 +541,38 @@ If the local Ollama service is not running or unreachable:
 
 ---
 
+---
+
 ## Verification & Testing
 
 ### Automated Regression Suite
-Run all 408+ automated unit, integration, and boundary tests:
+Run all 425 automated unit, integration, and boundary tests:
 ```bash
 python -m unittest discover -s . -p "test_*.py"
 ```
+
+### Automated Evaluation Benchmark
+MinecraftAI includes a structured evaluation benchmark (`eval/`) assessing the natural-language pipeline across 53 diverse requests covering 16 capability domains without request-specific implementation logic:
+
+* **Categories Evaluated (16 Domains)**: `mob_loot`, `functions`, `function_tags`, `predicates`, `advancements`, `recipes`, `state_machines`, `scoreboard_operations`, `property_multipliers`, `property_relative`, `property_percentage`, `property_absolute`, `entity_specific_targets`, `compound_requests`, `clarification_required`, and `invalid_unsupported`.
+* **Run via CLI Entry Point**:
+```bash
+minecraft-ai-eval
+```
+* **Run via Python Module**:
+```bash
+python -m eval.benchmark
+```
+* **Benchmark Purpose & Limitations**:
+  * Evaluates deterministic semantic interpretation, clarification triggering, mechanism mapping, static validation, and QA simulation.
+  * Clearly distinguishes between deterministic regression benchmarks (100% offline, zero external API keys) and model-dependent evaluations.
+  * The benchmark is not a general claim of universal AI intelligence or arbitrary natural-language perfection; it serves as a rigorous, deterministic regression test against Minecraft 1.21.11 capabilities.
+
+### Continuous Integration (CI/CD)
+GitHub Actions workflow configured in [`.github/workflows/ci.yml`](.github/workflows/ci.yml):
+* **Triggers**: Automated runs on push and pull requests to `main`.
+* **Matrix**: Tests across supported Python versions (`3.10`, `3.11`, `3.12`, `3.13`).
+* **Environment-Aware**: Installs packaging via `pip install -e ".[dev]"`, runs `git diff --check`, executes the full unit test suite (425 tests), runs the evaluation benchmark, and performs environment-aware headless Minecraft testing (reporting unavailable environment cleanly in constrained CI while maintaining 17/17 PASS in environments with Java 21 LTS).
 
 ### Verification Boundary: Headless vs In-Game Client
 
