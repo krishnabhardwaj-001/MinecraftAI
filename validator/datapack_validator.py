@@ -189,14 +189,16 @@ class DatapackValidator:
 
     def _load_valid_attributes(self) -> Set[str]:
         """
-        Loads all valid Minecraft attribute IDs for 1.21.11 from knowledge assets
+        Loads all valid Minecraft attribute IDs for the selected version from knowledge assets
         or registries.json, with aliases for backwards compatibility.
         """
         attributes = set()
-        registries_paths = [
-            self.base_dir / "generated" / "reports" / "registries.json",
-            self.base_dir / "source" / "1.21.11" / "generated" / "reports" / "registries.json",
-        ]
+        version_registries_path = (
+            self.base_dir / "source" / self.version / "generated" / "reports" / "registries.json"
+        )
+        registries_paths = [version_registries_path]
+        if self.version == "1.21.11":
+            registries_paths.append(self.base_dir / "generated" / "reports" / "registries.json")
 
         for reg_p in registries_paths:
             if reg_p.exists():
@@ -211,45 +213,46 @@ class DatapackValidator:
                 except Exception:
                     pass
 
-        # Complete set of 1.21.11 attributes as guaranteed baseline
-        standard_1_21_attributes = {
-            "minecraft:armor",
-            "minecraft:armor_toughness",
-            "minecraft:attack_damage",
-            "minecraft:attack_knockback",
-            "minecraft:attack_speed",
-            "minecraft:block_break_speed",
-            "minecraft:block_interaction_range",
-            "minecraft:burning_time",
-            "minecraft:camera_distance",
-            "minecraft:entity_interaction_range",
-            "minecraft:explosion_knockback_resistance",
-            "minecraft:fall_damage_multiplier",
-            "minecraft:flying_speed",
-            "minecraft:follow_range",
-            "minecraft:gravity",
-            "minecraft:jump_strength",
-            "minecraft:knockback_resistance",
-            "minecraft:luck",
-            "minecraft:max_absorption",
-            "minecraft:max_health",
-            "minecraft:mining_efficiency",
-            "minecraft:movement_efficiency",
-            "minecraft:movement_speed",
-            "minecraft:oxygen_bonus",
-            "minecraft:safe_fall_distance",
-            "minecraft:scale",
-            "minecraft:sneaking_speed",
-            "minecraft:spawn_reinforcements",
-            "minecraft:step_height",
-            "minecraft:submerged_mining_speed",
-            "minecraft:sweeping_damage_ratio",
-            "minecraft:tempt_range",
-            "minecraft:water_movement_efficiency",
-            "minecraft:waypoint_receive_range",
-            "minecraft:waypoint_transmit_range",
-        }
-        attributes.update(standard_1_21_attributes)
+        # Complete set of 1.21.11 attributes as guaranteed baseline ONLY for 1.21.11 when reports missing
+        if self.version == "1.21.11" and not attributes:
+            standard_1_21_attributes = {
+                "minecraft:armor",
+                "minecraft:armor_toughness",
+                "minecraft:attack_damage",
+                "minecraft:attack_knockback",
+                "minecraft:attack_speed",
+                "minecraft:block_break_speed",
+                "minecraft:block_interaction_range",
+                "minecraft:burning_time",
+                "minecraft:camera_distance",
+                "minecraft:entity_interaction_range",
+                "minecraft:explosion_knockback_resistance",
+                "minecraft:fall_damage_multiplier",
+                "minecraft:flying_speed",
+                "minecraft:follow_range",
+                "minecraft:gravity",
+                "minecraft:jump_strength",
+                "minecraft:knockback_resistance",
+                "minecraft:luck",
+                "minecraft:max_absorption",
+                "minecraft:max_health",
+                "minecraft:mining_efficiency",
+                "minecraft:movement_efficiency",
+                "minecraft:movement_speed",
+                "minecraft:oxygen_bonus",
+                "minecraft:safe_fall_distance",
+                "minecraft:scale",
+                "minecraft:sneaking_speed",
+                "minecraft:spawn_reinforcements",
+                "minecraft:step_height",
+                "minecraft:submerged_mining_speed",
+                "minecraft:sweeping_damage_ratio",
+                "minecraft:tempt_range",
+                "minecraft:water_movement_efficiency",
+                "minecraft:waypoint_receive_range",
+                "minecraft:waypoint_transmit_range",
+            }
+            attributes.update(standard_1_21_attributes)
 
         # Include generic.*, player.*, zombie.* aliases and prefix-less names
         aliases = set()

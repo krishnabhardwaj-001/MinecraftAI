@@ -1,5 +1,5 @@
 import json
-from typing import Any, Dict, List
+from typing import Any, Dict, List, Optional
 
 from generator.mechanisms.base import BaseMechanismGenerator
 from generator.models import AdvancementDefinition, DatapackResource
@@ -12,8 +12,9 @@ class AdvancementMechanismGenerator(BaseMechanismGenerator):
     for event triggers (e.g. player_killed_entity, tick, consume_item) and rewards.
     """
 
-    def __init__(self, version: str = "1.21.11"):
+    def __init__(self, version: str = "1.21.11", version_context: Optional[Any] = None):
         self.version = version
+        self.version_context = version_context
 
     def generate(self, spec: AdvancementDefinition) -> List[DatapackResource]:
         clean_path = spec.advancement_path.strip().replace("\\", "/").strip("/")

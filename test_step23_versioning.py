@@ -76,6 +76,12 @@ class TestStep23Versioning(unittest.TestCase):
         meta = self.registry.get("1.21.11")
         self.assertEqual(meta.version_id, "1.21.11")
 
+    def test_01b_1_21_1_is_registered(self):
+        """Requirement 1b: 1.21.1 is registered in the VersionRegistry."""
+        self.assertTrue(self.registry.is_supported("1.21.1"))
+        meta = self.registry.get("1.21.1")
+        self.assertEqual(meta.version_id, "1.21.1")
+
     def test_02_1_21_11_is_default(self):
         """Requirement 2: 1.21.11 is the default version."""
         self.assertEqual(get_default_version(), "1.21.11")
@@ -88,11 +94,12 @@ class TestStep23Versioning(unittest.TestCase):
         self.assertIsInstance(versions, list)
         self.assertEqual(versions, sorted(versions))
         self.assertIn("1.21.11", versions)
+        self.assertIn("1.21.1", versions)
 
     def test_04_unsupported_versions_are_rejected(self):
         """Requirement 4: unsupported versions raise ValueError and are not reported as supported."""
         self.assertFalse(self.registry.is_supported("1.20.1"))
-        self.assertFalse(self.registry.is_supported("1.21.1"))
+        self.assertFalse(self.registry.is_supported("1.21.5"))
         self.assertFalse(self.registry.is_supported("invalid_ver"))
 
         with self.assertRaises(ValueError) as ctx:
@@ -112,6 +119,23 @@ class TestStep23Versioning(unittest.TestCase):
         self.assertEqual(meta.recipe_result_format, "id_count")
         self.assertEqual(meta.data_pack_version, "94.1")
 
+    def test_05b_1_21_1_metadata_and_context(self):
+        """Requirement 5b: 1.21.1 metadata fields and VersionContext resolution."""
+        ctx = VersionContext("1.21.1")
+        self.assertEqual(ctx.version_id, "1.21.1")
+        self.assertEqual(ctx.pack_format, 48)
+        self.assertEqual(ctx.min_format, [48, 0])
+        self.assertEqual(ctx.max_format, [48, 0])
+        self.assertTrue(ctx.supports_format_range)
+        self.assertEqual(ctx.directory_layout, "singular")
+        self.assertEqual(ctx.attribute_format, "namespaced")
+        self.assertEqual(ctx.modifier_id_format, "string")
+        self.assertEqual(ctx.recipe_result_format, "id_count")
+        self.assertEqual(ctx.data_pack_version, "48.0")
+        self.assertIsNotNone(ctx.server_jar_path)
+        self.assertTrue(str(ctx.server_jar_path).replace("\\", "/").endswith("versions/1.21.1/server-1.21.1.jar"))
+        self.assertTrue(Path(ctx.server_jar_path).exists())
+
     # =========================================================================
     # 2. Knowledge Retrieval & Isolation Tests (Requirements 6 - 9)
     # =========================================================================
@@ -124,6 +148,14 @@ class TestStep23Versioning(unittest.TestCase):
         self.assertGreater(len(retriever.items), 0)
         self.assertGreater(len(retriever.entities), 0)
         self.assertGreater(len(retriever.loot_tables), 0)
+
+    def test_06b_1_21_1_knowledge_resolves_correctly(self):
+        """Requirement 6b: 1.21.1 knowledge files resolve and load correctly."""
+        retriever = MinecraftKnowledgeRetriever(version="1.21.1")
+        self.assertEqual(retriever.version, "1.21.1")
+        self.assertEqual(len(retriever.syntax_records), 1007)
+        self.assertEqual(len(retriever.items), 1333)
+        self.assertEqual(len(retriever.entities), 130)
 
     def test_07_requested_version_is_used_by_retriever(self):
         """Requirement 7: Retriever accurately preserves and uses the requested version."""
@@ -360,6 +392,24 @@ class TestStep23Versioning(unittest.TestCase):
         self.assertEqual(exit_code, 0)
         self.assertEqual(executed_version, ["1.21.11"])
 
+    def test_23b_cli_version_flag_works_with_1_21_1(self):
+        """Requirement 23b: CLI --version 1.21.1 executes cleanly."""
+        executed_version = []
+
+        def mock_pipeline(**kwargs):
+            executed_version.append(kwargs.get("minecraft_version"))
+            class MockRes:
+                status = "success"
+                is_success = True
+                final_datapack_path = "p"
+                final_zip_path = "z"
+                def summary(self): return "ok"
+            return MockRes()
+
+        exit_code = run_cli(args=["--version", "1.21.1", "--request", "Make creepers drop diamonds."], pipeline_fn=mock_pipeline)
+        self.assertEqual(exit_code, 0)
+        self.assertEqual(executed_version, ["1.21.1"])
+
     def test_24_unsupported_cli_version_fails_clearly(self):
         """Requirement 24: Unsupported CLI version exits with error code 1 without running pipeline."""
         pipeline_called = []
@@ -387,6 +437,7 @@ class TestStep23Versioning(unittest.TestCase):
         v_data = v_resp.json()
         self.assertEqual(v_data["default_version"], "1.21.11")
         self.assertIn("1.21.11", v_data["supported_versions"])
+        self.assertIn("1.21.1", v_data["supported_versions"])
 
     def test_26_web_rejects_unsupported_versions(self):
         """Requirement 26: Web API rejects unsupported version with HTTP 400."""
@@ -436,7 +487,11 @@ class TestStep23Versioning(unittest.TestCase):
         """Requirement 29: Semantic attribute identifier resolution produces verified identifier."""
         v_ctx = VersionContext.from_version("1.21.11")
         attr_id = resolve_attribute_identifier("speed", v_ctx)
-        self.assertEqual(attr_id, "minecraft:generic.movement_speed")
+        self.assertEqual(attr_id, "minecraft:movement_speed")
+
+        v_ctx_1 = VersionContext.from_version("1.21.1")
+        attr_id_1 = resolve_attribute_identifier("speed", v_ctx_1)
+        self.assertEqual(attr_id_1, "minecraft:generic.movement_speed")
 
     def test_30_existing_datapack_generation_remains_valid(self):
         """Requirement 30: End-to-end datapack generation and validation pass cleanly."""

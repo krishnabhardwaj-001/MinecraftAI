@@ -1,5 +1,5 @@
 import json
-from typing import List
+from typing import Any, List, Optional
 
 from generator.mechanisms.base import BaseMechanismGenerator
 from generator.models import DatapackResource, FunctionTagDefinition
@@ -12,8 +12,9 @@ class FunctionTagMechanismGenerator(BaseMechanismGenerator):
     (e.g., #minecraft:tick for continuous game-loop execution and #minecraft:load for initialization).
     """
 
-    def __init__(self, version: str = "1.21.11"):
+    def __init__(self, version: str = "1.21.11", version_context: Optional[Any] = None):
         self.version = version
+        self.version_context = version_context
 
     def generate(self, spec: FunctionTagDefinition) -> List[DatapackResource]:
         clean_tag = spec.tag_name.strip().replace("\\", "/").strip("/")

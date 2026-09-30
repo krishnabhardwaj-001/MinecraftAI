@@ -9,7 +9,7 @@ conditionals across the codebase.
 """
 
 from pathlib import Path
-from typing import Dict, List, Optional
+from typing import Any, Dict, List, Optional, Union
 from pydantic import BaseModel, Field, ConfigDict
 
 
@@ -76,14 +76,16 @@ class VersionRegistry:
     def _init_defaults(self) -> None:
         """
         Registers officially supported baseline versions.
-        For Step 23 (State A), Minecraft Java 1.21.11 is the only officially supported version.
+        Officially supported versions: 1.21.11 and 1.21.1.
         """
         repo_root = Path(__file__).resolve().parent.parent
-        server_jar = repo_root / "versions" / "1.21.11" / "server-1.21.11.jar"
-        if not server_jar.exists():
+
+        # 1.21.11
+        server_jar_1_21_11 = repo_root / "versions" / "1.21.11" / "server-1.21.11.jar"
+        if not server_jar_1_21_11.exists():
             fallback_jar = repo_root / "source" / "1.21.11" / "server.jar"
             if fallback_jar.exists():
-                server_jar = fallback_jar
+                server_jar_1_21_11 = fallback_jar
 
         self.register(
             VersionMetadata(
@@ -97,8 +99,32 @@ class VersionRegistry:
                 modifier_id_format="string",
                 recipe_result_format="id_count",
                 data_pack_version="94.1",
-                server_jar_path=server_jar if server_jar.exists() else None,
+                server_jar_path=server_jar_1_21_11 if server_jar_1_21_11.exists() else None,
                 description="Minecraft Java Edition 1.21.11 (Data Pack 94.1)"
+            )
+        )
+
+        # 1.21.1
+        server_jar_1_21_1 = repo_root / "versions" / "1.21.1" / "server-1.21.1.jar"
+        if not server_jar_1_21_1.exists():
+            fallback_jar_1_21_1 = repo_root / "source" / "1.21.1" / "server.jar"
+            if fallback_jar_1_21_1.exists():
+                server_jar_1_21_1 = fallback_jar_1_21_1
+
+        self.register(
+            VersionMetadata(
+                version_id="1.21.1",
+                pack_format=48,
+                min_format=[48, 0],
+                max_format=[48, 0],
+                supports_format_range=True,
+                directory_layout="singular",
+                attribute_format="namespaced",
+                modifier_id_format="string",
+                recipe_result_format="id_count",
+                data_pack_version="48.0",
+                server_jar_path=server_jar_1_21_1 if server_jar_1_21_1.exists() else None,
+                description="Minecraft Java Edition 1.21.1 (Data Pack 48.0)"
             )
         )
 
@@ -159,6 +185,21 @@ class VersionContext(BaseModel):
     model_config = ConfigDict(extra="allow", frozen=True)
 
     metadata: VersionMetadata = Field(..., description="Target version capabilities metadata")
+
+    def __init__(
+        self,
+        version_or_metadata: Optional[Union[str, VersionMetadata]] = None,
+        **data: Any
+    ):
+        if isinstance(version_or_metadata, VersionMetadata):
+            data["metadata"] = version_or_metadata
+        elif isinstance(version_or_metadata, str):
+            ctx = VersionContext.from_version(version_or_metadata)
+            data["metadata"] = ctx.metadata
+        elif version_or_metadata is None and "metadata" not in data:
+            ctx = VersionContext.from_version(None)
+            data["metadata"] = ctx.metadata
+        super().__init__(**data)
 
     @property
     def version_id(self) -> str:

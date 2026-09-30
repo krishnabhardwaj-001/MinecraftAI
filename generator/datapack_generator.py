@@ -64,10 +64,10 @@ class DatapackGenerator:
         self.loot_generator = LootTableGenerator(version=self.version)
 
         # Mechanism generators
-        self.loot_mech = LootTableMechanismGenerator(loot_generator=self.loot_generator)
-        self.function_mech = FunctionMechanismGenerator()
-        self.tag_mech = FunctionTagMechanismGenerator()
-        self.advancement_mech = AdvancementMechanismGenerator()
+        self.loot_mech = LootTableMechanismGenerator(version=self.version, loot_generator=self.loot_generator)
+        self.function_mech = FunctionMechanismGenerator(version=self.version, version_context=self.version_context)
+        self.tag_mech = FunctionTagMechanismGenerator(version=self.version, version_context=self.version_context)
+        self.advancement_mech = AdvancementMechanismGenerator(version=self.version, version_context=self.version_context)
         self.recipe_mech = RecipeMechanismGenerator(version=self.version)
         self.predicate_mech = PredicateMechanismGenerator(version=self.version)
         self.state_machine_mech = StateMachineMechanismGenerator(version=self.version)

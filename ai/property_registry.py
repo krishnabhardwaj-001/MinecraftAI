@@ -501,8 +501,12 @@ class PropertyCapabilityRegistry:
         """
         Resolves the Minecraft attribute identifier for a semantic property,
         taking into account the target version context.
-        For Minecraft 1.21.11, preserves 'minecraft:generic.movement_speed'
-        and other established generic identifiers.
+
+        Version-aware resolution:
+        - Minecraft 1.21.1: produces prefixed identifiers (e.g. 'minecraft:generic.movement_speed',
+          'minecraft:generic.attack_damage').
+        - Minecraft 1.21.11: produces simplified/unprefixed identifiers (e.g. 'minecraft:movement_speed',
+          'minecraft:attack_damage').
         """
         cap = self.lookup(property_name)
         if not cap:
@@ -510,7 +514,48 @@ class PropertyCapabilityRegistry:
         mech = cap.get_mechanism("attribute")
         if not mech:
             return None
-        return mech.minecraft_identifier
+
+        raw_id = mech.minecraft_identifier or f"minecraft:generic.{cap.property_name}"
+
+        # Resolve VersionContext or VersionMetadata generically
+        from ai.version_registry import VersionContext, VersionMetadata
+
+        v_ctx: Optional[VersionContext] = None
+        if isinstance(version_context, VersionContext):
+            v_ctx = version_context
+        elif isinstance(version_context, VersionMetadata):
+            v_ctx = VersionContext(version_or_metadata=version_context)
+        elif isinstance(version_context, str):
+            try:
+                v_ctx = VersionContext.from_version(version_context)
+            except Exception:
+                v_ctx = None
+        elif version_context is None:
+            try:
+                v_ctx = VersionContext.from_version(None)
+            except Exception:
+                v_ctx = None
+
+        target_version = v_ctx.version_id if v_ctx else "1.21.11"
+        pack_format = v_ctx.pack_format if v_ctx else 94
+
+        # In Minecraft Java 1.21.2+ (pack_format >= 57, including 1.21.11 / pack_format 94),
+        # vanilla attribute identifiers dropped the 'generic.' prefix (e.g. minecraft:movement_speed).
+        # In Minecraft Java 1.21.1 (pack_format 48), attributes require 'minecraft:generic.' prefix.
+        if target_version == "1.21.11" or pack_format >= 57:
+            if raw_id.startswith("minecraft:generic."):
+                return f"minecraft:{raw_id[len('minecraft:generic.'):]}"
+            elif raw_id.startswith("generic."):
+                return f"minecraft:{raw_id[len('generic.'):]}"
+            return raw_id
+        else:
+            # 1.21.1 or legacy prefixed attribute format
+            if not raw_id.startswith("minecraft:generic.") and not raw_id.startswith("generic."):
+                if ":" in raw_id:
+                    ns, name = raw_id.split(":", 1)
+                    if ns == "minecraft" and "." not in name:
+                        return f"minecraft:generic.{name}"
+            return raw_id
 
 
 # Module-level default registry instance

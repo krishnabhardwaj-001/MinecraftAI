@@ -27,8 +27,9 @@ class FunctionMechanismGenerator(BaseMechanismGenerator):
     - Emits deterministic UNIX line endings (\n)
     """
 
-    def __init__(self, version: str = "1.21.11"):
+    def __init__(self, version: str = "1.21.11", version_context: Optional[Any] = None):
         self.version = version
+        self.version_context = version_context
 
     def _normalize_id(self, raw_id: Optional[str], default_prefix: str = "minecraft:") -> str:
         if not raw_id:

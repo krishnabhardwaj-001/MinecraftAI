@@ -335,7 +335,19 @@ class RuntimeTestRunner:
             )
 
         # 2. Check bundled libraries
-        libraries_dir = project_root / "libraries"
+        # Version-aware library resolution:
+        # 1.21.1 server dependencies are located under source/1.21.1/libraries/
+        # 1.21.11 server dependencies are located under project-level libraries/
+        version_libraries_dir = project_root / "source" / self.version / "libraries"
+        if self.version != "1.21.11" and version_libraries_dir.exists():
+            libraries_dir = version_libraries_dir
+        elif (project_root / "libraries").exists():
+            libraries_dir = project_root / "libraries"
+        elif version_libraries_dir.exists():
+            libraries_dir = version_libraries_dir
+        else:
+            libraries_dir = project_root / "libraries"
+
         if not libraries_dir.exists():
             return RuntimeTestResult(
                 mode=RuntimeTestMode.MINECRAFT_SERVER,
@@ -355,7 +367,12 @@ class RuntimeTestRunner:
                 details="No library dependencies found in libraries/ directory."
             )
 
-        jars.append(str(server_jar))
+        unbundled_jar = project_root / "source" / self.version / "versions" / self.version / f"server-{self.version}.jar"
+        if unbundled_jar.exists() and str(unbundled_jar) not in jars:
+            jars.append(str(unbundled_jar))
+
+        if str(server_jar) not in jars:
+            jars.append(str(server_jar))
         classpath = ";".join(jars) if os.name == "nt" else ":".join(jars)
 
         # 3. Create isolated temp directory
