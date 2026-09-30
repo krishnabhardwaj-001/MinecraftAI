@@ -70,7 +70,11 @@
   - [x] Step 23.10: Benchmark version awareness (`eval/models.py`, `eval/benchmark.py`).
   - [x] Step 23.11: Step 23 dedicated test suite (`test_step23_versioning.py`, 30 tests).
   - [x] Step 23.12: Full regression suite (455/455), headless Minecraft (17/17), benchmark (53/53), and documentation.
-- [ ] Step 24: (Not started).
+- [x] Phase 24: Multi-version Minecraft support — 1.21.1 + 1.21.11 dual-version runtime.
+  - [x] Phase 24.3: 1.21.1 `VersionMetadata` registered (`pack_format: 48`), version-aware library resolution in `qa/runtime.py`, version-aware attribute resolution in `ai/property_registry.py`, version-aware attribute validator in `validator/datapack_validator.py`, mechanism generators accept `version_context`.
+  - [x] Phase 24.5: End-to-end multi-version verification suite (`test_step24_multiversion.py`, 11 tests), headless 1.21.1 real Minecraft server execution verified, knowledge isolation confirmed (1.21.1: 1007 cmds/130 entities/1333 items; 1.21.11: 1273 cmds/157 entities/1505 items).
+  - [x] Phase 24.6: Full audit — 545/545 tests, `git diff --check` clean, no TODO/FIXME/HACK, datapack structure verified for both versions, version isolation confirmed, all critical suites pass.
+  - [x] Phase 24.7: Staged and committed 59 files (`ff56464`), pushed to `origin/main` (`b5fcffd..ff56464`). Working tree clean, `main` synchronized with `origin/main`.
 - [x] Keep AI context files synchronized after significant changes.
 
 

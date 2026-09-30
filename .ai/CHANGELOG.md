@@ -1,5 +1,29 @@
 # AI Change Log
 
+- Implemented PHASE 24: Multi-Version Minecraft Support — 1.21.1 + 1.21.11 Dual-Version Runtime (`ai/version_registry.py`, `ai/property_registry.py`, `generator/datapack_generator.py`, `generator/mechanisms/advancement_mech.py`, `generator/mechanisms/function_mech.py`, `generator/mechanisms/tag_mech.py`, `qa/runtime.py`, `validator/datapack_validator.py`, `test_step23_versioning.py`, `test_step24_multiversion.py`, `knowledge/commands/java/1.21.1/`, `knowledge/entities/java/1.21.1/`, `knowledge/items/java/1.21.1/`, `source/1.21.1/`, `versions/1.21.1/`):
+
+  1. 1.21.1 VersionMetadata Registration (`ai/version_registry.py`): Added full `VersionMetadata` for Minecraft Java 1.21.1 (`pack_format: 48`, `min_format: [48, 0]`, `max_format: [48, 0]`, `server_jar_path: versions/1.21.1/server-1.21.1.jar`, libraries at `source/1.21.1/libraries/`). Updated docstring from "only 1.21.11" to "officially supported: 1.21.11 and 1.21.1". Default version remains 1.21.11.
+
+  2. Version-Aware Attribute Resolution (`ai/property_registry.py`): Upgraded `resolve_attribute_identifier()` from static single-version to data-driven version-aware. For `pack_format >= 57` (1.21.11+): produces unprefixed identifiers (`minecraft:movement_speed`). For `pack_format 48` (1.21.1): preserves `minecraft:generic.*` prefix (`minecraft:generic.movement_speed`). Zero entity/request-specific hacks; resolved purely from `VersionContext.pack_format`.
+
+  3. Version Context Propagation to Mechanism Generators (`generator/datapack_generator.py`, `generator/mechanisms/function_mech.py`, `generator/mechanisms/tag_mech.py`, `generator/mechanisms/advancement_mech.py`): `DatapackGenerator.__init__()` passes `version=self.version` and `version_context=self.version_context` into all mechanism generator constructors. All three mechanism generators accept optional `version_context` parameter for future version-conditional generation.
+
+  4. Version-Aware Runtime Classpath (`qa/runtime.py`): `RuntimeTestRunner` now selects libraries from `source/{version}/libraries/` for 1.21.1 (version-specific extracted libraries) and project-level `libraries/` for 1.21.11. Adds `source/{version}/versions/{version}/server-{version}.jar` to classpath for the 1.21.1 unbundled server JAR. Verifies correct startup string `Starting minecraft server version {version}`.
+
+  5. Version-Dynamic Attribute Validator (`validator/datapack_validator.py`): `_load_valid_attributes()` resolves `source/{self.version}/generated/reports/registries.json` dynamically. Baseline hardcoded 1.21.11 fallback guarded by `if self.version == "1.21.11" and not attributes`.
+
+  6. Extended Step 23 Test Suite (`test_step23_versioning.py`): Added 4 new tests (01b, 05b, 06b, 23b) covering 1.21.1 registration, metadata context, knowledge resolution counts, and CLI version flag. Updated `test_04` to check `1.21.5` (not `1.21.1` which is now supported). Updated `test_29` to assert correct attribute format per version. Total: 34/34 tests pass.
+
+  7. Phase 24.5 Multi-Version Test Suite (`test_step24_multiversion.py`): Created 11-test suite covering version registry dual-registration, `VersionContext` correctness for both versions, knowledge isolation (count-based and command-level), `pack.mcmeta` format for both versions, attribute resolution per version, validator attribute set isolation, runtime version context, CLI `--version` flag for both, and headless 1.21.1 real Minecraft server execution (`test_11`).
+
+  8. 1.21.1 Knowledge Assets (`knowledge/commands/java/1.21.1/commands.jsonl`, `knowledge/entities/java/1.21.1/entities.json`, `knowledge/items/java/1.21.1/items.json`): Extracted from 1.21.1 server reports. 1,007 command entries, 130 entities, 1,333 items. Fully isolated from 1.21.11 knowledge.
+
+  9. 1.21.1 Server Assets (`source/1.21.1/`, `versions/1.21.1/server-1.21.1.jar`): Extracted 1.21.1 server JAR (49.2 MB), generated reports (`registries.json`, `commands.json`, `items.json`, `blocks.json`, `biome_parameters/`), and runtime libraries (32 JARs). Follows identical layout to the established 1.21.11 pattern.
+
+  10. Phase 24.6 Full Audit: 545/545 tests pass (0 failed, 0 skipped, 0 errors). Both headless servers verified. `git diff --check` exits 0. No TODO/FIXME/HACK/TEMP in diff. Datapack structure verified for both versions (correct `pack_format`, ZIP root layout, no outer wrapper). Version isolation confirmed — 1.21.1 knowledge does not read 1.21.11 data and vice versa.
+
+  11. Phase 24.7 Git Integration: Staged 59 files (9 modified, 50 new). Created commit `ff56464 Complete Phase 24 multi-version support`. Pushed to `origin/main` (`b5fcffd..ff56464`). Working tree clean. `main` and `origin/main` synchronized.
+
 - Implemented STEP 23: Multi-Version Minecraft Support & Version-Aware Generation (State A: Architecture Readiness) (`ai/version_registry.py`, `ai/__init__.py`, `ai/property_registry.py`, `knowledge_retriever.py`, `generator/models.py`, `generator/__init__.py`, `generator/datapack_generator.py`, `validator/datapack_validator.py`, `qa/runtime.py`, `pipeline/minecraft_pipeline.py`, `run_pipeline.py`, `web/app.py`, `web/templates/index.html`, `web/static/js/app.js`, `web/static/css/style.css`, `eval/models.py`, `eval/benchmark.py`, `test_step23_versioning.py`, `README.md`, `.ai/PROJECT.md`, `.ai/STATE.md`, `.ai/TASKS.md`, `.ai/DECISIONS.md`):
   1. Centralized Version Architecture (`ai/version_registry.py`, `ai/__init__.py`):
      - Created `VersionMetadata` Pydantic model (`version_id`, `pack_format`, `min_format`, `max_format`, `supports_format_range`, `directory_layout`, `attribute_format`, `modifier_id_format`, `recipe_result_format`, `server_jar_path`, and `data_pack_version`).

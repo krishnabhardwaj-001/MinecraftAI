@@ -1,14 +1,14 @@
 # Current Project State
 
 ## Last synchronized
-2026-09-28
+2026-09-30
 
 ## Current implementation
-- Natural-language Minecraft request understanding is being developed in the `ai/` package.
-- Minecraft command knowledge/retrieval is available for Java 1.21.11.
-- Planner/context/schema components exist and are being iterated.
-- Local Ollama inference is part of the intended runtime path.
-- GitHub is connected as the shared repository source for AI-agent synchronization.
+- Natural-language Minecraft request understanding is fully operational in the `ai/` package.
+- Minecraft command/entity/item knowledge/retrieval is available for Java 1.21.1 and 1.21.11 with full per-version isolation.
+- The 8-stage pipeline (Understanding → RAG → Planning → Generation → Validation/Repair → QA → Intent Verification → READY Gate) is operational.
+- Local Ollama inference is the default runtime path; OpenAI-compatible providers are also supported.
+- GitHub is the shared repository source; `main` is synchronized with `origin/main` at commit `ff56464`.
 
 ## Working behavior verified during development
 - Semantic retrieval works after a previous traceback fix.
@@ -111,16 +111,14 @@
   9. Comprehensive Verification Suite (`test_step23_versioning.py`): Added 30 automated tests across Registry, Knowledge, Semantic IR, Generator, Validator, Runtime, CLI/Web, Benchmark, and Regression. Full test suite passing 455/455 tests. Headless real-Minecraft 1.21.11 verification passing 17/17 tests. Evaluation benchmark passing 53/53 cases. `git diff --check` clean.
 
 ## Known issues / gaps
-- None. Full pipeline passes all static, semantic, QA, intent, headless Minecraft 1.21.11 runtime, packaging, CI/CD, evaluation benchmark, and version-awareness tests.
-- Step 23 State A explicitly maintains Minecraft Java 1.21.11 as the ONLY officially supported version. Future versions (1.20.1, 1.21.1) are architecturally prepared for but not yet officially supported or populated.
+- None. Full pipeline passes all static, semantic, QA, intent, headless Minecraft 1.21.1 and 1.21.11 runtime, packaging, CI/CD, evaluation benchmark, and multi-version tests.
 
 ## Current priority
-Step 23 complete. Centralized version-aware architecture (`VersionRegistry`, `VersionMetadata`, `VersionContext`) implemented and verified. Full test suite passing (455/455), headless Minecraft 1.21.11 verified (17/17), benchmark passing (53/53), `git diff --check` clean.
+Phase 24 complete. Multi-version support (1.21.1 + 1.21.11) implemented, verified, committed, and pushed. Full test suite passing (545/545), headless Minecraft 1.21.1 verified (test_step24_multiversion), headless Minecraft 1.21.11 verified (17/17), benchmark passing (53/53), `git diff --check` clean. `main` and `origin/main` synchronized at commit `ff56464`.
 
 ## Next logical work
-1. Deliver Step 23 Final Report to user.
-2. Await user instruction before proceeding to Step 24.
-3. Keep shared AI context synchronized for Antigravity and ChatGPT/Codex.
+1. Await user instruction before proceeding to Phase 25.
+2. Keep shared AI context synchronized for Antigravity and ChatGPT/Codex.
 
 ## Agent handoff rule
 Before changing code, verify this state against the actual repository and Git history. After significant changes, update this file and the other relevant `.ai/` files.
