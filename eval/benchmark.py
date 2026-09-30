@@ -40,6 +40,7 @@ from generator.models import ActionSpecification, MechanismSpecification
 from qa.analyzer import StaticSemanticAnalyzer
 from qa.reviewer import AutonomousQAReviewer
 from validator.datapack_validator import DatapackValidator
+from ai.version_registry import VersionContext
 
 DEFAULT_DATASET_PATH = Path(__file__).parent / "dataset.json"
 
@@ -259,10 +260,12 @@ class BenchmarkRunner:
                     # Verify deterministic generation, validation, and QA in a clean temp environment
                     with tempfile.TemporaryDirectory(prefix="eval_case_") as tmp_dir:
                         out_dir = Path(tmp_dir)
-                        gen = DatapackGenerator(output_dir=out_dir, version="1.21.11")
+                        case_version = getattr(case, "minecraft_version", "1.21.11") or "1.21.11"
+                        v_context = VersionContext.from_version(case_version)
+                        gen = DatapackGenerator(output_dir=out_dir, version_context=v_context)
                         plan = {
                             "status": "ready",
-                            "minecraft_version": "1.21.11",
+                            "minecraft_version": v_context.version_id,
                             "summary": case.description or case.request,
                             "implementation_plan": [
                                 {
@@ -275,7 +278,8 @@ class BenchmarkRunner:
                         gen_res = gen.generate(plan=plan, datapack_name="case_pack", create_zip=False)
                         if gen_res.status == "success":
                             pack_path = gen_res.datapack_path
-                            val_res = self.validator.validate(pack_path)
+                            val = DatapackValidator(version_context=v_context)
+                            val_res = val.validate(pack_path)
                             validation_passed = val_res.is_valid
                             if not val_res.is_valid:
                                 errors.extend([e.message for e in val_res.errors])

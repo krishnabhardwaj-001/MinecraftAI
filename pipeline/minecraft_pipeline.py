@@ -14,6 +14,7 @@ from qa.reviewer import AutonomousQAReviewer
 from qa.runtime import RuntimeTestMode, RuntimeTestRunner
 from repair.repair_loop import AIRepairLoop
 from validator.datapack_validator import DatapackValidator
+from ai.version_registry import VersionContext
 
 
 def _log(stage: str, message: str, verbose: bool = True) -> None:
@@ -40,6 +41,7 @@ class MinecraftPipeline:
         self,
         provider: str = "ollama",
         version: str = "1.21.11",
+        version_context: Optional[VersionContext] = None,
         output_dir: Optional[Path] = None,
         max_repair_attempts: int = 3,
         max_qa_repair_attempts: int = 3,
@@ -54,7 +56,8 @@ class MinecraftPipeline:
         ai_provider: Optional[AIProvider] = None
     ):
         self.provider_name = provider
-        self.version = version
+        self.version_context = version_context or VersionContext.from_version(version)
+        self.version = self.version_context.version_id
         self.verbose = verbose
         self.max_repair_attempts = max_repair_attempts
         self.max_qa_repair_attempts = max_qa_repair_attempts
@@ -62,27 +65,27 @@ class MinecraftPipeline:
         # Subsystems (supports dependency injection for testing)
         self.ai = ai_provider or AIProvider(provider=provider)
         self.understanding = understanding_engine or MinecraftUnderstanding(provider=provider, ai_provider=self.ai)
-        self.generator = generator or DatapackGenerator(output_dir=output_dir, version=version)
-        self.validator = validator or DatapackValidator(version=version)
+        self.generator = generator or DatapackGenerator(output_dir=output_dir, version=self.version, version_context=self.version_context)
+        self.validator = validator or DatapackValidator(version=self.version, version_context=self.version_context)
         self.repair_loop = repair_loop or AIRepairLoop(
             ai_provider=self.ai,
             provider=provider,
             max_attempts=max_repair_attempts,
-            version=version,
+            version=self.version,
             generator=self.generator,
             validator=self.validator
         )
         self.qa_reviewer = qa_reviewer or AutonomousQAReviewer(
             ai_provider=self.ai,
             provider=provider,
-            version=version
+            version=self.version
         )
         self.qa_repair_engine = qa_repair_engine or QARepairEngine(
             ai_provider=self.ai,
             provider=provider,
-            version=version
+            version=self.version
         )
-        self.runtime_runner = runtime_runner or RuntimeTestRunner(version=version)
+        self.runtime_runner = runtime_runner or RuntimeTestRunner(version=self.version, version_context=self.version_context)
 
     def run(
         self,
@@ -534,6 +537,7 @@ class MinecraftPipeline:
 def run_minecraft_pipeline(
     request: str,
     minecraft_version: str = "1.21.11",
+    version_context: Optional[VersionContext] = None,
     provider: str = "ollama",
     create_zip: bool = True,
     output_dir: Optional[Path] = None,
@@ -547,6 +551,7 @@ def run_minecraft_pipeline(
     pipeline = MinecraftPipeline(
         provider=provider,
         version=minecraft_version,
+        version_context=version_context,
         output_dir=output_dir,
         max_repair_attempts=max_repair_attempts,
         max_qa_repair_attempts=max_qa_repair_attempts,

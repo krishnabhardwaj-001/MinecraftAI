@@ -142,12 +142,15 @@ document.addEventListener("DOMContentLoaded", () => {
     startSimulatedProgress();
 
     try {
+      const versionSelect = document.getElementById("minecraftVersionSelect");
+      const selectedVersion = versionSelect ? versionSelect.value : "1.21.11";
+
       const response = await fetch("/api/generate", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           request: requestText,
-          minecraft_version: "1.21.11"
+          minecraft_version: selectedVersion
         })
       });
 

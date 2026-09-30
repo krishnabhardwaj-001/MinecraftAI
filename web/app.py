@@ -17,6 +17,7 @@ if str(BASE_DIR) not in sys.path:
 
 from pipeline import run_minecraft_pipeline
 from run_pipeline import is_ollama_unreachable_error, get_ollama_diagnostic_message
+from ai.version_registry import get_version_registry
 GENERATED_DIR = BASE_DIR / "generated"
 STATIC_DIR = Path(__file__).resolve().parent / "static"
 TEMPLATES_DIR = Path(__file__).resolve().parent / "templates"
@@ -54,12 +55,16 @@ async def home_page(request: Request):
     """
     Renders the primary single-page web interface.
     """
+    registry = get_version_registry()
+    default_meta = registry.get_default()
     return templates.TemplateResponse(
         request=request,
         name="index.html",
         context={
-            "version": "1.21.11",
-            "pack_version": "94.1"
+            "version": default_meta.version_id,
+            "pack_version": default_meta.data_pack_version or str(default_meta.pack_format),
+            "supported_versions": registry.get_supported_versions(),
+            "default_version": default_meta.version_id
         }
     )
 
@@ -69,12 +74,37 @@ async def health_check():
     """
     Health check endpoint returning system and Minecraft target version.
     """
+    registry = get_version_registry()
+    default_meta = registry.get_default()
     return {
         "status": "ok",
         "edition": "Java Edition",
-        "minecraft_version": "1.21.11",
-        "data_pack_version": "94.1",
+        "minecraft_version": default_meta.version_id,
+        "data_pack_version": default_meta.data_pack_version or str(default_meta.pack_format),
+        "supported_versions": registry.get_supported_versions(),
         "pipeline": "ready"
+    }
+
+
+@app.get("/api/versions")
+async def list_versions():
+    """
+    Returns registered, officially supported Minecraft versions and capabilities.
+    """
+    registry = get_version_registry()
+    return {
+        "supported_versions": registry.get_supported_versions(),
+        "default_version": registry.get_default().version_id,
+        "versions": [
+            {
+                "version_id": meta.version_id,
+                "pack_format": meta.pack_format,
+                "data_pack_version": meta.data_pack_version,
+                "directory_layout": meta.directory_layout,
+                "description": meta.description
+            }
+            for meta in [registry.get(v) for v in registry.get_supported_versions()]
+        ]
     }
 
 
@@ -87,10 +117,19 @@ async def generate_datapack(payload: GeneratePayload):
     if not req_text:
         raise HTTPException(status_code=400, detail="Request text cannot be empty.")
 
+    target_ver = payload.minecraft_version.strip()
+    registry = get_version_registry()
+    if not registry.is_supported(target_ver):
+        supported = ", ".join(registry.get_supported_versions())
+        raise HTTPException(
+            status_code=400,
+            detail=f"Unsupported Minecraft version '{target_ver}'. Officially supported version(s): {supported}"
+        )
+
     try:
         pipeline_result = run_minecraft_pipeline(
             request=req_text,
-            minecraft_version=payload.minecraft_version,
+            minecraft_version=target_ver,
             provider="ollama",
             create_zip=True,
             verbose=False

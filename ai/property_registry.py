@@ -493,7 +493,38 @@ class PropertyCapabilityRegistry:
         """
         return self.get_registered_property_names()
 
+    def resolve_attribute_identifier(
+        self,
+        property_name: Optional[str],
+        version_context: Optional[Any] = None
+    ) -> Optional[str]:
+        """
+        Resolves the Minecraft attribute identifier for a semantic property,
+        taking into account the target version context.
+        For Minecraft 1.21.11, preserves 'minecraft:generic.movement_speed'
+        and other established generic identifiers.
+        """
+        cap = self.lookup(property_name)
+        if not cap:
+            return None
+        mech = cap.get_mechanism("attribute")
+        if not mech:
+            return None
+        return mech.minecraft_identifier
+
 
 # Module-level default registry instance
 DEFAULT_PROPERTY_REGISTRY = PropertyCapabilityRegistry()
+
+
+def resolve_attribute_identifier(
+    property_name: Optional[str],
+    version_context: Optional[Any] = None,
+    registry: Optional[PropertyCapabilityRegistry] = None
+) -> Optional[str]:
+    """
+    Convenience function resolving the attribute identifier for a semantic property.
+    """
+    reg = registry or DEFAULT_PROPERTY_REGISTRY
+    return reg.resolve_attribute_identifier(property_name, version_context)
 

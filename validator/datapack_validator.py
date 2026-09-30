@@ -22,6 +22,7 @@ from generator.models import (
     validate_comparison_operator,
 )
 from validator.models import ValidationCheck, ValidationIssue, ValidationResult
+from ai.version_registry import VersionContext
 
 MIN_SCORE_32 = -2147483648
 MAX_SCORE_32 = 2147483647
@@ -48,10 +49,16 @@ class DatapackValidator:
     def __init__(
         self,
         version: str = "1.21.11",
-        expected_pack_format: int = EXPECTED_PACK_FORMAT
+        expected_pack_format: Optional[int] = None,
+        version_context: Optional[VersionContext] = None
     ):
-        self.version = version
-        self.expected_pack_format = expected_pack_format
+        self.version_context = version_context or VersionContext.from_version(version)
+        self.version = self.version_context.version_id
+        self.expected_pack_format = (
+            expected_pack_format
+            if expected_pack_format is not None
+            else self.version_context.metadata.pack_format
+        )
         self.base_dir = Path(__file__).resolve().parent.parent
 
         # Load valid item IDs from knowledge
@@ -1368,7 +1375,7 @@ class DatapackValidator:
             )
 
         # Check for obsolete 1.20- plural directories ('loot_tables', 'functions', 'tags/functions', 'advancements')
-        if data_dir.exists():
+        if data_dir.exists() and self.version_context.metadata.directory_layout == "singular":
             for ns_dir in data_dir.iterdir():
                 if ns_dir.is_dir():
                     obsolete_paths = [
@@ -2737,13 +2744,15 @@ class DatapackValidator:
 def validate_datapack(
     path: Union[str, Path],
     version: str = "1.21.11",
-    expected_pack_format: int = 94
+    expected_pack_format: Optional[int] = None,
+    version_context: Optional[VersionContext] = None
 ) -> ValidationResult:
     """
     Convenience function to validate a datapack directory or ZIP archive.
     """
     validator = DatapackValidator(
         version=version,
-        expected_pack_format=expected_pack_format
+        expected_pack_format=expected_pack_format,
+        version_context=version_context
     )
     return validator.validate(path)

@@ -436,3 +436,27 @@ To establish continuous automated regression protection and structured natural-l
    Benchmark runner and test suite contain zero hardcoded case ID checks or prompt matching. Tests verify all 16 categories contain >=3 cases, schema validity, deterministic execution across repeated runs, and absence of hardcoded shortcuts.
 5. Strict Benchmark Purpose & Limitations:
    Explicitly documented in `README.md` and `.ai/PROJECT.md` that the benchmark evaluates supported MinecraftAI capabilities and regression invariants. It does not measure general AI intelligence or arbitrary natural-language perfection. Fully runnable offline without external API keys.
+
+## D043 — Centralized Version-Aware Architecture & VersionContext (Step 23 State A)
+To eliminate scattered assumptions (such as `if version == "1.21.11"` or `pack_format = 94`) across the generator, validator, QA, knowledge retrieval, and runtime layers, while keeping Minecraft Java 1.21.11 as the sole officially supported version in this step:
+1. VersionMetadata & VersionRegistry Pattern:
+   Established `ai/version_registry.py` defining `VersionMetadata` as a strongly typed Pydantic model (`version_id`, `pack_format`, `min_format`, `max_format`, `supports_format_range`, `directory_layout`, `attribute_format`, `modifier_id_format`, `recipe_result_format`, `server_jar_path`, and `data_pack_version`).
+   Implemented `VersionRegistry` as the single authoritative source of truth. Version `1.21.11` is registered automatically and configured as default.
+   Unsupported versions are rejected with explicit `ValueError` rather than silently falling back to `1.21.11`.
+2. VersionContext for Dependency Injection:
+   Created `VersionContext` carrying resolved `VersionMetadata`. Avoids global mutable state and string-matching conditionals in components. Components query metadata properties (`context.metadata.pack_format`, `context.metadata.directory_layout`) rather than branching on raw version strings.
+3. Dynamic Knowledge Layer Isolation:
+   Refactored `knowledge_retriever.py` to parameterize all loader functions (`load_syntax_knowledge`, `load_loot_table_knowledge`, `load_entity_knowledge`, etc.) with dynamic version paths (`knowledge/.../{version}/...`).
+   `MinecraftKnowledgeRetriever` consumes `VersionContext`. Missing or unsupported version directories return empty knowledge rather than leaking default version data.
+4. Semantic IR Target Version Propagation:
+   Added `minecraft_version` to `MinecraftDatapackSpec` in `generator/models.py`. The Minecraft version represents execution/generation context rather than a user-request semantic property. Semantic property modifications (`PropertyModification`) remain strictly version-neutral.
+5. Version-Aware Generator, Validator, and Runtime:
+   - `DatapackGenerator` consumes `VersionContext` to format `pack.mcmeta` with metadata `pack_format` and min/max format arrays.
+   - `DatapackValidator` verifies `pack_format` against metadata and checks `metadata.directory_layout == "singular"` before flagging `OBSOLETE_PATH`.
+   - `RuntimeTestRunner` parameterizes server discovery, resolving `versions/{version}/server-{version}.jar` and checking startup string `Starting minecraft server version {version}`.
+6. CLI & Web Version Exposure:
+   Added `--version` flag to `run_pipeline.py`. Web UI queries `GET /api/versions` to dynamically populate the version dropdown. Both interfaces validate against `VersionRegistry.is_supported` and return clear errors on unsupported versions.
+7. Evaluation Benchmark Version Awareness:
+   Added `minecraft_version` to `BenchmarkCase` in `eval/models.py` (defaulting to `1.21.11`). `eval/benchmark.py` resolves `VersionContext` and passes it to generator and validator.
+8. State A Version Boundary:
+   Minecraft Java 1.21.11 remains the ONLY officially supported version in Step 23. No second version (e.g. 1.20.1 or 1.21.1) server JAR, knowledge base, or compatibility shim is added or claimed.

@@ -1,5 +1,36 @@
 # AI Change Log
 
+- Implemented STEP 23: Multi-Version Minecraft Support & Version-Aware Generation (State A: Architecture Readiness) (`ai/version_registry.py`, `ai/__init__.py`, `ai/property_registry.py`, `knowledge_retriever.py`, `generator/models.py`, `generator/__init__.py`, `generator/datapack_generator.py`, `validator/datapack_validator.py`, `qa/runtime.py`, `pipeline/minecraft_pipeline.py`, `run_pipeline.py`, `web/app.py`, `web/templates/index.html`, `web/static/js/app.js`, `web/static/css/style.css`, `eval/models.py`, `eval/benchmark.py`, `test_step23_versioning.py`, `README.md`, `.ai/PROJECT.md`, `.ai/STATE.md`, `.ai/TASKS.md`, `.ai/DECISIONS.md`):
+  1. Centralized Version Architecture (`ai/version_registry.py`, `ai/__init__.py`):
+     - Created `VersionMetadata` Pydantic model (`version_id`, `pack_format`, `min_format`, `max_format`, `supports_format_range`, `directory_layout`, `attribute_format`, `modifier_id_format`, `recipe_result_format`, `server_jar_path`, and `data_pack_version`).
+     - Created `VersionRegistry` providing single authoritative registration point, auto-registering Minecraft Java 1.21.11 as default and only officially supported version, and rejecting unsupported versions with explicit `ValueError`.
+     - Created `VersionContext` enabling dependency injection across pipeline components without scattering string conditionals.
+  2. Dynamic Knowledge Retrieval & Isolation (`knowledge_retriever.py`):
+     - Parameterized all loader functions (`load_syntax_knowledge`, `load_loot_table_knowledge`, `load_entity_knowledge`, etc.) with dynamic target version.
+     - Unsupported versions fail gracefully with empty knowledge results rather than silently reading 1.21.11 data.
+  3. Semantic IR Target Version Context (`generator/models.py`, `generator/__init__.py`):
+     - Added `minecraft_version` to `MinecraftDatapackSpec` as execution context while keeping `PropertyModification` models version-neutral.
+  4. Version-Aware Generator & Validator (`generator/datapack_generator.py`, `validator/datapack_validator.py`):
+     - Refactored `DatapackGenerator` to consume `VersionContext` and format `pack.mcmeta` with version metadata `pack_format`, `min_format`, and `max_format`.
+     - Refactored `DatapackValidator` to check `pack_format` against target version metadata and only enforce singular directory rules when `metadata.directory_layout == "singular"`.
+  5. Version-Aware Attribute Capabilities (`ai/property_registry.py`):
+     - Added `resolve_attribute_identifier` resolving `minecraft:generic.movement_speed` for 1.21.11.
+  6. Parameterized Headless Server Runtime Harness (`qa/runtime.py`):
+     - Parameterized `RuntimeTestRunner` with `VersionContext`, dynamically resolving server JAR path (`versions/{version}/server-{version}.jar`) and detecting startup via `Starting minecraft server version {version}`.
+  7. CLI & Web Version Selection (`run_pipeline.py`, `web/app.py`, `web/templates/index.html`, `web/static/js/app.js`, `web/static/css/style.css`):
+     - Added `--version` CLI flag to `run_pipeline.py` with validation and rejection of unsupported versions.
+     - Added `GET /api/versions` endpoint and dynamic version selector dropdown in Web UI, validating submitted version on `POST /api/generate`.
+  8. Benchmark Version Awareness (`eval/models.py`, `eval/benchmark.py`):
+     - Added `minecraft_version` field to `BenchmarkCase` (defaulting to `1.21.11`). Benchmark runner injects `VersionContext` into generator and validator.
+  9. Comprehensive Verification Suite (`test_step23_versioning.py`):
+     - Created dedicated 30-test suite covering Registry, Knowledge Isolation, Semantic IR, Generator, Validator, Runtime, CLI/Web, Benchmark, and Regression.
+     - Full test suite passing 455/455 tests cleanly.
+     - Step 20 headless real-Minecraft 1.21.11 server verification passing 17/17 tests.
+     - Evaluation benchmark passing 53/53 cases across all 16 categories.
+     - `git diff --check` clean with 0 whitespace errors.
+  10. Strict Version Boundary:
+     - Preserved Minecraft Java 1.21.11 as the ONLY officially supported version. No second version added or claimed.
+
 - Implemented STEP 22B: CI/CD & Automated Evaluation Benchmark (`.github/workflows/ci.yml`, `eval/models.py`, `eval/dataset.json`, `eval/benchmark.py`, `test_step22b_benchmark.py`, `test_step20_golden.py`, `pyproject.toml`, `README.md`, `.ai/PROJECT.md`, `.ai/STATE.md`, `.ai/TASKS.md`, `.ai/DECISIONS.md`):
   1. GitHub Actions CI/CD Workflow (`.github/workflows/ci.yml`): Created multi-version matrix workflow testing across Python 3.10, 3.11, 3.12, and 3.13 on push/PR with `pip install -e ".[dev]"`, `git diff --check`, full unit test suite (425 tests), evaluation benchmark, and environment-aware headless Minecraft testing.
   2. Environment-Aware Headless Testing (`test_step20_golden.py`): Updated test 17 to check for Java executable and verify major version >= 21. Skips cleanly with informative messaging in constrained CI without failing or fabricating runtime verification, while maintaining 17/17 PASS in environments with Java 21 LTS.

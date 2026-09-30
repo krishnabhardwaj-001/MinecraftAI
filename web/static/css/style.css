@@ -314,7 +314,38 @@ body {
 
 .form-actions {
   display: flex;
-  justify-content: flex-end;
+  justify-content: space-between;
+  align-items: center;
+  gap: 16px;
+}
+
+.version-select-wrapper {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.version-select-label {
+  font-size: 13px;
+  color: var(--text-muted);
+  font-weight: 500;
+}
+
+.version-select {
+  background: rgba(15, 23, 42, 0.7);
+  border: 1px solid var(--border-subtle);
+  border-radius: 8px;
+  padding: 8px 12px;
+  color: var(--text-main);
+  font-family: var(--font-sans);
+  font-size: 13px;
+  outline: none;
+  cursor: pointer;
+  transition: border-color var(--transition-smooth);
+}
+
+.version-select:focus {
+  border-color: var(--emerald-500);
 }
 
 .primary-btn {

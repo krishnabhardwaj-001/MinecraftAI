@@ -111,7 +111,9 @@ The knowledge system can provide information about:
 
 The current primary target is:
 
-**Minecraft Java Edition 1.21.11**
+**Minecraft Java Edition 1.21.11** (Data Pack version `94.1` / `pack_format: 94`)
+
+> **Multi-Version Architecture Note**: MinecraftAI features a centralized, version-aware architecture (`VersionRegistry`, `VersionMetadata`, `VersionContext`). Minecraft Java 1.21.11 is the default and **only officially supported version** in this step. The system is architecturally ready for future Minecraft Java versions without hardcoded generator or validator assumptions, but additional versions (such as 1.20.1 or 1.21.1) are explicitly not yet supported.
 
 The knowledge layer helps separate general AI reasoning from Minecraft-specific implementation knowledge.
 
@@ -482,8 +484,11 @@ minecraft-ai
 # Direct request mode:
 minecraft-ai "When it is raining, give all players a diamond only once when the rain starts."
 
+# Specifying Minecraft target version (defaults to 1.21.11):
+minecraft-ai --version 1.21.11 --request "Make every creeper drop diamonds."
+
 # Alternatively via python:
-python run_pipeline.py "Make every creeper drop diamonds."
+python run_pipeline.py --version 1.21.11 --request "Make every creeper drop diamonds."
 ```
 
 ### Web Interface
@@ -497,6 +502,7 @@ python run_web.py --port 8000
 ```
 Open your browser to `http://127.0.0.1:8000` to access:
 * Visual **8-Stage Pipeline Tracker** (Understanding → RAG → Planning → Generator → Validation & Repair → Autonomous QA → Intent Verification → READY Gate).
+* Dynamic **Target Version Selector** (populated dynamically from `VersionRegistry`).
 * Interactive **Dynamic Clarification Chips**.
 * Instant **Datapack ZIP Download**.
 * Generated **File Tree & Inspection Panel**.
@@ -515,21 +521,28 @@ MinecraftAI deterministically generates and validates:
 * **Predicates** (`data/<ns>/predicate/`): All 19 Java 1.21.11 condition types and composite condition trees (`all_of`, `any_of`, `inverted`).
 * **State Machines**: Dedicated generator for global persistent state machines (`#global` scoreboards) and dynamic per-player scoreboards.
 
-### 2. Semantic Property Modifications
+### 2. Centralized Version-Aware Architecture
+MinecraftAI separates Minecraft version specifics from general AI reasoning and mechanisms:
+* **`VersionRegistry` & `VersionMetadata`**: Centralized registry (`ai/version_registry.py`) providing typed metadata (`pack_format`, `min_format`, `max_format`, `directory_layout`, `attribute_format`, `modifier_id_format`, `recipe_result_format`, `server_jar_path`).
+* **Dynamic Knowledge Isolation**: `MinecraftKnowledgeRetriever` dynamically resolves paths based on target version, preventing cross-version data leaks.
+* **Version-Aware Validation & Runtime**: `DatapackValidator` and `RuntimeTestRunner` validate and execute datapacks against target version metadata.
+* **Strict Support Boundaries**: Unknown or unsupported versions fail with clear diagnostic errors rather than silent fallbacks.
+
+### 3. Semantic Property Modifications
 Natural-language modifications (`make me 10 times faster`, `increase speed by 25%`, `set zombie speed to 0.4`):
 * Interprets numeric and comparative semantics without hardcoded mob/item logic.
-* Queries [`PropertyCapabilityRegistry`](ai/property_registry.py) for exact `(property, operation, value.kind)` capability selection.
-* Compiles speed multipliers and relative increments to `/attribute` (`minecraft:generic.movement_speed`) using `add_multiplied_total` and `add_value`/`add_multiplied_base`.
+* Queries [`PropertyCapabilityRegistry`](ai/property_registry.py) for exact `(property, operation, value.kind)` capability selection and version-aware attribute identifiers (`minecraft:generic.movement_speed`).
+* Compiles speed multipliers and relative increments to `/attribute` using `add_multiplied_total` and `add_value`/`add_multiplied_base`.
 * Enforces single-entity target constraints (`execute as {target} run attribute @s ...`).
 * Disambiguates modifier IDs deterministically (`minecraft_ai:{property}_{op}_{val}_{step_id}`) to prevent collision while allowing intentional stacking.
 
-### 3. Interactive Clarification
+### 4. Interactive Clarification
 When requests are underspecified or ambiguous (e.g. `make me faster` without magnitude/duration, or `make the zombie stronger` without specifying health vs attack damage):
 * The pipeline halts early before writing files.
 * **Web UI**: Dynamically renders clickable clarification buttons/chips for rapid selection.
 * **CLI**: Displays numbered choices and accepts index selection or custom refinement.
 
-### 4. Offline Ollama Diagnostics
+### 5. Offline Ollama Diagnostics
 If the local Ollama service is not running or unreachable:
 * The CLI and Web interfaces intercept connection failures.
 * Rather than crashing with an unhandled traceback, the system displays clear actionable instructions:
@@ -546,7 +559,7 @@ If the local Ollama service is not running or unreachable:
 ## Verification & Testing
 
 ### Automated Regression Suite
-Run all 425 automated unit, integration, and boundary tests:
+Run all 455 automated unit, integration, and boundary tests:
 ```bash
 python -m unittest discover -s . -p "test_*.py"
 ```

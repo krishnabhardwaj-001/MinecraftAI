@@ -5,6 +5,7 @@ import zipfile
 from pathlib import Path
 from typing import Any, Dict, List, Optional
 
+from ai.version_registry import VersionContext
 from generator.loot_table_generator import LootTableGenerator
 from generator.mechanisms import (
     AdvancementMechanismGenerator,
@@ -53,21 +54,23 @@ class DatapackGenerator:
     def __init__(
         self,
         output_dir: Optional[Path] = None,
-        version: str = "1.21.11"
+        version: str = "1.21.11",
+        version_context: Optional[VersionContext] = None
     ):
         self.base_dir = Path(__file__).resolve().parent.parent
         self.output_dir = Path(output_dir) if output_dir else (self.base_dir / "generated")
-        self.version = version
-        self.loot_generator = LootTableGenerator(version=version)
+        self.version_context = version_context or VersionContext.from_version(version)
+        self.version = self.version_context.version_id
+        self.loot_generator = LootTableGenerator(version=self.version)
 
         # Mechanism generators
         self.loot_mech = LootTableMechanismGenerator(loot_generator=self.loot_generator)
         self.function_mech = FunctionMechanismGenerator()
         self.tag_mech = FunctionTagMechanismGenerator()
         self.advancement_mech = AdvancementMechanismGenerator()
-        self.recipe_mech = RecipeMechanismGenerator(version=version)
-        self.predicate_mech = PredicateMechanismGenerator(version=version)
-        self.state_machine_mech = StateMachineMechanismGenerator(version=version)
+        self.recipe_mech = RecipeMechanismGenerator(version=self.version)
+        self.predicate_mech = PredicateMechanismGenerator(version=self.version)
+        self.state_machine_mech = StateMachineMechanismGenerator(version=self.version)
 
     def extract_loot_modifications(
         self,
@@ -624,20 +627,23 @@ class DatapackGenerator:
 
         files_generated: List[str] = []
 
-        # 1. Write pack.mcmeta (Minecraft Java 1.21.11 major pack format 94)
+        # 1. Write pack.mcmeta (resolved from VersionContext / VersionMetadata)
+        meta = self.version_context.metadata
         manifest = DatapackManifest(
-            pack_format=94,
-            min_format=[94, 0],
-            max_format=[94, 1],  # Minecraft Java 1.21.11 data pack version 94.1
+            pack_format=meta.pack_format,
+            min_format=meta.min_format if meta.supports_format_range else None,
+            max_format=meta.max_format if meta.supports_format_range else None,
             description=description
         )
 
         pack_dict = {
             "pack_format": manifest.pack_format,
-            "min_format": manifest.min_format,
-            "max_format": manifest.max_format,
             "description": manifest.description
         }
+        if manifest.min_format is not None:
+            pack_dict["min_format"] = manifest.min_format
+        if manifest.max_format is not None:
+            pack_dict["max_format"] = manifest.max_format
 
         mcmeta_content = json.dumps(
             {"pack": pack_dict},
@@ -958,12 +964,14 @@ def generate_datapack(
     output_dir: Optional[Path] = None,
     datapack_name: Optional[str] = None,
     description: Optional[str] = None,
-    create_zip: bool = True
+    create_zip: bool = True,
+    version: str = "1.21.11",
+    version_context: Optional[VersionContext] = None
 ) -> GenerationResult:
     """
     Convenience function to generate a datapack deterministically.
     """
-    generator = DatapackGenerator(output_dir=output_dir)
+    generator = DatapackGenerator(output_dir=output_dir, version=version, version_context=version_context)
     return generator.generate(
         plan=plan,
         context=context,

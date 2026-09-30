@@ -11,75 +11,43 @@ VERSION = "1.21.11"
 
 BASE_DIR = Path(__file__).resolve().parent
 
-COMMANDS_FILE = (
-    BASE_DIR
-    / "knowledge"
-    / "commands"
-    / "java"
-    / VERSION
-    / "commands.jsonl"
-)
+def get_commands_file(version: str = VERSION) -> Path:
+    ver = str(version or VERSION).strip()
+    return BASE_DIR / "knowledge" / "commands" / "java" / ver / "commands.jsonl"
 
-SEMANTIC_FILE = (
-    BASE_DIR
-    / "knowledge"
-    / "descriptions"
-    / "semantic_commands.json"
-)
+def get_loot_tables_dir(version: str = VERSION) -> Path:
+    ver = str(version or VERSION).strip()
+    return BASE_DIR / "knowledge" / "loot_tables" / "java" / ver / "tables"
 
-LOOT_TABLES_DIR = (
-    BASE_DIR
-    / "knowledge"
-    / "loot_tables"
-    / "java"
-    / VERSION
-    / "tables"
-)
+def get_entities_file(version: str = VERSION) -> Path:
+    ver = str(version or VERSION).strip()
+    return BASE_DIR / "knowledge" / "entities" / "java" / ver / "entities.json"
 
-ENTITIES_FILE = (
-    BASE_DIR
-    / "knowledge"
-    / "entities"
-    / "java"
-    / VERSION
-    / "entities.json"
-)
+def get_items_file(version: str = VERSION) -> Path:
+    ver = str(version or VERSION).strip()
+    return BASE_DIR / "knowledge" / "items" / "java" / ver / "items.json"
 
-ITEMS_FILE = (
-    BASE_DIR
-    / "knowledge"
-    / "items"
-    / "java"
-    / VERSION
-    / "items.json"
-)
+def get_predicates_file(version: str = VERSION) -> Path:
+    ver = str(version or VERSION).strip()
+    return BASE_DIR / "knowledge" / "predicates" / "java" / ver / "predicates.json"
 
-PREDICATES_FILE = (
-    BASE_DIR
-    / "knowledge"
-    / "predicates"
-    / "java"
-    / VERSION
-    / "predicates.json"
-)
+def get_tags_file(version: str = VERSION) -> Path:
+    ver = str(version or VERSION).strip()
+    return BASE_DIR / "knowledge" / "tags" / "java" / ver / "function_tags.json"
 
-TAGS_FILE = (
-    BASE_DIR
-    / "knowledge"
-    / "tags"
-    / "java"
-    / VERSION
-    / "function_tags.json"
-)
+def get_scoreboards_file(version: str = VERSION) -> Path:
+    ver = str(version or VERSION).strip()
+    return BASE_DIR / "knowledge" / "scoreboards" / "java" / ver / "scoreboards.json"
 
-SCOREBOARDS_FILE = (
-    BASE_DIR
-    / "knowledge"
-    / "scoreboards"
-    / "java"
-    / VERSION
-    / "scoreboards.json"
-)
+# Backwards-compatible path constants pointing to default version
+COMMANDS_FILE = get_commands_file(VERSION)
+SEMANTIC_FILE = BASE_DIR / "knowledge" / "descriptions" / "semantic_commands.json"
+LOOT_TABLES_DIR = get_loot_tables_dir(VERSION)
+ENTITIES_FILE = get_entities_file(VERSION)
+ITEMS_FILE = get_items_file(VERSION)
+PREDICATES_FILE = get_predicates_file(VERSION)
+TAGS_FILE = get_tags_file(VERSION)
+SCOREBOARDS_FILE = get_scoreboards_file(VERSION)
 
 
 # ============================================================
@@ -129,23 +97,21 @@ def tokenize(text):
 # LOAD COMMAND SYNTAX KNOWLEDGE
 # ============================================================
 
-def load_syntax_knowledge():
-
+def load_syntax_knowledge(version=None):
+    target_version = str(version or VERSION).strip()
+    cmd_file = get_commands_file(target_version)
     records = []
 
-    if not COMMANDS_FILE.exists():
+    if not cmd_file.exists():
         return records
 
     with open(
-        COMMANDS_FILE,
+        cmd_file,
         "r",
         encoding="utf-8"
     ) as f:
-
         for line in f:
-
             line = line.strip()
-
             if line:
                 records.append(
                     json.loads(line)
@@ -158,7 +124,7 @@ def load_syntax_knowledge():
 # LOAD SEMANTIC COMMAND KNOWLEDGE
 # ============================================================
 
-def load_semantic_knowledge():
+def load_semantic_knowledge(version=None):
 
     if not SEMANTIC_FILE.exists():
         return {}
@@ -181,14 +147,15 @@ def load_semantic_knowledge():
 # LOAD LOOT TABLE KNOWLEDGE
 # ============================================================
 
-def load_loot_table_knowledge():
-
+def load_loot_table_knowledge(version=None):
+    target_version = str(version or VERSION).strip()
+    lt_dir = get_loot_tables_dir(target_version)
     tables = []
 
-    if not LOOT_TABLES_DIR.exists():
+    if not lt_dir.exists():
         return tables
 
-    for file_path in LOOT_TABLES_DIR.rglob("*.json"):
+    for file_path in lt_dir.rglob("*.json"):
 
         # Ignore metadata files.
         if file_path.name in {"_list.json", "_all.json"}:
@@ -205,12 +172,12 @@ def load_loot_table_knowledge():
                 data = json.load(f)
 
             relative_path = file_path.relative_to(
-                LOOT_TABLES_DIR
+                lt_dir
             ).as_posix()
 
             tables.append(
                 {
-                    "version": VERSION,
+                    "version": target_version,
                     "edition": "Java",
                     "path": relative_path,
                     "type": data.get("type"),
@@ -231,43 +198,47 @@ def load_loot_table_knowledge():
 # LOAD ENTITY KNOWLEDGE
 # ============================================================
 
-def load_entity_knowledge():
+def load_entity_knowledge(version=None):
+    target_version = str(version or VERSION).strip()
+    ent_file = get_entities_file(target_version)
 
-    if ENTITIES_FILE.exists():
-        with open(ENTITIES_FILE, "r", encoding="utf-8") as f:
+    if ent_file.exists():
+        with open(ent_file, "r", encoding="utf-8") as f:
             return json.load(f)
 
-    # Check root knowledge/entities/entities.json
-    root_entities_file = BASE_DIR / "knowledge" / "entities" / "entities.json"
-    if root_entities_file.exists():
-        with open(root_entities_file, "r", encoding="utf-8") as f:
-            return json.load(f)
+    # Root knowledge/entities/entities.json fallback ONLY for default version
+    if target_version == VERSION:
+        root_entities_file = BASE_DIR / "knowledge" / "entities" / "entities.json"
+        if root_entities_file.exists():
+            with open(root_entities_file, "r", encoding="utf-8") as f:
+                return json.load(f)
 
-    # Fallback to generated reports
-    fallback_file = BASE_DIR / "generated" / "reports" / "registries.json"
-    if fallback_file.exists():
-        with open(fallback_file, "r", encoding="utf-8") as f:
-            regs = json.load(f)
+        # Fallback to generated reports
+        fallback_file = BASE_DIR / "generated" / "reports" / "registries.json"
+        if fallback_file.exists():
+            with open(fallback_file, "r", encoding="utf-8") as f:
+                regs = json.load(f)
 
-        entity_types = regs.get("minecraft:entity_type", {}).get("entries", {})
-        entities = []
+            entity_types = regs.get("minecraft:entity_type", {}).get("entries", {})
+            entities = []
+            lt_dir = get_loot_tables_dir(target_version)
 
-        for full_id in entity_types:
-            name = full_id.split(":", 1)[1] if ":" in full_id else full_id
-            disp = name.replace("_", " ").title()
-            lt_rel = f"entities/{name}.json"
-            has_lt = (LOOT_TABLES_DIR / lt_rel).exists()
+            for full_id in entity_types:
+                name = full_id.split(":", 1)[1] if ":" in full_id else full_id
+                disp = name.replace("_", " ").title()
+                lt_rel = f"entities/{name}.json"
+                has_lt = (lt_dir / lt_rel).exists()
 
-            entities.append({
-                "id": full_id,
-                "name": name,
-                "display_name": disp,
-                "loot_table": lt_rel if has_lt else None,
-                "version": VERSION,
-                "edition": "Java"
-            })
+                entities.append({
+                    "id": full_id,
+                    "name": name,
+                    "display_name": disp,
+                    "loot_table": lt_rel if has_lt else None,
+                    "version": target_version,
+                    "edition": "Java"
+                })
 
-        return entities
+            return entities
 
     return []
 
@@ -276,50 +247,53 @@ def load_entity_knowledge():
 # LOAD ITEM KNOWLEDGE
 # ============================================================
 
-def load_item_knowledge():
+def load_item_knowledge(version=None):
+    target_version = str(version or VERSION).strip()
+    item_file = get_items_file(target_version)
 
-    if ITEMS_FILE.exists():
-        with open(ITEMS_FILE, "r", encoding="utf-8") as f:
+    if item_file.exists():
+        with open(item_file, "r", encoding="utf-8") as f:
             return json.load(f)
 
-    # Check root knowledge/items/items.json
-    root_items_file = BASE_DIR / "knowledge" / "items" / "items.json"
-    if root_items_file.exists():
-        with open(root_items_file, "r", encoding="utf-8") as f:
-            return json.load(f)
+    # Root knowledge/items/items.json fallback ONLY for default version
+    if target_version == VERSION:
+        root_items_file = BASE_DIR / "knowledge" / "items" / "items.json"
+        if root_items_file.exists():
+            with open(root_items_file, "r", encoding="utf-8") as f:
+                return json.load(f)
 
-    # Fallback to generated reports
-    fallback_file = BASE_DIR / "generated" / "reports" / "items.json"
-    if fallback_file.exists():
-        with open(fallback_file, "r", encoding="utf-8") as f:
-            raw_items = json.load(f)
+        # Fallback to generated reports
+        fallback_file = BASE_DIR / "generated" / "reports" / "items.json"
+        if fallback_file.exists():
+            with open(fallback_file, "r", encoding="utf-8") as f:
+                raw_items = json.load(f)
 
-        items = []
+            items = []
 
-        for full_id in raw_items:
-            name = full_id.split(":", 1)[1] if ":" in full_id else full_id
-            disp = name.replace("_", " ").title()
+            for full_id in raw_items:
+                name = full_id.split(":", 1)[1] if ":" in full_id else full_id
+                disp = name.replace("_", " ").title()
 
-            aliases = [name]
-            if name.endswith("_ingot"):
-                aliases.append(name[:-6])
-            elif name.endswith("_dust"):
-                aliases.append(name[:-5])
-            elif name.endswith("_shard"):
-                aliases.append(name[:-6])
-            elif name == "lapis_lazuli":
-                aliases.append("lapis")
+                aliases = [name]
+                if name.endswith("_ingot"):
+                    aliases.append(name[:-6])
+                elif name.endswith("_dust"):
+                    aliases.append(name[:-5])
+                elif name.endswith("_shard"):
+                    aliases.append(name[:-6])
+                elif name == "lapis_lazuli":
+                    aliases.append("lapis")
 
-            items.append({
-                "id": full_id,
-                "name": name,
-                "display_name": disp,
-                "aliases": sorted(list(set(aliases))),
-                "version": VERSION,
-                "edition": "Java"
-            })
+                items.append({
+                    "id": full_id,
+                    "name": name,
+                    "display_name": disp,
+                    "aliases": sorted(list(set(aliases))),
+                    "version": target_version,
+                    "edition": "Java"
+                })
 
-        return items
+            return items
 
     return []
 
@@ -328,10 +302,12 @@ def load_item_knowledge():
 # LOAD PREDICATE KNOWLEDGE
 # ============================================================
 
-def load_predicate_knowledge():
-    if PREDICATES_FILE.exists():
+def load_predicate_knowledge(version=None):
+    target_version = str(version or VERSION).strip()
+    pred_file = get_predicates_file(target_version)
+    if pred_file.exists():
         try:
-            with open(PREDICATES_FILE, "r", encoding="utf-8") as f:
+            with open(pred_file, "r", encoding="utf-8") as f:
                 return json.load(f)
         except Exception:
             return []
@@ -342,10 +318,12 @@ def load_predicate_knowledge():
 # LOAD FUNCTION TAG KNOWLEDGE
 # ============================================================
 
-def load_tag_knowledge():
-    if TAGS_FILE.exists():
+def load_tag_knowledge(version=None):
+    target_version = str(version or VERSION).strip()
+    tag_file = get_tags_file(target_version)
+    if tag_file.exists():
         try:
-            with open(TAGS_FILE, "r", encoding="utf-8") as f:
+            with open(tag_file, "r", encoding="utf-8") as f:
                 return json.load(f)
         except Exception:
             return []
@@ -356,10 +334,12 @@ def load_tag_knowledge():
 # LOAD SCOREBOARD KNOWLEDGE
 # ============================================================
 
-def load_scoreboard_knowledge():
-    if SCOREBOARDS_FILE.exists():
+def load_scoreboard_knowledge(version=None):
+    target_version = str(version or VERSION).strip()
+    sc_file = get_scoreboards_file(target_version)
+    if sc_file.exists():
         try:
-            with open(SCOREBOARDS_FILE, "r", encoding="utf-8") as f:
+            with open(sc_file, "r", encoding="utf-8") as f:
                 return json.load(f)
         except Exception:
             return []
@@ -1276,41 +1256,40 @@ class MinecraftKnowledgeRetriever:
 
     def __init__(
         self,
-        version=VERSION
+        version=None
     ):
-
-        self.version = version
+        self.version = str(version or VERSION).strip()
 
         self.syntax_records = (
-            load_syntax_knowledge()
+            load_syntax_knowledge(version=self.version)
         )
 
         self.semantic_data = (
-            load_semantic_knowledge()
+            load_semantic_knowledge(version=self.version)
         )
 
         self.loot_tables = (
-            load_loot_table_knowledge()
+            load_loot_table_knowledge(version=self.version)
         )
 
         self.entities = (
-            load_entity_knowledge()
+            load_entity_knowledge(version=self.version)
         )
 
         self.items = (
-            load_item_knowledge()
+            load_item_knowledge(version=self.version)
         )
 
         self.predicates = (
-            load_predicate_knowledge()
+            load_predicate_knowledge(version=self.version)
         )
 
         self.tags = (
-            load_tag_knowledge()
+            load_tag_knowledge(version=self.version)
         )
 
         self.scoreboards = (
-            load_scoreboard_knowledge()
+            load_scoreboard_knowledge(version=self.version)
         )
 
     # --------------------------------------------------------

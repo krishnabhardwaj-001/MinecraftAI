@@ -11,6 +11,7 @@ from generator.models import (
     GenerationResult,
     LootTableModification,
     MechanismSpecification,
+    MinecraftDatapackSpec,
     PredicateDefinition,
     RecipeDefinition,
     validate_mechanism_specification,
@@ -32,6 +33,7 @@ __all__ = [
     "PredicateDefinition",
     "PredicateMechanismGenerator",
     "MechanismSpecification",
+    "MinecraftDatapackSpec",
     "validate_mechanism_specification",
 ]
 

@@ -57,7 +57,20 @@
   - [x] Step 22B.5: Benchmark test suite (`test_step22b_benchmark.py`, 10 tests).
   - [x] Step 22B.6: Full test suite regression gate (425/425 PASS) & headless Minecraft (17/17 PASS).
   - [x] Step 22B.7: Documentation synchronization (`README.md`, `.ai/PROJECT.md`, `.ai/STATE.md`, `.ai/TASKS.md`, `.ai/DECISIONS.md`, `.ai/CHANGELOG.md`).
-- [ ] Step 23: (Not started).
+- [x] Step 23: Multi-Version Minecraft Support & Version-Aware Generation (State A: Architecture Readiness).
+  - [x] Step 23.1: Centralized VersionMetadata & VersionRegistry (`ai/version_registry.py`).
+  - [x] Step 23.2: VersionContext abstraction & dependency injection.
+  - [x] Step 23.3: Knowledge retriever dynamic path isolation (`knowledge_retriever.py`).
+  - [x] Step 23.4: Semantic IR target version propagation (`generator/models.py`).
+  - [x] Step 23.5: Version-aware datapack generator & pack.mcmeta formatting (`generator/datapack_generator.py`).
+  - [x] Step 23.6: Version-aware datapack validator & directory layout verification (`validator/datapack_validator.py`).
+  - [x] Step 23.7: Version-aware attribute capability resolution (`ai/property_registry.py`).
+  - [x] Step 23.8: Parameterized headless runtime harness (`qa/runtime.py`).
+  - [x] Step 23.9: CLI & Web version selection and API endpoint (`run_pipeline.py`, `web/app.py`, `web/static/js/app.js`, `web/templates/index.html`).
+  - [x] Step 23.10: Benchmark version awareness (`eval/models.py`, `eval/benchmark.py`).
+  - [x] Step 23.11: Step 23 dedicated test suite (`test_step23_versioning.py`, 30 tests).
+  - [x] Step 23.12: Full regression suite (455/455), headless Minecraft (17/17), benchmark (53/53), and documentation.
+- [ ] Step 24: (Not started).
 - [x] Keep AI context files synchronized after significant changes.
 
 

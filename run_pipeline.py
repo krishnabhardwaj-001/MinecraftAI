@@ -4,6 +4,7 @@ from pathlib import Path
 from typing import Any, Callable, List, Optional
 
 from pipeline import run_minecraft_pipeline
+from ai.version_registry import get_version_registry, get_default_version
 
 
 def is_ollama_unreachable_error(exc: Optional[BaseException]) -> bool:
@@ -93,15 +94,48 @@ def run_cli(
     Executes the MinecraftAI CLI with interactive clarification support.
     Returns exit code (0 for success, 1 for error/failure, 2 for aborted clarification).
     """
+    cli_args = list(sys.argv[1:] if args is None else args)
+
+    # Parse optional --version flag
+    selected_version = get_default_version()
+    filtered_args = []
+    i = 0
+    while i < len(cli_args):
+        arg = cli_args[i]
+        if arg == "--version" or arg.startswith("--version="):
+            if "=" in arg:
+                selected_version = arg.split("=", 1)[1].strip()
+            elif i + 1 < len(cli_args):
+                selected_version = cli_args[i + 1].strip()
+                i += 1
+            else:
+                print("Error: --version requires a version argument.")
+                return 1
+        elif arg == "--request" or arg.startswith("--request="):
+            if "=" in arg:
+                filtered_args.append(arg.split("=", 1)[1].strip())
+            elif i + 1 < len(cli_args):
+                filtered_args.append(cli_args[i + 1].strip())
+                i += 1
+        else:
+            filtered_args.append(arg)
+        i += 1
+
+    # Validate selected version against VersionRegistry
+    registry = get_version_registry()
+    if not registry.is_supported(selected_version):
+        supported = ", ".join(registry.get_supported_versions())
+        print(f"Error: Unsupported Minecraft version '{selected_version}'. Officially supported version(s): {supported}")
+        return 1
+
+    version_meta = registry.get(selected_version)
     print("=" * 70)
     print("MinecraftAI - End-to-End Datapack Pipeline")
-    print("Target: Minecraft Java Edition 1.21.11 | Data Pack Version 94.1")
+    print(f"Target: Minecraft Java Edition {selected_version} | Data Pack Version {version_meta.data_pack_version or version_meta.pack_format}")
     print("=" * 70)
 
-    cli_args = sys.argv[1:] if args is None else args
-
-    if cli_args:
-        request = " ".join(cli_args).strip()
+    if filtered_args:
+        request = " ".join(filtered_args).strip()
     else:
         try:
             request = input_fn("\nEnter Minecraft natural-language request: ").strip()
@@ -118,7 +152,7 @@ def run_cli(
         try:
             result = pipeline_fn(
                 request=request,
-                minecraft_version="1.21.11",
+                minecraft_version=selected_version,
                 provider="ollama",
                 create_zip=True,
                 verbose=True
@@ -193,7 +227,7 @@ def run_cli(
             continue
 
         elif result.is_success:
-            print("\n[+] SUCCESS: Validated Datapack Ready for Minecraft 1.21.11!")
+            print(f"\n[+] SUCCESS: Validated Datapack Ready for Minecraft {selected_version}!")
             print(f"    Datapack Folder: {result.final_datapack_path}")
             print(f"    Datapack ZIP:    {result.final_zip_path}")
             return 0

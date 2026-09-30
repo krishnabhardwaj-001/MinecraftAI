@@ -1325,3 +1325,28 @@ def validate_mechanism_specification(spec: Union[MechanismSpecification, Dict[st
         raise ValueError(f"Unsupported mechanism specification type: '{spec_type}'")
 
 
+class MinecraftDatapackSpec(BaseModel):
+    """
+    Structured semantic/datapack specification defining target version and planned content.
+    Represents generation context decoupled from semantic property meaning.
+    """
+    model_config = ConfigDict(extra="allow")
+
+    minecraft_version: str = Field(
+        default="1.21.11",
+        description="Target Minecraft Java Edition version"
+    )
+    requirements: List[Dict[str, Any]] = Field(
+        default_factory=list,
+        description="High-level requirements / objectives"
+    )
+    mechanisms: List[MechanismSpecification] = Field(
+        default_factory=list,
+        description="Planned datapack mechanisms"
+    )
+    actions: List[ActionSpecification] = Field(
+        default_factory=list,
+        description="Planned actions / command specifications"
+    )
+
+

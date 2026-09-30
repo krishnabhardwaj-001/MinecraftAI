@@ -66,6 +66,14 @@
           </div>
 
           <div class="form-actions">
+            <div class="version-select-wrapper">
+              <label for="minecraftVersionSelect" class="version-select-label">Version:</label>
+              <select id="minecraftVersionSelect" name="minecraft_version" class="version-select">
+                {% for ver in supported_versions %}
+                  <option value="{{ ver }}" {% if ver == default_version %}selected{% endif %}>Minecraft Java {{ ver }}</option>
+                {% endfor %}
+              </select>
+            </div>
             <button type="submit" id="submitBtn" class="primary-btn">
               <span class="btn-text">Generate Datapack</span>
               <svg class="btn-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">

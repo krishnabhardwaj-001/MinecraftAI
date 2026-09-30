@@ -21,6 +21,7 @@ class BenchmarkCase(BaseModel):
     category: str = Field(..., description="Capability category (e.g. 'mob_loot', 'functions', 'predicates')")
     request: str = Field(..., description="Natural-language request text")
     description: Optional[str] = Field(default=None, description="Human-readable description of the case")
+    minecraft_version: str = Field(default="1.21.11", description="Target Minecraft Java Edition version (default: 1.21.11)")
 
     # Expected semantic and implementation specifications
     expected_mechanism: Optional[str] = Field(

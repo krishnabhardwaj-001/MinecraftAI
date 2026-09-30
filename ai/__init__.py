@@ -24,10 +24,18 @@ from ai.property_registry import (
     PropertyCapability,
     PropertyCapabilityRegistry,
     DEFAULT_PROPERTY_REGISTRY,
+    resolve_attribute_identifier,
 )
 from ai.implementation_mapper import (
     ImplementationMapper,
     MappedImplementation,
+)
+from ai.version_registry import (
+    VersionMetadata,
+    VersionRegistry,
+    VersionContext,
+    get_version_registry,
+    get_default_version,
 )
 
 __all__ = [
@@ -48,4 +56,14 @@ __all__ = [
     "DEFAULT_CLARIFICATION_ENGINE",
     "ImplementationMapper",
     "MappedImplementation",
+    "MechanismCapability",
+    "PropertyCapability",
+    "PropertyCapabilityRegistry",
+    "DEFAULT_PROPERTY_REGISTRY",
+    "resolve_attribute_identifier",
+    "VersionMetadata",
+    "VersionRegistry",
+    "VersionContext",
+    "get_version_registry",
+    "get_default_version",
 ]

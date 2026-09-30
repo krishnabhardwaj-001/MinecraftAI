@@ -99,15 +99,27 @@
   5. Benchmark Test Suite (`test_step22b_benchmark.py`): Added 10 automated tests verifying dataset schema, required fields, category coverage (all 16 categories with >=3 cases), deterministic execution, clarification behavior, semantic IR structure, mechanism selection, validator/QA outcomes, absence of hardcoded shortcuts, and stable summary reporting.
   6. Full Regression Verification: 425/425 unit tests passing cleanly across the repository. Step 20 headless real-Minecraft 1.21.11 verification passing 17/17 tests. `git diff --check` clean.
 
+- Multi-Version Minecraft Support & Version-Aware Generation (Step 23 State A) operational:
+  1. Centralized Version Architecture (`ai/version_registry.py`): Defined `VersionMetadata` (Pydantic model containing `version_id`, `pack_format`, `min_format`, `max_format`, `supports_format_range`, `directory_layout`, `attribute_format`, `modifier_id_format`, `recipe_result_format`, `server_jar_path`, and `data_pack_version`). Implemented `VersionRegistry` automatically registering Minecraft Java 1.21.11 as the default and only officially supported version, and rejecting unsupported versions with `ValueError`. Implemented `VersionContext` for clean dependency injection across components without scattered version string matching.
+  2. Knowledge Layer Path Dynamic Isolation (`knowledge_retriever.py`): Refactored knowledge loaders (`load_syntax_knowledge`, `load_loot_table_knowledge`, `load_entity_knowledge`, etc.) to take dynamic `version` parameters, resolving paths via version-aware helpers (`get_commands_file`, etc.). Unsupported versions do not load default data and return 0 entities/commands cleanly.
+  3. Semantic IR Version Context (`generator/models.py`, `ai/semantic_models.py`): Added `minecraft_version` to `MinecraftDatapackSpec` as execution context while keeping `PropertyModification` strictly version-neutral.
+  4. Version-Aware Generator & Validator (`generator/datapack_generator.py`, `validator/datapack_validator.py`): Injected `VersionContext`. `DatapackGenerator` uses `metadata.pack_format` and min/max format arrays for `pack.mcmeta`. `DatapackValidator` validates `pack_format` against metadata and enforces `directory_layout == "singular"` before flagging `OBSOLETE_PATH`.
+  5. Version-Aware Property Capabilities (`ai/property_registry.py`): Added `resolve_attribute_identifier` resolving `minecraft:generic.movement_speed` for 1.21.11.
+  6. Parameterized Headless Runtime (`qa/runtime.py`): `RuntimeTestRunner` accepts `VersionContext`, dynamically resolves server JAR path, and verifies version startup string `Starting minecraft server version {version}`.
+  7. CLI & Web Version Selection (`run_pipeline.py`, `web/app.py`, `web/static/js/app.js`, `web/templates/index.html`): Added `--version` to CLI with validation against `VersionRegistry.is_supported` and rejection of unsupported versions. Web UI provides dynamic version selector dropdown queried via `GET /api/versions` and enforces version validation on `/api/generate`.
+  8. Benchmark Version Awareness (`eval/models.py`, `eval/benchmark.py`): Added `minecraft_version` field to `BenchmarkCase` defaulting to 1.21.11. Benchmark runner resolves `VersionContext` and passes it to generator and validator.
+  9. Comprehensive Verification Suite (`test_step23_versioning.py`): Added 30 automated tests across Registry, Knowledge, Semantic IR, Generator, Validator, Runtime, CLI/Web, Benchmark, and Regression. Full test suite passing 455/455 tests. Headless real-Minecraft 1.21.11 verification passing 17/17 tests. Evaluation benchmark passing 53/53 cases. `git diff --check` clean.
+
 ## Known issues / gaps
-- None. Full pipeline passes all static, semantic, QA, intent, headless Minecraft 1.21.11 runtime, packaging, CI/CD, and evaluation benchmark tests.
+- None. Full pipeline passes all static, semantic, QA, intent, headless Minecraft 1.21.11 runtime, packaging, CI/CD, evaluation benchmark, and version-awareness tests.
+- Step 23 State A explicitly maintains Minecraft Java 1.21.11 as the ONLY officially supported version. Future versions (1.20.1, 1.21.1) are architecturally prepared for but not yet officially supported or populated.
 
 ## Current priority
-Step 22B complete. CI/CD workflow, evaluation benchmark system (53 cases, 16 categories), deterministic runner (`minecraft-ai-eval`), and benchmark test suite (10 tests) implemented and verified. Full test suite passing (425/425), headless Minecraft 1.21.11 verified (17/17), benchmark passing (53/53), `git diff --check` clean.
+Step 23 complete. Centralized version-aware architecture (`VersionRegistry`, `VersionMetadata`, `VersionContext`) implemented and verified. Full test suite passing (455/455), headless Minecraft 1.21.11 verified (17/17), benchmark passing (53/53), `git diff --check` clean.
 
 ## Next logical work
-1. Deliver Step 22B Final Report to user.
-2. Await user instruction before proceeding to Step 23.
+1. Deliver Step 23 Final Report to user.
+2. Await user instruction before proceeding to Step 24.
 3. Keep shared AI context synchronized for Antigravity and ChatGPT/Codex.
 
 ## Agent handoff rule

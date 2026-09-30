@@ -7,6 +7,8 @@ from typing import Any, Dict, List, Optional
 # pyrefly: ignore [missing-import]
 from pydantic import BaseModel, ConfigDict, Field
 
+from ai.version_registry import VersionContext
+
 
 class RuntimeTestMode(str, Enum):
     """
@@ -60,8 +62,13 @@ class RuntimeTestRunner:
     3. Unavailable: Clean fallback when runtime environment is not configured.
     """
 
-    def __init__(self, version: str = "1.21.11"):
-        self.version = version
+    def __init__(
+        self,
+        version: str = "1.21.11",
+        version_context: Optional[VersionContext] = None
+    ):
+        self.version_context = version_context or VersionContext.from_version(version)
+        self.version = self.version_context.version_id
 
     def run(
         self,
@@ -90,15 +97,27 @@ class RuntimeTestRunner:
             return self._run_static_simulation(datapack_dir)
 
         elif mode == RuntimeTestMode.MINECRAFT_SERVER:
-            if not server_jar_path or not Path(server_jar_path).exists():
+            resolved_jar = server_jar_path
+            if not resolved_jar:
+                resolved_jar = self.version_context.metadata.server_jar_path
+            if not resolved_jar or not Path(resolved_jar).exists():
+                base_dir = Path(__file__).resolve().parent.parent
+                cand1 = base_dir / "versions" / self.version / f"server-{self.version}.jar"
+                cand2 = base_dir / "source" / self.version / "server.jar"
+                if cand1.exists():
+                    resolved_jar = cand1
+                elif cand2.exists():
+                    resolved_jar = cand2
+
+            if not resolved_jar or not Path(resolved_jar).exists():
                 return RuntimeTestResult(
                     mode=RuntimeTestMode.MINECRAFT_SERVER,
                     passed=False,
                     ticks_simulated=0,
                     logs=["Server JAR not found."],
-                    details=f"Server JAR at '{server_jar_path}' does not exist."
+                    details=f"Server JAR for Minecraft {self.version} not found (looked for '{resolved_jar}')."
                 )
-            return self._run_minecraft_server(datapack_dir, Path(server_jar_path), timeout_s, custom_commands=custom_commands)
+            return self._run_minecraft_server(datapack_dir, Path(resolved_jar), timeout_s, custom_commands=custom_commands)
 
         return RuntimeTestResult(
             mode=RuntimeTestMode.UNAVAILABLE,
@@ -483,7 +502,8 @@ class RuntimeTestRunner:
                         proc.kill()
 
                 # Verify exact version from running server console output
-                exact_version_matched = any("Starting minecraft server version 1.21.11" in l for l in logs)
+                expected_startup = f"Starting minecraft server version {self.version}"
+                exact_version_matched = any(expected_startup in l for l in logs)
                 if not exact_version_matched:
                     return RuntimeTestResult(
                         mode=RuntimeTestMode.MINECRAFT_SERVER,
@@ -491,7 +511,7 @@ class RuntimeTestRunner:
                         ticks_simulated=0,
                         events_tested=events_tested,
                         logs=logs,
-                        details="Minecraft server did not report exact version 1.21.11 in console output."
+                        details=f"Minecraft server did not report exact version {self.version} in console output."
                     )
 
                 # Verify absence of broken function tags or missing function references
@@ -522,7 +542,7 @@ class RuntimeTestRunner:
                         ticks_simulated=40,
                         events_tested=events_tested,
                         logs=logs,
-                        details="Minecraft 1.21.11 server booted headlessly, verified exact version 1.21.11, datapack loading, function tags, commands, and stopped cleanly."
+                        details=f"Minecraft {self.version} server booted headlessly, verified exact version {self.version}, datapack loading, function tags, commands, and stopped cleanly."
                     )
                 else:
                     return RuntimeTestResult(

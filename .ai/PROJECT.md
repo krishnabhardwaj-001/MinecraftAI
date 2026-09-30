@@ -19,8 +19,12 @@ The project operates as an authoritative 8-stage pipeline:
 
 This architecture is generic, version-aware, and deterministic.
 
-## Target Minecraft version
-- Minecraft Java Edition 1.21.11 (Data Pack version 94.1 / `pack_format: 94`, `min_format: [94, 0]`, `max_format: [94, 1]`)
+## Target Minecraft version & Version Architecture (Step 23 State A)
+- **Officially Supported Version**: Minecraft Java Edition 1.21.11 (`data_pack_version: "94.1"`, `pack_format: 94`, `min_format: [94, 0]`, `max_format: [94, 1]`, `directory_layout: "singular"`, `attribute_format: "namespaced"`, `modifier_id_format: "string"`, `recipe_result_format: "id_count"`).
+- **Single Source of Truth**: Centralized `VersionRegistry` and `VersionMetadata` (`ai/version_registry.py`) providing typed capabilities via `VersionContext`. Eliminates scattered hardcoded version conditionals across the codebase.
+- **Dynamic Knowledge Isolation**: `MinecraftKnowledgeRetriever` resolves files strictly relative to the requested version path (`knowledge/.../{version}/...`) and rejects unsupported versions without silent fallback to 1.21.11.
+- **Semantic IR Versioning**: `MinecraftDatapackSpec` carries `minecraft_version` as execution context while keeping `PropertyModification` strictly version-neutral.
+- **Multi-Version Readiness**: Architecture is ready for future Minecraft Java versions; however, additional versions (e.g., 1.20.1, 1.21.1) are explicitly NOT yet supported in Step 23.
 
 ## Authoritative Mechanism Domains (7 Supported Domains)
 The deterministic generator and validator support 7 first-class mechanism domains:
