@@ -40,7 +40,7 @@ class MinecraftPipeline:
     def __init__(
         self,
         provider: str = "ollama",
-        version: str = "1.21.11",
+        version: Optional[str] = None,
         version_context: Optional[VersionContext] = None,
         output_dir: Optional[Path] = None,
         max_repair_attempts: int = 3,
@@ -64,7 +64,12 @@ class MinecraftPipeline:
 
         # Subsystems (supports dependency injection for testing)
         self.ai = ai_provider or AIProvider(provider=provider)
-        self.understanding = understanding_engine or MinecraftUnderstanding(provider=provider, ai_provider=self.ai)
+        self.understanding = understanding_engine or MinecraftUnderstanding(
+            provider=provider,
+            ai_provider=self.ai,
+            version=self.version,
+            version_context=self.version_context
+        )
         self.generator = generator or DatapackGenerator(output_dir=output_dir, version=self.version, version_context=self.version_context)
         self.validator = validator or DatapackValidator(version=self.version, version_context=self.version_context)
         self.repair_loop = repair_loop or AIRepairLoop(
@@ -78,12 +83,14 @@ class MinecraftPipeline:
         self.qa_reviewer = qa_reviewer or AutonomousQAReviewer(
             ai_provider=self.ai,
             provider=provider,
-            version=self.version
+            version=self.version,
+            version_context=self.version_context
         )
         self.qa_repair_engine = qa_repair_engine or QARepairEngine(
             ai_provider=self.ai,
             provider=provider,
-            version=self.version
+            version=self.version,
+            version_context=self.version_context
         )
         self.runtime_runner = runtime_runner or RuntimeTestRunner(version=self.version, version_context=self.version_context)
 
@@ -536,7 +543,7 @@ class MinecraftPipeline:
 
 def run_minecraft_pipeline(
     request: str,
-    minecraft_version: str = "1.21.11",
+    minecraft_version: Optional[str] = None,
     version_context: Optional[VersionContext] = None,
     provider: str = "ollama",
     create_zip: bool = True,

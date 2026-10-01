@@ -64,7 +64,7 @@ class RuntimeTestRunner:
 
     def __init__(
         self,
-        version: str = "1.21.11",
+        version: Optional[str] = None,
         version_context: Optional[VersionContext] = None
     ):
         self.version_context = version_context or VersionContext.from_version(version)
@@ -380,7 +380,7 @@ class RuntimeTestRunner:
         events_tested = ["boot_load"]
 
         try:
-            with tempfile.TemporaryDirectory(prefix="mc_server_test_") as temp_dir_str:
+            with tempfile.TemporaryDirectory(prefix="mc_server_test_", ignore_cleanup_errors=True) as temp_dir_str:
                 temp_dir = Path(temp_dir_str)
                 # Accept EULA inside temp directory only
                 (temp_dir / "eula.txt").write_text("eula=true\n", encoding="utf-8")
@@ -437,7 +437,7 @@ class RuntimeTestRunner:
 
                 server_ready = False
                 start_time = time.time()
-                max_boot_time = max(35, timeout_s - 15)
+                max_boot_time = max(80, timeout_s)
 
                 try:
                     while time.time() - start_time < max_boot_time:
@@ -517,6 +517,7 @@ class RuntimeTestRunner:
                             pass
                     if proc.poll() is None:
                         proc.kill()
+                    time.sleep(0.5)
 
                 # Verify exact version from running server console output
                 expected_startup = f"Starting minecraft server version {self.version}"

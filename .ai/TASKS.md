@@ -75,6 +75,20 @@
   - [x] Phase 24.5: End-to-end multi-version verification suite (`test_step24_multiversion.py`, 11 tests), headless 1.21.1 real Minecraft server execution verified, knowledge isolation confirmed (1.21.1: 1007 cmds/130 entities/1333 items; 1.21.11: 1273 cmds/157 entities/1505 items).
   - [x] Phase 24.6: Full audit — 545/545 tests, `git diff --check` clean, no TODO/FIXME/HACK, datapack structure verified for both versions, version isolation confirmed, all critical suites pass.
   - [x] Phase 24.7: Staged and committed 59 files (`ff56464`), pushed to `origin/main` (`b5fcffd..ff56464`). Working tree clean, `main` synchronized with `origin/main`.
+- [x] Phase 25.1: Multi-Version Knowledge Parity & 1.21.1 Loot Table Restoration.
+  - [x] Extracted all 1,178 vanilla 1.21.1 loot tables directly from `versions/1.21.1/server-1.21.1.jar` into `knowledge/loot_tables/java/1.21.1/tables/` with `schema.json`.
+  - [x] Added generic namespace normalization (`minecraft:`, `minecraft/`) in `LootTableGenerator._normalize_path()`.
+  - [x] Reconciled table counts: 1.21.1 (1,178 tables) vs 1.21.11 (1,324 tables + 22 `_all.json` index files), net difference +146 (+147 additions, -1 deletion of `blocks/chain.json`).
+  - [x] Dedicated verification suite (`test_step25_1_loot_knowledge.py`, 5 tests) passing 5/5.
+- [x] Phase 25.2: Version-Aware Understanding & QA Context Propagation.
+  - [x] Parameterized `MinecraftUnderstanding` with `version` and `version_context`, generating dynamic prompt targeting `Minecraft Java Edition {self.version}.`.
+  - [x] Propagated `version` and `version_context` through `MinecraftPipeline` to all downstream subsystems: Understanding, Generator, Validator, Repair Loop, Autonomous QA Reviewer, QA Repair Engine, and Runtime Test Runner.
+  - [x] Eliminated hardcoded string defaults in QA components (`StaticSemanticAnalyzer`, `AutonomousQAReviewer`, `QARepairEngine`, `RuntimeTestRunner`, `ScoreboardSemanticSimulator`), resolving dynamically via `VersionContext.from_version(version)`.
+  - [x] Enhanced `RuntimeTestRunner` with `ignore_cleanup_errors=True` on `tempfile.TemporaryDirectory`, 0.5s handle-release delay to avoid Windows `WinError 32` file locking on `logs/latest.log`, and `max_boot_time = max(80, timeout_s)`.
+  - [x] Dedicated verification suite (`test_step25_2_version_context.py`, 10 tests) passing 10/10; combined multi-version suites passing 60/60; full test suite passing 560/560; headless servers verified.
+- [ ] Phase 25.3: Pytest Warning Cleanup (eliminate 75 `PytestReturnNotNoneWarning` across 9 legacy test files).
+- [ ] Phase 25.4: Dual-Version Evaluation Benchmark Suite (`eval/dataset.json`, `eval/benchmark.py`).
+- [ ] Phase 25.5: Final Dual-Version Verification, Documentation & Handoff.
 - [x] Keep AI context files synchronized after significant changes.
 
 

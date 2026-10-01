@@ -28,6 +28,10 @@ class LootTableGenerator:
         clean = loot_table_path.strip().replace("\\", "/")
         if clean.startswith("/"):
             clean = clean[1:]
+        if clean.startswith("minecraft:"):
+            clean = clean[len("minecraft:"):]
+        elif clean.startswith("minecraft/"):
+            clean = clean[len("minecraft/"):]
         if not clean.endswith(".json"):
             clean += ".json"
         return clean

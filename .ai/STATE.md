@@ -110,15 +110,31 @@
   8. Benchmark Version Awareness (`eval/models.py`, `eval/benchmark.py`): Added `minecraft_version` field to `BenchmarkCase` defaulting to 1.21.11. Benchmark runner resolves `VersionContext` and passes it to generator and validator.
   9. Comprehensive Verification Suite (`test_step23_versioning.py`): Added 30 automated tests across Registry, Knowledge, Semantic IR, Generator, Validator, Runtime, CLI/Web, Benchmark, and Regression. Full test suite passing 455/455 tests. Headless real-Minecraft 1.21.11 verification passing 17/17 tests. Evaluation benchmark passing 53/53 cases. `git diff --check` clean.
 
+- Multi-Version Knowledge Parity & Loot Preservation (Phase 25.1) operational:
+  1. Authoritative 1.21.1 Loot Table Knowledge: Extracted all 1,178 vanilla loot table JSON files directly from `versions/1.21.1/server-1.21.1.jar` inner JAR (`data/minecraft/loot_table/`) into `knowledge/loot_tables/java/1.21.1/tables/` with `schema.json`.
+  2. Generic Namespace Normalization (`generator/loot_table_generator.py`): Extended `_normalize_path()` to strip optional `minecraft:` or `minecraft/` resource prefixes, allowing canonical identifiers (e.g. `minecraft:entities/creeper`) from entity metadata to resolve to relative filesystem paths.
+  3. Vanilla Drop Preservation: Fixed 1.21.1 mob loot generation from falling back to empty pools, ensuring original vanilla drops (gunpowder, music discs for creepers) are preserved alongside custom additions.
+  4. Validator Auto-Discovery: `DatapackValidator` automatically discovers 1.21.1 vanilla loot tables, verifies drop preservation, and enforces `PRESERVATION_FAILURE` on destructive overrides without code modifications.
+  5. Dedicated Verification Suite (`test_step25_1_loot_knowledge.py`, 5 tests): Verifies 1.21.1 loot knowledge existence, vanilla drop preservation, validator detection of destructive modifications, 1.21.11 regression parity, and ZIP root structure.
+
+- Version-Aware Understanding & QA Context Propagation (Phase 25.2) operational:
+  1. Version-Aware Understanding Layer (`ai/understanding.py`): `MinecraftUnderstanding` accepts `version: Optional[str] = None` and `version_context: Optional[VersionContext] = None`. Dynamically formats `f"Minecraft Java Edition {self.version}."` into the system prompt. Completely eliminates hardcoded `1.21.11` prompt literals.
+  2. End-to-End Pipeline Version Flow (`pipeline/minecraft_pipeline.py`): `MinecraftPipeline` propagates `version` and `version_context` into `MinecraftUnderstanding`, `DatapackGenerator`, `DatapackValidator`, `AIRepairLoop`, `AutonomousQAReviewer`, `QARepairEngine`, and `RuntimeTestRunner`.
+  3. QA Subsystems Dynamic Context (`qa/analyzer.py`, `qa/reviewer.py`, `qa/repair.py`, `qa/runtime.py`, `qa/scoreboard_semantics.py`): Constructors accept `version` / `version_context` resolving dynamically through `VersionContext.from_version(version)`. Standalone default construction resolves to the project default `1.21.11` without duplicating hardcoded string literals.
+  4. Headless Server Windows Robustness (`qa/runtime.py`): Updated `RuntimeTestRunner` with `ignore_cleanup_errors=True` on `tempfile.TemporaryDirectory` and a 0.5s handle-release delay to prevent `WinError 32` file locking on `logs/latest.log` upon Java process termination, and expanded `max_boot_time` to `max(80, timeout_s)` to support realistic headless server initialization on Windows.
+  5. Dedicated Verification Suite (`test_step25_2_version_context.py`, 10 tests): Verifies 1.21.1 and 1.21.11 Understanding prompt generation, pipeline version forwarding, QA component isolation, simulator context passing, and object context propagation. 560/560 tests passing, 53/53 benchmark cases passing, both 1.21.1 and 1.21.11 headless real Minecraft servers verified.
+
 ## Known issues / gaps
-- None. Full pipeline passes all static, semantic, QA, intent, headless Minecraft 1.21.1 and 1.21.11 runtime, packaging, CI/CD, evaluation benchmark, and multi-version tests.
+- 75 legacy unit tests in 9 test files trigger `PytestReturnNotNoneWarning` because they return boolean values rather than asserting (scheduled for cleanup in Phase 25.3).
+- Evaluation benchmark dataset (`eval/dataset.json`) currently tests 53 cases against 1.21.11 with 0 explicit 1.21.1 cases (scheduled for expansion in Phase 25.4).
 
 ## Current priority
-Phase 24 complete. Multi-version support (1.21.1 + 1.21.11) implemented, verified, committed, and pushed. Full test suite passing (545/545), headless Minecraft 1.21.1 verified (test_step24_multiversion), headless Minecraft 1.21.11 verified (17/17), benchmark passing (53/53), `git diff --check` clean. `main` and `origin/main` synchronized at commit `ff56464`.
+Phase 25.1 and Phase 25.2 complete. 1.21.1 loot knowledge restored and authoritative; Understanding and QA context propagation fully version-aware. Full test suite passing (560/560), headless Minecraft 1.21.1 and 1.21.11 servers verified, benchmark passing (53/53), `git diff --check` clean.
 
 ## Next logical work
-1. Await user instruction before proceeding to Phase 25.
-2. Keep shared AI context synchronized for Antigravity and ChatGPT/Codex.
+1. Proceed to Phase 25.3: Pytest warning cleanup (eliminate 75 `PytestReturnNotNoneWarning`).
+2. Proceed to Phase 25.4: Dual-version evaluation benchmark suite (`eval/dataset.json`, `eval/benchmark.py`).
+3. Proceed to Phase 25.5: Final dual-version end-to-end verification and handoff.
 
 ## Agent handoff rule
 Before changing code, verify this state against the actual repository and Git history. After significant changes, update this file and the other relevant `.ai/` files.

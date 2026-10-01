@@ -23,7 +23,9 @@ import copy
 import re
 from enum import Enum
 from pathlib import Path
-from typing import Any, Dict, List, Optional, Set, Tuple, Union
+from typing import Any, Dict, List, Optional, Set, Tuple
+
+from ai.version_registry import VersionContext
 
 from qa.models import QACategory, QAFinding, QASeverity
 
@@ -308,11 +310,19 @@ class ParsedCommand:
 class ScoreboardSemanticSimulator:
     """
     Lightweight deterministic semantic analyzer and multi-tick simulator
-    for Minecraft Java Edition 1.21.11 scoreboard and state-machine datapacks.
+    for Minecraft Java scoreboard and state-machine datapacks.
     """
 
-    def __init__(self, version: str = "1.21.11"):
-        self.version = version
+    def __init__(
+        self,
+        version: Optional[str] = None,
+        version_context: Optional[VersionContext] = None
+    ):
+        if version_context is not None:
+            self.version_context = version_context
+        else:
+            self.version_context = VersionContext.from_version(version)
+        self.version = self.version_context.version_id
 
     def parse_line(self, line: str, line_number: int, file_path: str) -> Optional[ParsedCommand]:
         line_clean = line.strip()

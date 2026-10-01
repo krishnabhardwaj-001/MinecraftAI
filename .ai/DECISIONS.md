@@ -460,3 +460,25 @@ To eliminate scattered assumptions (such as `if version == "1.21.11"` or `pack_f
    Added `minecraft_version` to `BenchmarkCase` in `eval/models.py` (defaulting to `1.21.11`). `eval/benchmark.py` resolves `VersionContext` and passes it to generator and validator.
 8. State A Version Boundary:
    Minecraft Java 1.21.11 remains the ONLY officially supported version in Step 23. No second version (e.g. 1.20.1 or 1.21.1) server JAR, knowledge base, or compatibility shim is added or claimed.
+
+## D044 — Authoritative 1.21.1 Loot Table Knowledge & Vanilla Drop Preservation (Phase 25.1)
+To eliminate vanilla drop destruction during 1.21.1 loot table modifications and achieve knowledge parity with 1.21.11:
+1. Authoritative Vanilla Extraction:
+   Extracted all 1,178 vanilla 1.21.1 loot tables directly from `versions/1.21.1/server-1.21.1.jar`'s inner jar filesystem (`data/minecraft/loot_table/`) into `knowledge/loot_tables/java/1.21.1/tables/` with `schema.json`.
+2. Generic Resource Namespace Normalization:
+   Extended `LootTableGenerator._normalize_path()` to strip optional `minecraft:` or `minecraft/` namespace prefixes. This ensures entity metadata loot table identifiers (e.g. `minecraft:entities/creeper`) map directly to relative knowledge paths (`entities/creeper.json`) regardless of target version.
+3. Reconciled Differential Inventory:
+   Verified exact table counts directly from official server JARs: 1.21.1 contains 1,178 tables; 1.21.11 contains 1,324 tables (and 22 `_all.json` index files). The net difference of +146 is accounted for by 147 new tables in 1.21.11 (e.g., trial chambers, pale garden, bundles, bogons) and 1 deleted table (`blocks/chain.json` was removed/restructured).
+4. Preservation of Vanilla Drops:
+   `DatapackValidator` and `LootTableGenerator` preserve original vanilla pools and condition sequences across versions, ensuring that modifying a 1.21.1 creeper table retains vanilla gunpowder drops while adding requested items.
+
+## D045 — Version-Aware Understanding Prompt & Dynamic Context Propagation across Pipeline and QA (Phase 25.2)
+To eliminate hardcoded `1.21.11` version target assumptions across the AI understanding layer, pipeline orchestration, and QA subsystems:
+1. Dynamic Understanding Target Prompt:
+   `MinecraftUnderstanding` accepts `version: Optional[str] = None` and `version_context: Optional[VersionContext] = None`. When constructing the system prompt, it dynamically inserts `Minecraft Java Edition {self.version}.` rather than a hardcoded `1.21.11` literal string.
+2. Unified Context Forwarding in Pipeline:
+   `MinecraftPipeline` accepts `version` and `version_context` (defaulting dynamically via `VersionContext.from_version(version)`) and propagates them directly to all instantiated subcomponents: `MinecraftUnderstanding`, `DatapackGenerator`, `DatapackValidator`, `AIRepairLoop`, `AutonomousQAReviewer`, `QARepairEngine`, and `RuntimeTestRunner`.
+3. Dynamic Construction in QA Subsystems:
+   Removed hardcoded constructor parameter defaults `version: str = "1.21.11"` from `StaticSemanticAnalyzer`, `AutonomousQAReviewer`, `QARepairEngine`, `ScoreboardSemanticSimulator`, and `RuntimeTestRunner`. All constructors use `version: Optional[str] = None, version_context: Optional[VersionContext] = None` and resolve to `VersionContext.from_version(version)`, maintaining `1.21.11` as the registered project default without duplicate string literals.
+4. Robust Windows Headless Server Teardown & Boot Latency:
+   Updated `RuntimeTestRunner` with `ignore_cleanup_errors=True` on `tempfile.TemporaryDirectory` and a 0.5s handle-release delay to avoid Windows `WinError 32` file locking on `logs/latest.log` upon Java process termination, and expanded `max_boot_time` to `max(80, timeout_s)` to reliably accommodate initial spawn chunks generation on Windows machines.

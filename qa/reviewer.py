@@ -4,6 +4,7 @@ from pathlib import Path
 from typing import Any, Dict, List, Optional
 
 from ai.provider import AIProvider
+from ai.version_registry import VersionContext
 from qa.analyzer import StaticSemanticAnalyzer
 from qa.models import (
     IntentVerificationResult,
@@ -34,12 +35,17 @@ class AutonomousQAReviewer:
         self,
         ai_provider: Optional[AIProvider] = None,
         provider: str = "ollama",
-        version: str = "1.21.11"
+        version: Optional[str] = None,
+        version_context: Optional[VersionContext] = None
     ):
-        self.version = version
+        if version_context is not None:
+            self.version_context = version_context
+        else:
+            self.version_context = VersionContext.from_version(version)
+        self.version = self.version_context.version_id
         self.provider_name = provider
         self.ai = ai_provider or AIProvider(provider=provider)
-        self.analyzer = StaticSemanticAnalyzer(version=version)
+        self.analyzer = StaticSemanticAnalyzer(version_context=self.version_context)
 
     def review(
         self,

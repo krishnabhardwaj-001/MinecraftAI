@@ -1,15 +1,28 @@
 import json
+from typing import Any, Dict, List, Optional
 
 from ai.provider import AIProvider
 from ai.schemas import MinecraftUnderstandingResult
+from ai.version_registry import VersionContext
 
 
 class MinecraftUnderstanding:
 
-    def __init__(self, provider="ollama", ai_provider=None):
+    def __init__(
+        self,
+        provider: str = "ollama",
+        ai_provider: Optional[AIProvider] = None,
+        version: Optional[str] = None,
+        version_context: Optional[VersionContext] = None
+    ):
         self.provider = ai_provider or AIProvider(provider)
+        if version_context is not None:
+            self.version_context = version_context
+        else:
+            self.version_context = VersionContext.from_version(version)
+        self.version = self.version_context.version_id
 
-        self.system_prompt = """
+        self.system_prompt = f"""
 You are the understanding layer of a Minecraft AI system.
 
 Your job is to understand the user's request and convert it into
@@ -304,7 +317,7 @@ Return only the structured response required by the schema.
 
 Current project target:
 
-Minecraft Java Edition 1.21.11.
+Minecraft Java Edition {self.version}.
 
 Do not generate commands.
 Do not generate datapack files.
@@ -433,11 +446,6 @@ Understand the user's intent.
 
 if __name__ == "__main__":
 
-    print("=" * 70)
-    print("Minecraft AI - Understanding Layer")
-    print("Minecraft Java Edition 1.21.11")
-    print("=" * 70)
-
     provider = input(
         "\nAI provider [ollama/openai] (default: ollama): "
     ).strip().lower()
@@ -446,6 +454,11 @@ if __name__ == "__main__":
         provider = "ollama"
 
     ai = MinecraftUnderstanding(provider=provider)
+
+    print("=" * 70)
+    print("Minecraft AI - Understanding Layer")
+    print(f"Minecraft Java Edition {ai.version}")
+    print("=" * 70)
 
     while True:
 

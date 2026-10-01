@@ -3,13 +3,14 @@ import re
 from pathlib import Path
 from typing import Any, Dict, List, Optional, Set, Tuple
 
+from ai.version_registry import VersionContext
 from qa.models import QACategory, QAFinding, QASeverity
 from qa.scoreboard_semantics import ScoreboardSemanticSimulator
 
 
 class StaticSemanticAnalyzer:
     """
-    Deterministic static semantic analyzer for Minecraft Java 1.21.11 datapacks.
+    Deterministic static semantic analyzer for Minecraft Java datapacks.
     Inspects:
     1. File completeness and orphaned resources
     2. Cross-file reference integrity (functions, tags, predicates, objectives)
@@ -17,8 +18,16 @@ class StaticSemanticAnalyzer:
     4. State machine temporal logic and initialization ordering
     """
 
-    def __init__(self, version: str = "1.21.11"):
-        self.version = version
+    def __init__(
+        self,
+        version: Optional[str] = None,
+        version_context: Optional[VersionContext] = None
+    ):
+        if version_context is not None:
+            self.version_context = version_context
+        else:
+            self.version_context = VersionContext.from_version(version)
+        self.version = self.version_context.version_id
 
     def analyze(
         self,
@@ -612,7 +621,7 @@ class StaticSemanticAnalyzer:
         datapack_dir: Path,
         resources: Dict[str, Any]
     ) -> List[QAFinding]:
-        sim = ScoreboardSemanticSimulator(version=self.version)
+        sim = ScoreboardSemanticSimulator(version=self.version, version_context=self.version_context)
         return sim.analyze_datapack(datapack_dir)
 
     # -------------------------------------------------------------------------
