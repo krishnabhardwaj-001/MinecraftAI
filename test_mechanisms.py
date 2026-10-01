@@ -54,7 +54,6 @@ def test_function_mechanism():
     assert "say Healed all players!" in lines
     assert "playsound minecraft:entity.player.levelup player @a" in lines
     print("  [OK] Function generated with singular 1.21+ path and stripped slashes.")
-    return True
 
 
 def test_function_tag_mechanism():
@@ -109,7 +108,6 @@ def test_function_tag_mechanism():
     print("  [OK] Function tag generated at data/minecraft/tags/function/tick.json with valid JSON.")
     print("  [OK] Minimal canonical format verified (replace omitted when False, included when True).")
     print("  [OK] Game-loop tag namespace routing to 'minecraft' verified.")
-    return True
 
 
 def test_advancement_mechanism():
@@ -155,7 +153,6 @@ def test_advancement_mechanism():
     assert data.get("rewards", {}).get("experience") == 1000
     assert data.get("display", {}).get("frame") == "challenge"
     print("  [OK] Advancement generated at data/custom_pack/advancement/story/kill_boss.json.")
-    return True
 
 
 def test_multi_mechanism_datapack():
@@ -241,7 +238,6 @@ def test_multi_mechanism_datapack():
 
     # Cleanup
     shutil.rmtree(test_dir)
-    return True
 
 
 def test_validator_catches_invalid_mechanisms():
@@ -307,8 +303,6 @@ def test_validator_catches_invalid_mechanisms():
         assert len(adv_errors) > 0, "Validator failed to flag MALFORMED_ADVANCEMENT!"
         print("  [OK] Validator caught MALFORMED_ADVANCEMENT missing 'criteria'.")
 
-    return True
-
 
 def test_determinism_multi_mechanism():
     print("=" * 70)
@@ -372,7 +366,6 @@ def test_determinism_multi_mechanism():
     # Cleanup
     shutil.rmtree(dir1)
     shutil.rmtree(dir2)
-    return True
 
 
 def test_generic_pipeline_effect_request():
@@ -431,7 +424,6 @@ def test_generic_pipeline_effect_request():
     print("  [OK] Generic effect request generated and validated successfully.")
 
     shutil.rmtree(test_dir)
-    return True
 
 
 def run_all_tests():
@@ -448,8 +440,8 @@ def run_all_tests():
 
     passed = 0
     for t in tests:
-        if t():
-            passed += 1
+        t()
+        passed += 1
 
     print("=" * 70)
     print(f"ALL {passed}/{len(tests)} MECHANISM TESTS PASSED SUCCESSFULLY!")

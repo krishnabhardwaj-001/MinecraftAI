@@ -124,7 +124,6 @@ def test_zero_repair_attempts_on_valid_datapack():
 
     print("  [OK] Valid datapack correctly skipped AI repair (0 attempts, 0 AI calls).")
     shutil.rmtree(test_dir, ignore_errors=True)
-    return True
 
 
 def test_corrupted_output_triggers_repair_and_regenerates_valid():
@@ -261,7 +260,6 @@ def test_corrupted_output_triggers_repair_and_regenerates_valid():
 
     print(f"  [OK] Successfully repaired invalid item ID on attempt #1: {result.message}")
     shutil.rmtree(test_dir, ignore_errors=True)
-    return True
 
 
 def test_maximum_retry_count_enforced_and_no_infinite_loop():
@@ -353,7 +351,6 @@ def test_maximum_retry_count_enforced_and_no_infinite_loop():
 
     print(f"  [OK] Enforced exact retry limit ({MAX_RETRIES}) with no infinite loop: {result.message}")
     shutil.rmtree(test_dir, ignore_errors=True)
-    return True
 
 
 def test_failed_repair_returns_structured_failure_history():
@@ -448,7 +445,6 @@ def test_failed_repair_returns_structured_failure_history():
     assert "Attempt History:" in summary_text
     print("  [OK] Structured failure summary formatted cleanly.")
     shutil.rmtree(test_dir, ignore_errors=True)
-    return True
 
 
 def test_arbitrary_entity_and_item_combination():
@@ -560,7 +556,6 @@ def test_arbitrary_entity_and_item_combination():
 
     print("  [OK] Arbitrary spider -> iron_ingot combination successfully healed and validated.")
     shutil.rmtree(test_dir, ignore_errors=True)
-    return True
 
 
 def test_ai_provider_instantiation_and_contract():
@@ -575,7 +570,6 @@ def test_ai_provider_instantiation_and_contract():
     assert loop.max_attempts == 3
     assert loop.version == "1.21.11"
     print("  [OK] AIRepairLoop initializes cleanly with default Ollama AIProvider.")
-    return True
 
 
 def test_multi_attempt_repair_resolution():
@@ -679,22 +673,20 @@ def test_multi_attempt_repair_resolution():
 
     print(f"  [OK] Multi-attempt repair resolved successfully on attempt #2: {result.message}")
     shutil.rmtree(test_dir, ignore_errors=True)
-    return True
 
 
 if __name__ == "__main__":
-    t1 = test_zero_repair_attempts_on_valid_datapack()
-    t2 = test_corrupted_output_triggers_repair_and_regenerates_valid()
-    t3 = test_maximum_retry_count_enforced_and_no_infinite_loop()
-    t4 = test_failed_repair_returns_structured_failure_history()
-    t5 = test_arbitrary_entity_and_item_combination()
-    t6 = test_ai_provider_instantiation_and_contract()
-    t7 = test_multi_attempt_repair_resolution()
-
-    if all([t1, t2, t3, t4, t5, t6, t7]):
+    try:
+        test_zero_repair_attempts_on_valid_datapack()
+        test_corrupted_output_triggers_repair_and_regenerates_valid()
+        test_maximum_retry_count_enforced_and_no_infinite_loop()
+        test_failed_repair_returns_structured_failure_history()
+        test_arbitrary_entity_and_item_combination()
+        test_ai_provider_instantiation_and_contract()
+        test_multi_attempt_repair_resolution()
         print("=" * 70)
         print("ALL 7 REPAIR LOOP TESTS PASSED SUCCESSFULLY!")
         print("=" * 70)
         sys.exit(0)
-    else:
+    except AssertionError:
         sys.exit(1)

@@ -147,7 +147,6 @@ def test_creeper_drops_diamonds():
     print(f"  [OK] Datapack ZIP created successfully: {result.zip_path}")
 
     print("\nTEST 1 PASSED SUCCESSFULLY!\n")
-    return True
 
 
 def test_determinism():
@@ -209,7 +208,6 @@ def test_determinism():
     shutil.rmtree(test_output_2)
 
     print("\nTEST 2 PASSED SUCCESSFULLY!\n")
-    return True
 
 
 def test_generality_arbitrary_mob():
@@ -301,7 +299,6 @@ def test_generality_arbitrary_mob():
     shutil.rmtree(test_output_dir)
 
     print("\nTEST 3 PASSED SUCCESSFULLY!\n")
-    return True
 
 
 def test_multi_datapack_tag_aggregation():
@@ -384,19 +381,17 @@ def test_multi_datapack_tag_aggregation():
 
     shutil.rmtree(test_output_dir)
     print("\nTEST 4 PASSED SUCCESSFULLY!\n")
-    return True
 
 
 if __name__ == "__main__":
-    t1 = test_creeper_drops_diamonds()
-    t2 = test_determinism()
-    t3 = test_generality_arbitrary_mob()
-    t4 = test_multi_datapack_tag_aggregation()
-
-    if t1 and t2 and t3 and t4:
+    try:
+        test_creeper_drops_diamonds()
+        test_determinism()
+        test_generality_arbitrary_mob()
+        test_multi_datapack_tag_aggregation()
         print("=" * 70)
         print("ALL 4 GENERATOR TESTS PASSED SUCCESSFULLY!")
         print("=" * 70)
         sys.exit(0)
-    else:
+    except AssertionError:
         sys.exit(1)

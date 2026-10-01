@@ -76,7 +76,6 @@ def test_valid_creeper_datapack():
 
     # Clean up
     shutil.rmtree(test_dir)
-    return True
 
 
 def test_invalid_json():
@@ -103,7 +102,6 @@ def test_invalid_json():
             f"Expected INVALID_JSON error code, got: {[e.code for e in result.errors]}"
         )
         print(f"  [OK] Correctly caught invalid JSON syntax: {result.errors[0].message}")
-    return True
 
 
 def test_missing_mcmeta():
@@ -122,7 +120,6 @@ def test_missing_mcmeta():
         assert not result.is_valid, "Expected invalid result when pack.mcmeta is missing!"
         assert any(e.code == "MISSING_MCMETA" for e in result.errors)
         print(f"  [OK] Correctly caught missing pack.mcmeta: {result.errors[0].message}")
-    return True
 
 
 def test_wrong_pack_format():
@@ -146,7 +143,6 @@ def test_wrong_pack_format():
         assert not result.is_valid, "Expected invalid result for wrong pack_format!"
         assert any(e.code == "INVALID_PACK_FORMAT" for e in result.errors)
         print(f"  [OK] Correctly caught incompatible pack format: {result.errors[0].message}")
-    return True
 
 
 def test_invalid_item_id():
@@ -188,7 +184,6 @@ def test_invalid_item_id():
         assert not result.is_valid, "Expected invalid result for unrecognized item ID!"
         assert any(e.code == "INVALID_ITEM_ID" for e in result.errors)
         print(f"  [OK] Correctly caught unrecognized item ID: {result.errors[0].message}")
-    return True
 
 
 def test_malformed_loot_table():
@@ -225,7 +220,6 @@ def test_malformed_loot_table():
         assert not result.is_valid, "Expected invalid result for malformed loot table!"
         assert any(e.code == "MALFORMED_LOOT_TABLE" for e in result.errors)
         print(f"  [OK] Correctly caught malformed loot table schema: {result.errors[0].message}")
-    return True
 
 
 def test_unsafe_zip_path():
@@ -248,7 +242,6 @@ def test_unsafe_zip_path():
         assert not result.is_valid, "Expected invalid result for zip path traversal!"
         assert any(e.code == "UNSAFE_PATH" for e in result.errors)
         print(f"  [OK] Blocked unsafe path in ZIP archive: {result.errors[0].message}")
-    return True
 
 
 def test_valid_skeleton_datapack():
@@ -306,7 +299,6 @@ def test_valid_skeleton_datapack():
     print("  [OK] Skeleton -> iron datapack validated successfully.")
 
     shutil.rmtree(test_dir)
-    return True
 
 
 def test_obsolete_plural_path():
@@ -332,7 +324,6 @@ def test_obsolete_plural_path():
         assert not result.is_valid, "Expected invalid result for legacy plural 'loot_tables' path!"
         assert any(e.code == "OBSOLETE_PATH" for e in result.errors)
         print(f"  [OK] Correctly caught obsolete 1.20 path convention: {result.errors[0].message}")
-    return True
 
 
 def test_function_tag_validation():
@@ -391,25 +382,22 @@ def test_function_tag_validation():
         assert any(e.code == "MISSING_TAG_REFERENCE" for e in res_e.errors)
         print("  [OK] Missing tag reference correctly flagged with MISSING_TAG_REFERENCE.")
 
-    return True
-
 
 if __name__ == "__main__":
-    t1 = test_valid_creeper_datapack()
-    t2 = test_invalid_json()
-    t3 = test_missing_mcmeta()
-    t4 = test_wrong_pack_format()
-    t5 = test_invalid_item_id()
-    t6 = test_malformed_loot_table()
-    t7 = test_unsafe_zip_path()
-    t8 = test_valid_skeleton_datapack()
-    t9 = test_obsolete_plural_path()
-    t10 = test_function_tag_validation()
-
-    if all([t1, t2, t3, t4, t5, t6, t7, t8, t9, t10]):
+    try:
+        test_valid_creeper_datapack()
+        test_invalid_json()
+        test_missing_mcmeta()
+        test_wrong_pack_format()
+        test_invalid_item_id()
+        test_malformed_loot_table()
+        test_unsafe_zip_path()
+        test_valid_skeleton_datapack()
+        test_obsolete_plural_path()
+        test_function_tag_validation()
         print("=" * 70)
         print("ALL 10 VALIDATOR TESTS PASSED SUCCESSFULLY!")
         print("=" * 70)
         sys.exit(0)
-    else:
+    except AssertionError:
         sys.exit(1)

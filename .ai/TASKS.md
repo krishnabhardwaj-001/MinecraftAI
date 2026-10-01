@@ -86,7 +86,12 @@
   - [x] Eliminated hardcoded string defaults in QA components (`StaticSemanticAnalyzer`, `AutonomousQAReviewer`, `QARepairEngine`, `RuntimeTestRunner`, `ScoreboardSemanticSimulator`), resolving dynamically via `VersionContext.from_version(version)`.
   - [x] Enhanced `RuntimeTestRunner` with `ignore_cleanup_errors=True` on `tempfile.TemporaryDirectory`, 0.5s handle-release delay to avoid Windows `WinError 32` file locking on `logs/latest.log`, and `max_boot_time = max(80, timeout_s)`.
   - [x] Dedicated verification suite (`test_step25_2_version_context.py`, 10 tests) passing 10/10; combined multi-version suites passing 60/60; full test suite passing 560/560; headless servers verified.
-- [ ] Phase 25.3: Pytest Warning Cleanup (eliminate 75 `PytestReturnNotNoneWarning` across 9 legacy test files).
+- [x] Phase 25.3: Pytest Warning Cleanup (eliminate 75 `PytestReturnNotNoneWarning` across 9 legacy test files).
+  - [x] Replaced legacy `return True` and `return all_passed` with clean pytest assertions across 9 files (`test_planner_boundary.py`, `test_recipes.py`, `test_step15_boundary.py`, `test_validator.py`, `test_predicates.py`, `test_mechanisms.py`, `test_repair_loop.py`, `test_generator.py`, `test_retrieval.py`).
+  - [x] Maintained standalone test execution via `run_all_tests()` and `__main__` entry points using `try/except AssertionError`.
+  - [x] Confirmed zero non-None returns remain across all `test_*` functions in the repository via AST inspection.
+  - [x] Zero production code changed; zero assertions weakened or deleted; no warning suppression decorators or configuration used.
+  - [x] Verified full suite (560/560 PASS, 0 warnings), multi-version suites (60/60 PASS), and evaluation benchmark (53/53 PASS).
 - [ ] Phase 25.4: Dual-Version Evaluation Benchmark Suite (`eval/dataset.json`, `eval/benchmark.py`).
 - [ ] Phase 25.5: Final Dual-Version Verification, Documentation & Handoff.
 - [x] Keep AI context files synchronized after significant changes.

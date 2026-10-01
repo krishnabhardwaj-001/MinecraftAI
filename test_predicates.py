@@ -89,7 +89,6 @@ def test_1_valid_simple_predicates():
 
     print("  [OK] Simple predicates correctly generated and validated.")
     shutil.rmtree(test_dir)
-    return True
 
 
 def test_2_nested_predicates():
@@ -191,7 +190,6 @@ def test_2_nested_predicates():
 
     print("  [OK] Nested composite predicates correctly generated and validated.")
     shutil.rmtree(test_dir)
-    return True
 
 
 def test_3_deterministic_generation():
@@ -236,7 +234,6 @@ def test_3_deterministic_generation():
     print(f"  [OK] Predicate JSON generation is deterministic (SHA256: {hash1[:16]}...)")
     shutil.rmtree(dir1)
     shutil.rmtree(dir2)
-    return True
 
 
 def test_4_namespace_and_path_handling():
@@ -267,7 +264,6 @@ def test_4_namespace_and_path_handling():
 
     print("  [OK] Deeply nested predicate subpath and custom namespace correctly handled.")
     shutil.rmtree(test_dir)
-    return True
 
 
 def test_5_validator_unsupported_type_and_malformed():
@@ -317,7 +313,6 @@ def test_5_validator_unsupported_type_and_malformed():
 
     print("  [OK] Validator correctly rejects unsupported condition types, bad chance ranges, and legacy plural paths.")
     shutil.rmtree(test_dir)
-    return True
 
 
 def test_6_validator_invalid_item_and_entity_ids():
@@ -367,7 +362,6 @@ def test_6_validator_invalid_item_and_entity_ids():
 
     print("  [OK] Validator correctly detects and rejects invalid item and entity IDs in predicates.")
     shutil.rmtree(test_dir)
-    return True
 
 
 def test_7_planner_boundary_and_validation():
@@ -422,7 +416,6 @@ def test_7_planner_boundary_and_validation():
     validate_plan_mechanisms(plan)
 
     print("  [OK] Planner mechanism specification model and validation boundary fully verified.")
-    return True
 
 
 def test_8_composite_datapack_all_mechanisms():
@@ -490,7 +483,6 @@ def test_8_composite_datapack_all_mechanisms():
 
     print("  [OK] Datapack with all 6 mechanisms (including predicate) generated and passed validation cleanly.")
     shutil.rmtree(test_dir)
-    return True
 
 
 if __name__ == "__main__":

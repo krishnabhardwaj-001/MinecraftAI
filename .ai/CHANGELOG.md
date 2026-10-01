@@ -1,5 +1,13 @@
 # AI Change Log
 
+- Implemented PHASE 25.3: Pytest Warning Cleanup & Clean Assertion Contracts (`test_generator.py`, `test_mechanisms.py`, `test_planner_boundary.py`, `test_predicates.py`, `test_recipes.py`, `test_repair_loop.py`, `test_retrieval.py`, `test_step15_boundary.py`, `test_validator.py`):
+  1. Warning Remediation: Eliminated all 75 `PytestReturnNotNoneWarning` warnings across 9 legacy test files without disabling, filtering, or suppressing warnings.
+  2. Assertion Contracts: Replaced trailing `return True` statements (from early standalone script harnesses) with clean pytest assertions; converted `return all_passed` in `test_retrieval.py` to `assert all_passed, "..."`.
+  3. Standalone Execution Preservation: Updated `run_all_tests()` loops and `if __name__ == "__main__":` entry points to catch `AssertionError`, maintaining standalone CLI script execution support while standardizing on pytest.
+  4. Repository-Wide Audit: Verified via AST parsing that zero non-None returns remain in any `test_*` function repository-wide.
+  5. Zero Production Changes: Touched only test files; preserved all existing test assertions, logic, and structure.
+  6. Verification Suite: Full test suite passes 560/560 with zero errors, zero failures, zero warnings (180.18s). Multi-version suites pass 60/60. Benchmark passes 53/53 cases (100%). `git diff --check` passes cleanly.
+
 - Implemented PHASE 25.2: Version-Aware Understanding & QA Context Propagation (`ai/understanding.py`, `pipeline/minecraft_pipeline.py`, `qa/analyzer.py`, `qa/reviewer.py`, `qa/repair.py`, `qa/runtime.py`, `qa/scoreboard_semantics.py`, `test_step25_2_version_context.py`):
   1. Dynamic Target Understanding Prompt (`ai/understanding.py`): `MinecraftUnderstanding` accepts `version: Optional[str] = None` and `version_context: Optional[VersionContext] = None`. Injects `Minecraft Java Edition {self.version}.` dynamically into the system prompt, eliminating hardcoded `1.21.11` literal strings.
   2. End-to-End Version Forwarding in Pipeline (`pipeline/minecraft_pipeline.py`): Propagates target `version` and `version_context` through `MinecraftPipeline` into `MinecraftUnderstanding`, `DatapackGenerator`, `DatapackValidator`, `AIRepairLoop`, `AutonomousQAReviewer`, `QARepairEngine`, and `RuntimeTestRunner`.

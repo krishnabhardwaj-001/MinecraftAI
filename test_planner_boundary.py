@@ -56,7 +56,6 @@ def test_1_planner_structured_mechanism_output():
     # Verify that mechanism is a structured dictionary
     assert isinstance(first_mech, dict)
     print(f"  [OK] Planner produced structured mechanism: type='{first_mech.get('type')}', target='{first_mech.get('target')}', item='{first_mech.get('item')}'")
-    return True
 
 
 def test_2_pydantic_validation_valid_specifications():
@@ -121,7 +120,6 @@ def test_2_pydantic_validation_valid_specifications():
     assert "kill_zombie" in adv_def.criteria
 
     print("  [OK] All 4 mechanism types validated and converted cleanly.")
-    return True
 
 
 def test_3_rejection_incomplete_specifications():
@@ -185,8 +183,6 @@ def test_3_rejection_incomplete_specifications():
         assert "unsupported" in str(e).lower()
         print(f"  [OK] Rejected unsupported mechanism type: {e}")
 
-    return True
-
 
 def test_4_generic_function_specification():
     print("=" * 70)
@@ -233,7 +229,6 @@ def test_4_generic_function_specification():
     print("  [OK] Function specification generated and validated cleanly.")
 
     shutil.rmtree(test_dir)
-    return True
 
 
 def test_5_generic_function_tag_specification():
@@ -286,7 +281,6 @@ def test_5_generic_function_tag_specification():
     print("  [OK] Function tag specification verified at data/minecraft/tags/function/tick.json.")
 
     shutil.rmtree(test_dir)
-    return True
 
 
 def test_6_generic_advancement_specification():
@@ -352,7 +346,6 @@ def test_6_generic_advancement_specification():
     print("  [OK] Advancement specification verified at data/zombie_hunt/advancement/kill_zombie_reward.json.")
 
     shutil.rmtree(test_dir)
-    return True
 
 
 def test_7_generic_loot_table_specification():
@@ -403,7 +396,6 @@ def test_7_generic_loot_table_specification():
     print("  [OK] Structured loot table specification generated and validated.")
 
     shutil.rmtree(test_dir)
-    return True
 
 
 def test_8_multiple_mechanisms_in_one_plan():
@@ -468,7 +460,6 @@ def test_8_multiple_mechanisms_in_one_plan():
     print("  [OK] Multi-mechanism plan (function + tag + advancement) cleanly generated and validated.")
 
     shutil.rmtree(test_dir)
-    return True
 
 
 def test_9_existing_loot_table_compatibility():
@@ -511,7 +502,6 @@ def test_9_existing_loot_table_compatibility():
     print("  [OK] Full backward compatibility verified for legacy minimal plans.")
 
     shutil.rmtree(test_dir)
-    return True
 
 
 def test_10_dynamic_clarification_preservation():
@@ -523,7 +513,6 @@ def test_10_dynamic_clarification_preservation():
     assert res.status == "needs_clarification", f"Expected needs_clarification, got: {res.status}"
     assert res.clarification is not None and len(res.clarification) > 0
     print(f"  [OK] Ambiguous request correctly stopped at clarification: '{res.clarification}'")
-    return True
 
 
 def test_11_arbitrary_entity_item_generality():
@@ -567,7 +556,6 @@ def test_11_arbitrary_entity_item_generality():
     print("  [OK] Multiple arbitrary mob/item pairs verified without special casing.")
 
     shutil.rmtree(test_dir)
-    return True
 
 
 def test_12_full_pipeline_integration():
@@ -580,7 +568,6 @@ def test_12_full_pipeline_integration():
     assert res.final_zip_path is not None
     assert Path(res.final_zip_path).exists()
     print(f"  [OK] Full pipeline generated validated ZIP at: {res.final_zip_path}")
-    return True
 
 
 def test_13_deterministic_reproducibility():
@@ -637,7 +624,6 @@ def test_13_deterministic_reproducibility():
 
     shutil.rmtree(dir1)
     shutil.rmtree(dir2)
-    return True
 
 
 def run_all_tests():
@@ -660,8 +646,8 @@ def run_all_tests():
 
     passed = 0
     for t in tests:
-        if t():
-            passed += 1
+        t()
+        passed += 1
 
     print("=" * 70)
     print(f"ALL {passed}/{len(tests)} PLANNER BOUNDARY TESTS PASSED SUCCESSFULLY!")

@@ -73,7 +73,6 @@ def test_1_shaped_crafting_recipe():
 
     print("  [OK] Shaped recipe correctly generated with 1.21+ result.id syntax and validated.")
     shutil.rmtree(test_dir)
-    return True
 
 
 def test_2_shapeless_crafting_recipe():
@@ -119,7 +118,6 @@ def test_2_shapeless_crafting_recipe():
 
     print("  [OK] Shapeless recipe correctly generated and validated.")
     shutil.rmtree(test_dir)
-    return True
 
 
 def test_3_smelting_recipe():
@@ -168,7 +166,6 @@ def test_3_smelting_recipe():
 
     print("  [OK] Smelting recipe correctly generated with cookingtime/experience and validated.")
     shutil.rmtree(test_dir)
-    return True
 
 
 def test_4_blasting_and_smoking_recipes():
@@ -213,7 +210,6 @@ def test_4_blasting_and_smoking_recipes():
 
     print("  [OK] Blasting and smoking recipes verified.")
     shutil.rmtree(test_dir)
-    return True
 
 
 def test_5_validator_catches_invalid_item_id():
@@ -249,7 +245,6 @@ def test_5_validator_catches_invalid_item_id():
 
     print(f"  [OK] Validator caught invalid item ID: {val_res.errors[0].message}")
     shutil.rmtree(test_dir)
-    return True
 
 
 def test_6_validator_catches_obsolete_recipes_plural_directory():
@@ -287,7 +282,6 @@ def test_6_validator_catches_obsolete_recipes_plural_directory():
     obs_err = next(e for e in val_res.errors if e.code == "OBSOLETE_PATH")
     print(f"  [OK] Validator caught obsolete path: {obs_err.message}")
     shutil.rmtree(test_dir)
-    return True
 
 
 def test_7_validator_catches_undefined_pattern_symbol():
@@ -336,7 +330,6 @@ def test_7_validator_catches_undefined_pattern_symbol():
     bad_err = next(e for e in val_res.errors if e.code == "MALFORMED_RECIPE")
     print(f"  [OK] Validator caught unmatched pattern symbol: {bad_err.message}")
     shutil.rmtree(test_dir)
-    return True
 
 
 def test_8_rejection_of_incomplete_recipe_specifications():
@@ -394,8 +387,6 @@ def test_8_rejection_of_incomplete_recipe_specifications():
         assert False, "Should have rejected shapeless recipe with empty ingredients"
     except ValueError as e:
         print(f"  [OK] Rejected shapeless recipe with empty ingredients: {e}")
-
-    return True
 
 
 def test_9_multi_mechanism_composite_all_five():
@@ -509,7 +500,6 @@ def test_9_multi_mechanism_composite_all_five():
 
     print("  [OK] Composite datapack successfully generated and validated all 5 mechanisms!")
     shutil.rmtree(test_dir)
-    return True
 
 
 def test_10_deterministic_reproducibility():
@@ -550,7 +540,6 @@ def test_10_deterministic_reproducibility():
     print(f"  [OK] Byte-identical reproducibility verified across runs (SHA256: {zip_hash1[:16]}...).")
     shutil.rmtree(test_dir1)
     shutil.rmtree(test_dir2)
-    return True
 
 
 def test_11_arbitrary_item_generality():
@@ -591,7 +580,6 @@ def test_11_arbitrary_item_generality():
 
     print("  [OK] Multiple arbitrary item combinations verified cleanly.")
     shutil.rmtree(test_dir)
-    return True
 
 
 def test_12_planner_structured_recipe_plan():
@@ -642,7 +630,6 @@ def test_12_planner_structured_recipe_plan():
 
     print("  [OK] Planner recipe plan generated and validated cleanly.")
     shutil.rmtree(test_dir)
-    return True
 
 
 def run_all_tests():
@@ -664,8 +651,8 @@ def run_all_tests():
 
     passed = 0
     for t in tests:
-        if t():
-            passed += 1
+        t()
+        passed += 1
 
     print("\n" + "=" * 70)
     print(f"ALL {passed}/{len(tests)} RECIPE TESTS PASSED SUCCESSFULLY!")

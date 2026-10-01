@@ -1,7 +1,7 @@
 # Current Project State
 
 ## Last synchronized
-2026-09-30
+2026-10-01
 
 ## Current implementation
 - Natural-language Minecraft request understanding is fully operational in the `ai/` package.
@@ -124,17 +124,22 @@
   4. Headless Server Windows Robustness (`qa/runtime.py`): Updated `RuntimeTestRunner` with `ignore_cleanup_errors=True` on `tempfile.TemporaryDirectory` and a 0.5s handle-release delay to prevent `WinError 32` file locking on `logs/latest.log` upon Java process termination, and expanded `max_boot_time` to `max(80, timeout_s)` to support realistic headless server initialization on Windows.
   5. Dedicated Verification Suite (`test_step25_2_version_context.py`, 10 tests): Verifies 1.21.1 and 1.21.11 Understanding prompt generation, pipeline version forwarding, QA component isolation, simulator context passing, and object context propagation. 560/560 tests passing, 53/53 benchmark cases passing, both 1.21.1 and 1.21.11 headless real Minecraft servers verified.
 
+- Pytest Warning Cleanup & Clean Assertion Contracts (Phase 25.3) operational:
+  1. Warning Elimination: Eliminated all 75 `PytestReturnNotNoneWarning` warnings across 9 legacy test files (`test_planner_boundary.py` [13], `test_recipes.py` [12], `test_step15_boundary.py` [12], `test_validator.py` [10], `test_predicates.py` [8], `test_mechanisms.py` [7], `test_repair_loop.py` [7], `test_generator.py` [4], `test_retrieval.py` [2]).
+  2. Clean Assertion Contracts: Replaced legacy trailing `return True` and `return all_passed` patterns with proper pytest assertions (`assert all_passed, ...`). Updated standalone `run_all_tests()` and `__main__` harness blocks to catch `AssertionError` while preserving standalone execution capabilities.
+  3. Strict Invariant & Test Preservation: Zero assertions were removed or weakened; all verification checks were strictly preserved; zero production code files were modified.
+  4. Repository-Wide AST Audit: Confirmed 0 non-None returns remain across all `test_*` functions in the repository (excluding mock helpers).
+  5. Regression & Suite Pass Rate: Full pytest test suite (560/560) passes cleanly with 0 errors, 0 failures, and 0 warnings (180.18s). Combined multi-version suites (60/60) pass cleanly. Evaluation benchmark (53/53 cases) passes 100%. `git diff --check` passes with zero whitespace/formatting issues.
+
 ## Known issues / gaps
-- 75 legacy unit tests in 9 test files trigger `PytestReturnNotNoneWarning` because they return boolean values rather than asserting (scheduled for cleanup in Phase 25.3).
 - Evaluation benchmark dataset (`eval/dataset.json`) currently tests 53 cases against 1.21.11 with 0 explicit 1.21.1 cases (scheduled for expansion in Phase 25.4).
 
 ## Current priority
-Phase 25.1 and Phase 25.2 complete. 1.21.1 loot knowledge restored and authoritative; Understanding and QA context propagation fully version-aware. Full test suite passing (560/560), headless Minecraft 1.21.1 and 1.21.11 servers verified, benchmark passing (53/53), `git diff --check` clean.
+Phase 25.1, Phase 25.2, and Phase 25.3 complete. 1.21.1 loot knowledge restored and authoritative; Understanding and QA context propagation fully version-aware; test suite completely clean with 0 warnings. Full test suite passing (560/560), headless Minecraft 1.21.1 and 1.21.11 servers verified, benchmark passing (53/53), `git diff --check` clean.
 
 ## Next logical work
-1. Proceed to Phase 25.3: Pytest warning cleanup (eliminate 75 `PytestReturnNotNoneWarning`).
-2. Proceed to Phase 25.4: Dual-version evaluation benchmark suite (`eval/dataset.json`, `eval/benchmark.py`).
-3. Proceed to Phase 25.5: Final dual-version end-to-end verification and handoff.
+1. Proceed to Phase 25.4: Dual-version evaluation benchmark suite (`eval/dataset.json`, `eval/benchmark.py`).
+2. Proceed to Phase 25.5: Final dual-version end-to-end verification and handoff.
 
 ## Agent handoff rule
 Before changing code, verify this state against the actual repository and Git history. After significant changes, update this file and the other relevant `.ai/` files.

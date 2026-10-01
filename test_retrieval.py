@@ -96,7 +96,7 @@ def test_retriever():
         print("SOME TEST CASES FAILED.")
     print("=" * 70)
 
-    return all_passed
+    assert all_passed, "Some knowledge retrieval test cases failed."
 
 
 def test_scoreboard_retrieval():
@@ -182,10 +182,13 @@ def test_scoreboard_retrieval():
         print("SOME SCOREBOARD RETRIEVAL TESTS FAILED.")
     print("=" * 70)
 
-    return all_passed
+    assert all_passed, "Some scoreboard knowledge retrieval test cases failed."
 
 
 if __name__ == "__main__":
-    success_loot = test_retriever()
-    success_sb = test_scoreboard_retrieval()
-    sys.exit(0 if (success_loot and success_sb) else 1)
+    try:
+        test_retriever()
+        test_scoreboard_retrieval()
+        sys.exit(0)
+    except AssertionError:
+        sys.exit(1)

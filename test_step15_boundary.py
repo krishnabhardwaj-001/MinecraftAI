@@ -93,7 +93,6 @@ def test_1_action_specification_validation():
     assert score_action.score_value == 0
 
     print("  [OK] All ActionSpecification types created, normalized, and validated cleanly.")
-    return True
 
 
 def test_2_deterministic_command_synthesis_effects():
@@ -142,8 +141,6 @@ def test_2_deterministic_command_synthesis_effects():
     assert cmd_default == "effect give @a minecraft:speed 30 0 false", f"Got: {cmd_default}"
     print(f"  [OK] Synthesized default (None) command: '{cmd_default}'")
 
-    return True
-
 
 def test_3_deterministic_command_synthesis_items():
     print("=" * 70)
@@ -162,7 +159,6 @@ def test_3_deterministic_command_synthesis_items():
     # Target @a automatically pairs with 'execute as @a at @s run give @s ...'
     assert cmd == "execute as @a at @s run give @s minecraft:diamond 1", f"Got: {cmd}"
     print(f"  [OK] Synthesized context-aware command: '{cmd}'")
-    return True
 
 
 def test_4_state_machine_deterministic_generation():
@@ -207,7 +203,6 @@ def test_4_state_machine_deterministic_generation():
     assert "execute unless predicate minecraft_ai:is_raining run scoreboard players set #global rain_state 0" in tick_content
 
     print("  [OK] State machine generated correct load/tick files and tags deterministically.")
-    return True
 
 
 def test_5_per_player_state_machine_generation():
@@ -240,7 +235,6 @@ def test_5_per_player_state_machine_generation():
     assert "execute as @a at @s if score @s sneak_state matches 0 if predicate minecraft_ai:is_sneaking run" in tick_content
 
     print("  [OK] Per-player state machine generated with dynamic tick initialization.")
-    return True
 
 
 def test_6_datapack_generator_with_structured_actions():
@@ -300,7 +294,6 @@ def test_6_datapack_generator_with_structured_actions():
 
     print("  [OK] Structured action compiled into validated function datapack.")
     shutil.rmtree(test_dir)
-    return True
 
 
 def test_7_datapack_generator_with_state_machine_and_qa():
@@ -363,7 +356,6 @@ def test_7_datapack_generator_with_state_machine_and_qa():
 
     print("  [OK] State machine datapack generated cleanly, passed structural validation and QA review (0 errors).")
     shutil.rmtree(test_dir)
-    return True
 
 
 def test_8_resource_consolidation_shared_files():
@@ -438,7 +430,6 @@ def test_8_resource_consolidation_shared_files():
 
     print("  [OK] Shared .mcfunction and function tag JSON consolidated cleanly without clobbering.")
     shutil.rmtree(test_dir)
-    return True
 
 
 def test_9_raw_command_escape_hatch():
@@ -470,8 +461,6 @@ def test_9_raw_command_escape_hatch():
         print(f"  [OK] Captured audit log warning: {logs.strip()}")
     finally:
         logger.removeHandler(handler)
-
-    return True
 
 
 def test_10_function_tag_integrity_and_reload_diagnostics():
@@ -566,7 +555,6 @@ def test_10_function_tag_integrity_and_reload_diagnostics():
 
     shutil.rmtree(test_dir)
     print("  [OK] Function tag sanitization, reload diagnostics, and debug function verified.")
-    return True
 
 
 def test_11_state_machine_with_infinite_effect():
@@ -637,7 +625,6 @@ def test_11_state_machine_with_infinite_effect():
 
     print("  [OK] State machine with infinite effect generated, validated, and QA-verified cleanly.")
     shutil.rmtree(test_dir)
-    return True
 
 
 def test_12_structured_action_architectural_boundary():
@@ -674,8 +661,6 @@ def test_12_structured_action_architectural_boundary():
     finally:
         logger.removeHandler(handler)
 
-    return True
-
 
 def run_all_tests():
     print("RUNNING STEP 15 PLANNER -> GENERATOR BOUNDARY TESTS...\n")
@@ -696,8 +681,8 @@ def run_all_tests():
 
     passed = 0
     for t in tests:
-        if t():
-            passed += 1
+        t()
+        passed += 1
 
     print("=" * 70)
     print(f"ALL {passed}/{len(tests)} STEP 15 BOUNDARY TESTS PASSED SUCCESSFULLY!")
