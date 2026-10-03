@@ -1,14 +1,14 @@
 # Current Project State
 
 ## Last synchronized
-2026-10-01
+2026-10-03
 
 ## Current implementation
 - Natural-language Minecraft request understanding is fully operational in the `ai/` package.
 - Minecraft command/entity/item knowledge/retrieval is available for Java 1.21.1 and 1.21.11 with full per-version isolation.
 - The 8-stage pipeline (Understanding → RAG → Planning → Generation → Validation/Repair → QA → Intent Verification → READY Gate) is operational.
 - Local Ollama inference is the default runtime path; OpenAI-compatible providers are also supported.
-- GitHub is the shared repository source; `main` is synchronized with `origin/main` at commit `ff56464`.
+- GitHub is the shared repository source; `main` is synchronized with `origin/main` at commit `e9b7fa2`.
 
 ## Working behavior verified during development
 - Semantic retrieval works after a previous traceback fix.
@@ -131,22 +131,46 @@
   4. Repository-Wide AST Audit: Confirmed 0 non-None returns remain across all `test_*` functions in the repository (excluding mock helpers).
   5. Regression & Suite Pass Rate: Full pytest test suite (560/560) passes cleanly with 0 errors, 0 failures, and 0 warnings (180.18s). Combined multi-version suites (60/60) pass cleanly. Evaluation benchmark (53/53 cases) passes 100%. `git diff --check` passes with zero whitespace/formatting issues.
 
-- Dual-Version Evaluation Benchmark Suite (Phase 25.4) operational:
-  1. Data-Driven Benchmark Version Model (`eval/models.py`): Extended `BenchmarkCase` with `minecraft_version: str = Field(default="1.21.11")` and validator defaulting missing/empty values to the registered project default (`1.21.11`). Extended `CaseEvaluationResult` with `minecraft_version` and `BenchmarkSummary` with `version_metrics: Dict[str, Dict[str, Any]]`.
-  2. Dynamic Runner Version Isolation (`eval/benchmark.py`): Runner dynamically creates version-scoped reviewers, generators, and QA analyzers (`_get_reviewer()`, `_get_func_gen()`, `_get_qa_analyzer()`). Verifies target version against `VersionRegistry.is_supported`, validates pack format against `v_context.pack_format` (and optional `metadata["expected_pack_format"]`), and reports detailed version-disaggregated metrics. Added `--version` CLI flag and guaranteed direct script execution via repository root `sys.path` injection.
-  3. Expanded Dual-Version Dataset (`eval/dataset.json`): Preserved all original 53 cases targeting 1.21.11 (53/53 PASS). Added 25 carefully curated, non-redundant cases targeting 1.21.1 (`case_1211_01` to `case_1211_25`) covering all 16 capability domains (mob loot with vanilla preservation, functions, tags, predicates, advancements, recipes, state machines, scoreboard ops, property modifications, compound requests, clarification, and negative safety checks). Total: 78 cases.
-  4. Final Benchmark Verification: 78/78 cases pass cleanly (100.0% accuracy across every category): 1.21.11: 53/53 (100.0%), 1.21.1: 25/25 (100.0%). Execution is strictly deterministic (~34ms average duration per case).
-  5. Dedicated Test Suite (`test_step25_4_dual_version_benchmark.py`, 10 tests): Verifies 1.21.11 preservation, dataset schema, version-specific execution against 1.21.1 and 1.21.11, default fallback, separate version reporting, version-specific expectations, rejection of mismatched versions, existing runner compatibility, and determinism.
-  6. Repository Regression Gate: Full pytest suite passes 570/570 with 0 errors, 0 failures, 0 warnings under `-W error` (261.94s). `git diff --check` passes cleanly.
+- Final Dual-Version Verification, Documentation & Handoff (Phase 25.5) operational:
+  1. Dedicated Verification Suite (`test_step25_5_final_verification.py`, 10 tests):
+     - End-to-end `VersionContext` propagation and metadata integrity (pack format 94 vs 48, min/max format arrays, singular directory layout, data pack versions 94.1 vs 48.0).
+     - Generator format emission (`pack_format: 94` for 1.21.11, `pack_format: 48` for 1.21.1).
+     - Cross-version validator rejection (preventing pack format mismatch or improper directory layout).
+     - Loot table vanilla drop preservation across both versions (gunpowder + discs preserved for creepers).
+     - Autonomous QA reviewer and analyzer version scoping and isolation.
+     - Understanding and pipeline dynamic context flow without hardcoded version strings.
+     - Evaluation benchmark version metrics and disaggregated reporting.
+     - Deterministic byte-identical ZIP hashing across repeated runs and version differentiation.
+     - Unsupported version rejection (`ValueError` / `is_supported == False`).
+     - Headless runtime runner server JAR, classpath, and library resolution.
+     - Passed 10/10 in 8.06s with 0 warnings under `-W error`.
+  2. Production Codebase Hardcoded-Version Audit:
+     - Audited all occurrences of `1.21.11` and `1.21.1` in production directories (`ai/`, `generator/`, `validator/`, `pipeline/`, `qa/`, `repair/`, `web/`, runners).
+     - Confirmed zero accidental hardcodings in core logic; all instances classified as legitimate registered defaults, documentation/comments, or data-driven assets.
+  3. Headless Real-Minecraft Runtime Verification:
+     - Minecraft Java 1.21.11 (`test_step20_golden.py::TestStep20HeadlessMinecraftServer::test_17_headless_real_minecraft_server_execution`): Official `server-1.21.11.jar` executed with Java 21 LTS; installed generated datapack; verified `/datapack list` and functions -> PASSED (34.54s).
+     - Minecraft Java 1.21.1 (`test_step24_multiversion.py::TestStep24MultiVersion::test_11_real_minecraft_1_21_1_headless_server_execution`): Official `versions/1.21.1/server-1.21.1.jar` executed with Java 21 LTS and version libraries; installed generated datapack; verified `/datapack list` -> PASSED (27.99s).
+  4. Generation & Archive Determinism:
+     - Repeated generation of identical prompts produces byte-identical ZIP archives (SHA256: 1.21.11: `4dcedcc3f9db...`, 1.21.1: `49758ad9b92c...`).
+     - Outputs for different versions differ appropriately in `pack.mcmeta` and attribute namespace formatting.
+  5. Multi-Version Benchmark Regression:
+     - Full evaluation benchmark (`python eval/benchmark.py`) passed 78/78 cases (100.0% accuracy across all 16 domains, ~16.8ms avg duration per case).
+     - 1.21.11: 53/53 PASSED (100.0%).
+     - 1.21.1: 25/25 PASSED (100.0%).
+  6. Regression Gate & Test Suite Parity:
+     - Full pytest test suite passes 580/580 tests with 0 errors, 0 failures, 0 warnings under `-W error`.
+     - Multi-version test suites (`test_step23_versioning.py`, `test_step24_multiversion.py`, `test_step25_1_loot_knowledge.py`, `test_step25_2_version_context.py`, `test_step25_4_dual_version_benchmark.py`, `test_step25_5_final_verification.py`) pass 80/80 tests.
+     - `git diff --check` passes cleanly.
 
 ## Known issues / gaps
-None. Multi-version runtime, knowledge parity, context propagation, warning hygiene, and dual-version benchmark evaluation are fully verified.
+1. Web UI static status line in `web/static/js/app.js` (line 308) reads `resultMeta.textContent = "Datapack ready for Minecraft 1.21.11";`. This is a minor cosmetic frontend string, identified during the Phase 25.5 hardcoded-version audit. Per strict Phase 25.5 scope rules ("DO NOT change the web UI"), this is catalogued for update in a future UI milestone.
+2. In live end-to-end pipeline execution with local Ollama LLMs (`test_pipeline.py`), stochastic variation in generative responses on ambiguous prompts can occasionally produce interactive clarification requests. The deterministic pipeline, benchmark, and generator suites are 100% deterministic and immune to LLM temperature variations.
 
 ## Current priority
-Phase 25.1, Phase 25.2, Phase 25.3, and Phase 25.4 complete. Multi-version support for 1.21.1 and 1.21.11 is comprehensively implemented and benchmarked. 78/78 evaluation benchmark cases passing across both versions; 570/570 pytest tests passing with 0 warnings under `-W error`; `git diff --check` clean.
+Phase 25 is fully complete and verified. Dual-version Minecraft Java 1.21.11 and 1.21.1 support is fully audited, verified in real headless server runtimes, deterministically tested, and benchmarked at 100% (78/78 cases). 580/580 pytest tests passing with 0 warnings under `-W error`.
 
 ## Next logical work
-1. Proceed to Phase 25.5: Final dual-version end-to-end verification, documentation alignment, and handoff.
+1. Proceed to Phase 26: Next major capability milestone (e.g. Extended Multi-Version Support, Advanced Datapack Mechanics, or UI Multi-Version Dynamic Metadata).
 
 ## Agent handoff rule
 Before changing code, verify this state against the actual repository and Git history. After significant changes, update this file and the other relevant `.ai/` files.

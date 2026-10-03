@@ -1,5 +1,36 @@
 # AI Change Log
 
+- Implemented PHASE 25.5: Final Dual-Version Verification, Documentation & Handoff (`test_step25_5_final_verification.py`, `.ai/STATE.md`, `.ai/TASKS.md`, `.ai/DECISIONS.md`, `.ai/CHANGELOG.md`):
+  1. Dedicated Verification Suite (`test_step25_5_final_verification.py`, 10 tests):
+     - End-to-end `VersionContext` propagation and metadata integrity (pack format 94 vs 48, min/max format arrays, singular directory layout, data pack versions 94.1 vs 48.0).
+     - Generator format emission (`pack_format: 94` for 1.21.11, `pack_format: 48` for 1.21.1).
+     - Cross-version validator rejection (preventing pack format mismatch or improper directory layout).
+     - Loot table vanilla drop preservation across both versions (gunpowder + discs preserved for creepers).
+     - Autonomous QA reviewer and analyzer version scoping and isolation.
+     - Understanding and pipeline dynamic context flow without hardcoded version strings.
+     - Evaluation benchmark version metrics and disaggregated reporting.
+     - Deterministic byte-identical ZIP hashing across repeated runs and version differentiation.
+     - Unsupported version rejection (`ValueError` / `is_supported == False`).
+     - Headless runtime runner server JAR, classpath, and library resolution.
+     - Passed 10/10 in 8.06s with 0 warnings under `-W error`.
+  2. Production Codebase Hardcoded-Version Audit:
+     - Exhaustively audited all occurrences of `1.21.11` and `1.21.1` in production directories (`ai/`, `generator/`, `validator/`, `pipeline/`, `qa/`, `repair/`, `web/`, runners).
+     - Verified zero accidental hardcodings in core logic; all instances classified as legitimate registered defaults, documentation/comments, or data-driven assets.
+  3. Headless Real-Minecraft Runtime Verification:
+     - Minecraft Java 1.21.11 (`test_step20_golden.py::TestStep20HeadlessMinecraftServer::test_17_headless_real_minecraft_server_execution`): Official `server-1.21.11.jar` executed with Java 21 LTS; installed generated datapack; verified `/datapack list` and functions -> PASSED (34.54s).
+     - Minecraft Java 1.21.1 (`test_step24_multiversion.py::TestStep24MultiVersion::test_11_real_minecraft_1_21_1_headless_server_execution`): Official `versions/1.21.1/server-1.21.1.jar` executed with Java 21 LTS and version libraries; installed generated datapack; verified `/datapack list` -> PASSED (27.99s).
+  4. Generation & Archive Determinism:
+     - Repeated generation of identical prompts produces byte-identical ZIP archives (SHA256: 1.21.11: `4dcedcc3f9db...`, 1.21.1: `49758ad9b92c...`).
+     - Outputs for different versions differ appropriately in `pack.mcmeta` and attribute namespace formatting.
+  5. Multi-Version Benchmark Regression:
+     - Full evaluation benchmark (`python eval/benchmark.py`) passed 78/78 cases (100.0% accuracy across all 16 domains, ~16.8ms avg duration per case).
+     - 1.21.11: 53/53 PASSED (100.0%).
+     - 1.21.1: 25/25 PASSED (100.0%).
+  6. Regression Gate & Test Suite Parity:
+     - Full pytest test suite passes 580/580 tests with 0 errors, 0 failures, 0 warnings under `-W error`.
+     - Multi-version test suites (`test_step23_versioning.py`, `test_step24_multiversion.py`, `test_step25_1_loot_knowledge.py`, `test_step25_2_version_context.py`, `test_step25_4_dual_version_benchmark.py`, `test_step25_5_final_verification.py`) pass 80/80 tests.
+     - `git diff --check` passes cleanly.
+
 - Implemented PHASE 25.4: Dual-Version Evaluation Benchmark Suite (`eval/models.py`, `eval/benchmark.py`, `eval/dataset.json`, `test_step25_4_dual_version_benchmark.py`):
   1. Data-Driven Benchmark Version Model (`eval/models.py`): Extended `BenchmarkCase` with `minecraft_version: str = Field(default="1.21.11")` and validator defaulting omitted/empty values to registered project default (`1.21.11`). Extended `CaseEvaluationResult` with `minecraft_version` and `BenchmarkSummary` with `version_metrics: Dict[str, Dict[str, Any]]`.
   2. Dynamic Runner Version Scoping (`eval/benchmark.py`): Updated `BenchmarkRunner` to construct version-scoped reviewers, generators, and QA analyzers (`_get_reviewer()`, `_get_func_gen()`, `_get_qa_analyzer()`). Verifies target version against `VersionRegistry.is_supported`, validates pack format against `v_context.pack_format` (and optional `metadata["expected_pack_format"]`), and reports version-disaggregated metrics. Added `--version` CLI flag and ensured direct script execution via repository root `sys.path` injection.

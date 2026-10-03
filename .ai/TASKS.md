@@ -99,7 +99,15 @@
   - [x] Added 25 curated 1.21.1 cases across all 16 domains to `eval/dataset.json` (25/25 PASS).
   - [x] Dedicated verification suite (`test_step25_4_dual_version_benchmark.py`, 10 tests) passing 10/10 with zero warnings.
   - [x] Verified full benchmark (78/78 cases, 100.0% accuracy) and full pytest suite (570/570 PASS under `-W error`).
-- [ ] Phase 25.5: Final Dual-Version Verification, Documentation & Handoff.
+- [x] Phase 25.5: Final Dual-Version Verification, Documentation & Handoff.
+  - [x] Phase 25.5.1: End-to-end version propagation audit across all pipeline stages (Request → Understanding → Planner → VersionContext → Generator → Validator → QA → Runtime → Benchmark).
+  - [x] Phase 25.5.2: Production codebase hardcoded-version audit (all occurrences in `ai/`, `generator/`, `validator/`, `pipeline/`, `qa/`, `repair/`, `web/`, and runners catalogued as legitimate defaults/data).
+  - [x] Phase 25.5.3: Dual-version headless real-Minecraft runtime verification (official 1.21.11 and 1.21.1 server JARs executed with Java 21 LTS, datapacks loaded and verified).
+  - [x] Phase 25.5.4: Generation and ZIP hash determinism verification (byte-identical SHA256 reproducibility across repeated generation runs).
+  - [x] Phase 25.5.5: Dedicated verification test suite (`test_step25_5_final_verification.py`, 10 tests, 10/10 PASS).
+  - [x] Phase 25.5.6: Dual-version evaluation benchmark regression (78/78 cases, 100.0% accuracy across all 16 domains).
+  - [x] Phase 25.5.7: Full test suite regression gate (580/580 PASS under `-W error`).
+  - [x] Phase 25.5.8: Project documentation and memory synchronization (`.ai/STATE.md`, `.ai/TASKS.md`, `.ai/DECISIONS.md`, `.ai/CHANGELOG.md`).
 - [x] Keep AI context files synchronized after significant changes.
 
 

@@ -518,3 +518,21 @@ To extend the automated evaluation benchmark to rigorously evaluate both support
    Extended `BenchmarkSummary` with `version_metrics` and updated `format_report()` to display a clean per-version breakdown (cases, passed, failed, percentage) alongside the existing category matrix. Added `--version` CLI flag allowing selective execution of specific versions (e.g. `python -m eval.benchmark --version 1.21.1`).
 6. Preserved 100% Determinism & Backward Compatibility:
    All 53 existing 1.21.11 cases continue to pass 53/53. The expanded suite of 78 cases passes 78/78 (100.0%) deterministically in ~35ms avg duration per case without external API dependencies. Full pytest suite passes 570/570 under `-W error`.
+
+## D048 — Dual-Version Verification, Testing Invariants & Handoff Architecture (Phase 25.5)
+To formally verify, audit, and lock down the completed multi-version architecture supporting Minecraft Java 1.21.11 and 1.21.1 without introducing scope creep:
+1. End-to-End Version Propagation Invariant:
+   Verified that target Minecraft version information propagates through every stage of the pipeline without leakage, loss, or silent fallback:
+   Natural Language Request → Understanding (`MinecraftUnderstanding(version)`) → Planner → `VersionContext` → Deterministic Generator (`DatapackGenerator(version_context)`) → Validator (`DatapackValidator(version_context)`) → QA Reviewer (`AutonomousQAReviewer(version_context)`) → Headless Runtime (`RuntimeTestRunner(version_context)`) → Benchmark Runner (`BenchmarkRunner`).
+2. Production Codebase Hardcoded-Version Audit:
+   Conducted an exhaustive grep audit across all production modules (`ai/`, `generator/`, `validator/`, `pipeline/`, `qa/`, `repair/`, `web/`, and runner scripts). Every occurrence of `1.21.11` and `1.21.1` was categorized:
+   - Legitimate defaults (e.g. `VersionRegistry.default_version = "1.21.11"`).
+   - Version-specific assets and paths (e.g. `knowledge/loot_tables/java/1.21.1/`).
+   - Documentation, logs, and user guidance strings.
+   Zero accidental hardcoded version assumptions or bypasses exist in production logic. A static status line in `web/static/js/app.js` was identified and documented for future UI updates to avoid altering frontend assets during a verification phase.
+3. Dual-Version Real Headless Server Verification:
+   Executed official Mojang server JARs (`server-1.21.11.jar` and `server-1.21.1.jar`) via Java 21 LTS in automated headless mode. Verified that generated datapacks install cleanly into `world/datapacks/`, appear enabled in `/datapack list`, compile function tags (`#minecraft:load`, `#minecraft:tick`) without syntax or reference errors, and execute successfully at runtime.
+4. Determinism Guarantee:
+   Verified that repeated generation of identical requests under identical version targets yields byte-identical ZIP files (stable SHA256 hashes), while generation under different version targets correctly produces version-appropriate outputs (`pack.mcmeta` format 94 vs 48, attribute namespaces).
+5. Comprehensive Regression Gate:
+   Established a dedicated verification suite (`test_step25_5_final_verification.py`, 10 tests). Full test suite passes 580/580 with 0 errors, 0 failures, and 0 warnings under `-W error`. Evaluation benchmark passes 78/78 cases (100.0% accuracy across all 16 domains).
