@@ -508,5 +508,254 @@
     "description": "Nonsensical input unrecognized by semantic understanding",
     "is_supported": false,
     "expect_validation_success": false
+  },
+  {
+    "id": "case_1211_01_loot_creeper_diamond",
+    "category": "mob_loot",
+    "request": "Make every creeper drop diamonds.",
+    "minecraft_version": "1.21.1",
+    "description": "Custom drop on 1.21.1 creeper entity death preserving vanilla drops",
+    "expected_mechanism": "loot_table",
+    "expected_target": "creeper",
+    "metadata": {"item": "minecraft:diamond", "expected_pack_format": 48}
+  },
+  {
+    "id": "case_1211_02_loot_skeleton_iron",
+    "category": "mob_loot",
+    "request": "Make skeletons drop iron ingots.",
+    "minecraft_version": "1.21.1",
+    "description": "Custom drop on 1.21.1 skeleton entity death",
+    "expected_mechanism": "loot_table",
+    "expected_target": "skeleton",
+    "metadata": {"item": "minecraft:iron_ingot", "expected_pack_format": 48}
+  },
+  {
+    "id": "case_1211_03_loot_spider_emerald",
+    "category": "mob_loot",
+    "request": "Make spiders drop emeralds.",
+    "minecraft_version": "1.21.1",
+    "description": "Custom drop on 1.21.1 spider entity death",
+    "expected_mechanism": "loot_table",
+    "expected_target": "spider",
+    "metadata": {"item": "minecraft:emerald", "expected_pack_format": 48}
+  },
+  {
+    "id": "case_1211_04_func_regeneration_30s",
+    "category": "functions",
+    "request": "Give all players regeneration effect for 30 seconds.",
+    "minecraft_version": "1.21.1",
+    "description": "1.21.1 regeneration effect command",
+    "expected_mechanism": "function",
+    "expected_target": "@a",
+    "metadata": {"effect": "minecraft:regeneration", "duration": 30, "expected_pack_format": 48}
+  },
+  {
+    "id": "case_1211_05_func_night_vision_60s",
+    "category": "functions",
+    "request": "Give player night vision for 60 seconds.",
+    "minecraft_version": "1.21.1",
+    "description": "1.21.1 night vision function command",
+    "expected_mechanism": "function",
+    "expected_target": "@p",
+    "metadata": {"effect": "minecraft:night_vision", "duration": 60, "expected_pack_format": 48}
+  },
+  {
+    "id": "case_1211_06_func_clear_effects",
+    "category": "functions",
+    "request": "Clear all effects from all players.",
+    "minecraft_version": "1.21.1",
+    "description": "1.21.1 effect clearing function command",
+    "expected_mechanism": "function",
+    "expected_target": "@a",
+    "metadata": {"action": "clear_effect", "expected_pack_format": 48}
+  },
+  {
+    "id": "case_1211_07_tag_tick_loop",
+    "category": "function_tags",
+    "request": "Run custom function on tick.",
+    "minecraft_version": "1.21.1",
+    "description": "1.21.1 tick loop function tag registration",
+    "expected_mechanism": "function_tag",
+    "metadata": {"tag": "tick", "expected_pack_format": 48}
+  },
+  {
+    "id": "case_1211_08_tag_load_boot",
+    "category": "function_tags",
+    "request": "Execute initialization function on load.",
+    "minecraft_version": "1.21.1",
+    "description": "1.21.1 load lifecycle function tag registration",
+    "expected_mechanism": "function_tag",
+    "metadata": {"tag": "load", "expected_pack_format": 48}
+  },
+  {
+    "id": "case_1211_09_pred_weather_rain",
+    "category": "predicates",
+    "request": "Add a predicate that checks if it is raining.",
+    "minecraft_version": "1.21.1",
+    "description": "1.21.1 weather check condition predicate",
+    "expected_mechanism": "predicate",
+    "metadata": {"condition": "minecraft:weather_check", "expected_pack_format": 48}
+  },
+  {
+    "id": "case_1211_10_pred_time_night",
+    "category": "predicates",
+    "request": "Check if the time of day is night.",
+    "minecraft_version": "1.21.1",
+    "description": "1.21.1 time check condition predicate",
+    "expected_mechanism": "predicate",
+    "metadata": {"condition": "minecraft:time_check", "expected_pack_format": 48}
+  },
+  {
+    "id": "case_1211_11_adv_kill_skeleton",
+    "category": "advancements",
+    "request": "Grant an advancement when a player kills a skeleton.",
+    "minecraft_version": "1.21.1",
+    "description": "1.21.1 custom advancement definition",
+    "expected_mechanism": "advancement",
+    "metadata": {"trigger": "minecraft:player_killed_entity", "expected_pack_format": 48}
+  },
+  {
+    "id": "case_1211_12_recipe_shaped_sword",
+    "category": "recipes",
+    "request": "Add a shaped crafting recipe for a diamond sword using dirt and stick.",
+    "minecraft_version": "1.21.1",
+    "description": "1.21.1 shaped recipe generation",
+    "expected_mechanism": "recipe",
+    "metadata": {"recipe_type": "minecraft:crafting_shaped", "result_item": "minecraft:diamond_sword", "expected_pack_format": 48}
+  },
+  {
+    "id": "case_1211_13_recipe_shapeless_iron",
+    "category": "recipes",
+    "request": "Add a shapeless recipe converting 9 iron nuggets into an iron ingot.",
+    "minecraft_version": "1.21.1",
+    "description": "1.21.1 shapeless recipe generation",
+    "expected_mechanism": "recipe",
+    "metadata": {"recipe_type": "minecraft:crafting_shapeless", "result_item": "minecraft:iron_ingot", "expected_pack_format": 48}
+  },
+  {
+    "id": "case_1211_14_recipe_smelting_iron",
+    "category": "recipes",
+    "request": "Add a smelting recipe for raw iron into an iron ingot.",
+    "minecraft_version": "1.21.1",
+    "description": "1.21.1 smelting recipe generation",
+    "expected_mechanism": "recipe",
+    "metadata": {"recipe_type": "minecraft:smelting", "result_item": "minecraft:iron_ingot", "expected_pack_format": 48}
+  },
+  {
+    "id": "case_1211_15_sm_rain_counter",
+    "category": "state_machines",
+    "request": "Count how many times it starts raining using a state machine.",
+    "minecraft_version": "1.21.1",
+    "description": "1.21.1 state machine mechanism generation",
+    "expected_mechanism": "state_machine",
+    "metadata": {"condition": "minecraft:weather_check", "objective": "rain_count", "expected_pack_format": 48}
+  },
+  {
+    "id": "case_1211_16_score_add_points",
+    "category": "scoreboard_operations",
+    "request": "Add 10 points to player score on scoreboard.",
+    "minecraft_version": "1.21.1",
+    "description": "1.21.1 scoreboard score addition",
+    "expected_mechanism": "function",
+    "expected_target": "@s",
+    "metadata": {"action": "add_score", "score_value": 10, "expected_pack_format": 48}
+  },
+  {
+    "id": "case_1211_17_score_objective_deaths",
+    "category": "scoreboard_operations",
+    "request": "Create a death count objective displayed on the sidebar.",
+    "minecraft_version": "1.21.1",
+    "description": "1.21.1 death count scoreboard objective",
+    "expected_mechanism": "scoreboard_objective",
+    "metadata": {"criteria": "deathCount", "display_slot": "sidebar", "expected_pack_format": 48}
+  },
+  {
+    "id": "case_1211_18_prop_speed_2x",
+    "category": "property_multipliers",
+    "request": "Make all players 2 times faster.",
+    "minecraft_version": "1.21.1",
+    "description": "1.21.1 speed multiplier modification",
+    "expected_mechanism": "attribute",
+    "expected_property": "speed",
+    "expected_operation": "multiply",
+    "expected_value_kind": "multiplier",
+    "expected_value": 2.0
+  },
+  {
+    "id": "case_1211_19_prop_speed_add_5",
+    "category": "property_relative",
+    "request": "Increase player speed by 5.",
+    "minecraft_version": "1.21.1",
+    "description": "1.21.1 relative speed increment",
+    "expected_mechanism": "attribute",
+    "expected_property": "speed",
+    "expected_operation": "add",
+    "expected_value_kind": "relative",
+    "expected_value": 5.0
+  },
+  {
+    "id": "case_1211_20_prop_speed_add_25pct",
+    "category": "property_percentage",
+    "request": "Increase speed by 25%.",
+    "minecraft_version": "1.21.1",
+    "description": "1.21.1 speed percentage increment",
+    "expected_mechanism": "attribute",
+    "expected_property": "speed",
+    "expected_operation": "add",
+    "expected_value_kind": "percentage",
+    "expected_value": 25.0
+  },
+  {
+    "id": "case_1211_21_prop_speed_set_02",
+    "category": "property_absolute",
+    "request": "Set my speed to 0.2.",
+    "minecraft_version": "1.21.1",
+    "description": "1.21.1 absolute speed assignment",
+    "expected_mechanism": "attribute",
+    "expected_property": "speed",
+    "expected_operation": "set",
+    "expected_value_kind": "absolute",
+    "expected_value": 0.2,
+    "expected_target": "player"
+  },
+  {
+    "id": "case_1211_22_target_zombie_speed_2x",
+    "category": "entity_specific_targets",
+    "request": "Make zombies 2 times faster.",
+    "minecraft_version": "1.21.1",
+    "description": "1.21.1 entity specific target modification",
+    "expected_mechanism": "attribute",
+    "expected_property": "speed",
+    "expected_operation": "multiply",
+    "expected_value_kind": "multiplier",
+    "expected_value": 2.0,
+    "expected_target": "zombies"
+  },
+  {
+    "id": "case_1211_23_compound_speed_and_sword",
+    "category": "compound_requests",
+    "request": "Make me 10 times faster and give me a diamond sword.",
+    "minecraft_version": "1.21.1",
+    "description": "1.21.1 compound multi-intent request",
+    "expected_mechanism": "attribute",
+    "is_compound": true
+  },
+  {
+    "id": "case_1211_24_clarif_make_me_faster",
+    "category": "clarification_required",
+    "request": "Make me faster.",
+    "minecraft_version": "1.21.1",
+    "description": "1.21.1 qualitative request requiring clarification",
+    "requires_clarification": true,
+    "expected_clarification_parameter": "magnitude"
+  },
+  {
+    "id": "case_1211_25_invalid_gibberish",
+    "category": "invalid_unsupported",
+    "request": "Blah blah xyz 123456 qwerty.",
+    "minecraft_version": "1.21.1",
+    "description": "1.21.1 invalid unsupported input",
+    "is_supported": false,
+    "expect_validation_success": false
   }
 ]

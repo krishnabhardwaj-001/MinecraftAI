@@ -131,15 +131,22 @@
   4. Repository-Wide AST Audit: Confirmed 0 non-None returns remain across all `test_*` functions in the repository (excluding mock helpers).
   5. Regression & Suite Pass Rate: Full pytest test suite (560/560) passes cleanly with 0 errors, 0 failures, and 0 warnings (180.18s). Combined multi-version suites (60/60) pass cleanly. Evaluation benchmark (53/53 cases) passes 100%. `git diff --check` passes with zero whitespace/formatting issues.
 
+- Dual-Version Evaluation Benchmark Suite (Phase 25.4) operational:
+  1. Data-Driven Benchmark Version Model (`eval/models.py`): Extended `BenchmarkCase` with `minecraft_version: str = Field(default="1.21.11")` and validator defaulting missing/empty values to the registered project default (`1.21.11`). Extended `CaseEvaluationResult` with `minecraft_version` and `BenchmarkSummary` with `version_metrics: Dict[str, Dict[str, Any]]`.
+  2. Dynamic Runner Version Isolation (`eval/benchmark.py`): Runner dynamically creates version-scoped reviewers, generators, and QA analyzers (`_get_reviewer()`, `_get_func_gen()`, `_get_qa_analyzer()`). Verifies target version against `VersionRegistry.is_supported`, validates pack format against `v_context.pack_format` (and optional `metadata["expected_pack_format"]`), and reports detailed version-disaggregated metrics. Added `--version` CLI flag and guaranteed direct script execution via repository root `sys.path` injection.
+  3. Expanded Dual-Version Dataset (`eval/dataset.json`): Preserved all original 53 cases targeting 1.21.11 (53/53 PASS). Added 25 carefully curated, non-redundant cases targeting 1.21.1 (`case_1211_01` to `case_1211_25`) covering all 16 capability domains (mob loot with vanilla preservation, functions, tags, predicates, advancements, recipes, state machines, scoreboard ops, property modifications, compound requests, clarification, and negative safety checks). Total: 78 cases.
+  4. Final Benchmark Verification: 78/78 cases pass cleanly (100.0% accuracy across every category): 1.21.11: 53/53 (100.0%), 1.21.1: 25/25 (100.0%). Execution is strictly deterministic (~34ms average duration per case).
+  5. Dedicated Test Suite (`test_step25_4_dual_version_benchmark.py`, 10 tests): Verifies 1.21.11 preservation, dataset schema, version-specific execution against 1.21.1 and 1.21.11, default fallback, separate version reporting, version-specific expectations, rejection of mismatched versions, existing runner compatibility, and determinism.
+  6. Repository Regression Gate: Full pytest suite passes 570/570 with 0 errors, 0 failures, 0 warnings under `-W error` (261.94s). `git diff --check` passes cleanly.
+
 ## Known issues / gaps
-- Evaluation benchmark dataset (`eval/dataset.json`) currently tests 53 cases against 1.21.11 with 0 explicit 1.21.1 cases (scheduled for expansion in Phase 25.4).
+None. Multi-version runtime, knowledge parity, context propagation, warning hygiene, and dual-version benchmark evaluation are fully verified.
 
 ## Current priority
-Phase 25.1, Phase 25.2, and Phase 25.3 complete. 1.21.1 loot knowledge restored and authoritative; Understanding and QA context propagation fully version-aware; test suite completely clean with 0 warnings. Full test suite passing (560/560), headless Minecraft 1.21.1 and 1.21.11 servers verified, benchmark passing (53/53), `git diff --check` clean.
+Phase 25.1, Phase 25.2, Phase 25.3, and Phase 25.4 complete. Multi-version support for 1.21.1 and 1.21.11 is comprehensively implemented and benchmarked. 78/78 evaluation benchmark cases passing across both versions; 570/570 pytest tests passing with 0 warnings under `-W error`; `git diff --check` clean.
 
 ## Next logical work
-1. Proceed to Phase 25.4: Dual-version evaluation benchmark suite (`eval/dataset.json`, `eval/benchmark.py`).
-2. Proceed to Phase 25.5: Final dual-version end-to-end verification and handoff.
+1. Proceed to Phase 25.5: Final dual-version end-to-end verification, documentation alignment, and handoff.
 
 ## Agent handoff rule
 Before changing code, verify this state against the actual repository and Git history. After significant changes, update this file and the other relevant `.ai/` files.

@@ -92,7 +92,13 @@
   - [x] Confirmed zero non-None returns remain across all `test_*` functions in the repository via AST inspection.
   - [x] Zero production code changed; zero assertions weakened or deleted; no warning suppression decorators or configuration used.
   - [x] Verified full suite (560/560 PASS, 0 warnings), multi-version suites (60/60 PASS), and evaluation benchmark (53/53 PASS).
-- [ ] Phase 25.4: Dual-Version Evaluation Benchmark Suite (`eval/dataset.json`, `eval/benchmark.py`).
+- [x] Phase 25.4: Dual-Version Evaluation Benchmark Suite (`eval/dataset.json`, `eval/benchmark.py`, `eval/models.py`).
+  - [x] Extended `BenchmarkCase`, `CaseEvaluationResult`, and `BenchmarkSummary` models in `eval/models.py` with version attributes and default fallback.
+  - [x] Updated `BenchmarkRunner` in `eval/benchmark.py` with version-scoped reviewers, generators, and QA analyzers, dynamic pack_format validation, unsupported version rejection, and version breakdown reporting.
+  - [x] Preserved all 53 original 1.21.11 benchmark cases (53/53 PASS).
+  - [x] Added 25 curated 1.21.1 cases across all 16 domains to `eval/dataset.json` (25/25 PASS).
+  - [x] Dedicated verification suite (`test_step25_4_dual_version_benchmark.py`, 10 tests) passing 10/10 with zero warnings.
+  - [x] Verified full benchmark (78/78 cases, 100.0% accuracy) and full pytest suite (570/570 PASS under `-W error`).
 - [ ] Phase 25.5: Final Dual-Version Verification, Documentation & Handoff.
 - [x] Keep AI context files synchronized after significant changes.
 

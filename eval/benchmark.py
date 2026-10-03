@@ -29,6 +29,10 @@ import time
 from pathlib import Path
 from typing import Any, Dict, List, Optional, Tuple
 
+ROOT_DIR = Path(__file__).resolve().parent.parent
+if str(ROOT_DIR) not in sys.path:
+    sys.path.insert(0, str(ROOT_DIR))
+
 from ai.clarification import DEFAULT_CLARIFICATION_ENGINE, ClarificationRequirement
 from ai.implementation_mapper import ImplementationMapper, MappedImplementation
 from ai.numeric_interpreter import NumericSemanticInterpreter
@@ -40,7 +44,7 @@ from generator.models import ActionSpecification, MechanismSpecification
 from qa.analyzer import StaticSemanticAnalyzer
 from qa.reviewer import AutonomousQAReviewer
 from validator.datapack_validator import DatapackValidator
-from ai.version_registry import VersionContext
+from ai.version_registry import VersionContext, get_default_version, get_version_registry
 
 DEFAULT_DATASET_PATH = Path(__file__).parent / "dataset.json"
 
@@ -57,9 +61,18 @@ class BenchmarkRunner:
         self.clarification_engine = DEFAULT_CLARIFICATION_ENGINE
         self.mapper = ImplementationMapper()
         self.func_gen = FunctionMechanismGenerator()
-        self.validator = DatapackValidator(version="1.21.11")
+        self.validator = DatapackValidator()
         self.qa_analyzer = StaticSemanticAnalyzer()
         self.reviewer = AutonomousQAReviewer()
+
+    def _get_reviewer(self, v_context: VersionContext) -> AutonomousQAReviewer:
+        return AutonomousQAReviewer(version_context=v_context)
+
+    def _get_func_gen(self, v_context: VersionContext) -> FunctionMechanismGenerator:
+        return FunctionMechanismGenerator(version_context=v_context)
+
+    def _get_qa_analyzer(self, v_context: VersionContext) -> StaticSemanticAnalyzer:
+        return StaticSemanticAnalyzer(version_context=v_context)
 
     def load_dataset(self) -> List[BenchmarkCase]:
         """Loads and parses the benchmark dataset from JSON."""
@@ -83,6 +96,48 @@ class BenchmarkRunner:
         qa_passed = False
         intent_passed = False
         repair_attempts = 0
+
+        case_version = case.minecraft_version or get_default_version()
+
+        registry = get_version_registry()
+        if not registry.is_supported(case_version):
+            duration_ms = (time.perf_counter() - t0) * 1000.0
+            if not case.is_supported:
+                # Intentionally unsupported version case
+                return CaseEvaluationResult(
+                    case_id=case.id,
+                    category=case.category,
+                    request=case.request,
+                    minecraft_version=case_version,
+                    passed=True,
+                    semantic_interpretation_passed=True,
+                    clarification_passed=False,
+                    implementation_passed=False,
+                    validation_passed=False,
+                    qa_passed=False,
+                    intent_passed=False,
+                    details=f"Correctly flagged unsupported Minecraft version '{case_version}'",
+                    errors=[]
+                )
+            else:
+                errors.append(f"Target Minecraft version '{case_version}' is not supported by VersionRegistry.")
+                return CaseEvaluationResult(
+                    case_id=case.id,
+                    category=case.category,
+                    request=case.request,
+                    minecraft_version=case_version,
+                    passed=False,
+                    semantic_interpretation_passed=False,
+                    clarification_passed=False,
+                    implementation_passed=False,
+                    validation_passed=False,
+                    qa_passed=False,
+                    intent_passed=False,
+                    details=f"Unsupported Minecraft version '{case_version}'",
+                    errors=errors
+                )
+
+        v_context = VersionContext.from_version(case_version)
 
         try:
             # -----------------------------------------------------------------
@@ -146,8 +201,8 @@ class BenchmarkRunner:
                         func_dir = p / "data" / "test" / "function"
                         func_dir.mkdir(parents=True)
                         (func_dir / "main.mcfunction").write_text("attribute @a minecraft:generic.max_health base set -5\n", encoding="utf-8")
-                        (p / "pack.mcmeta").write_text(json.dumps({"pack": {"pack_format": 94, "description": "test"}}), encoding="utf-8")
-                        findings = self.qa_analyzer.analyze(p)
+                        (p / "pack.mcmeta").write_text(json.dumps({"pack": {"pack_format": v_context.pack_format, "description": "test"}}), encoding="utf-8")
+                        findings = self._get_qa_analyzer(v_context).analyze(p)
                         hazard_found = any(expected_hazard in f.id for f in findings)
                         if hazard_found:
                             semantic_passed = True
@@ -234,7 +289,7 @@ class BenchmarkRunner:
                         property_modification=mod,
                         target=mapped.target or default_target
                     )
-                    cmd = self.func_gen.synthesize_action(action)
+                    cmd = self._get_func_gen(v_context).synthesize_action(action)
                     if cmd:
                         validation_passed = True
                         qa_passed = True
@@ -260,8 +315,6 @@ class BenchmarkRunner:
                     # Verify deterministic generation, validation, and QA in a clean temp environment
                     with tempfile.TemporaryDirectory(prefix="eval_case_") as tmp_dir:
                         out_dir = Path(tmp_dir)
-                        case_version = getattr(case, "minecraft_version", "1.21.11") or "1.21.11"
-                        v_context = VersionContext.from_version(case_version)
                         gen = DatapackGenerator(output_dir=out_dir, version_context=v_context)
                         plan = {
                             "status": "ready",
@@ -278,13 +331,28 @@ class BenchmarkRunner:
                         gen_res = gen.generate(plan=plan, datapack_name="case_pack", create_zip=False)
                         if gen_res.status == "success":
                             pack_path = gen_res.datapack_path
+
+                            # Verify version-specific pack_format if specified in metadata
+                            expected_format = case.metadata.get("expected_pack_format")
+                            if expected_format is not None:
+                                mcmeta_file = pack_path / "pack.mcmeta"
+                                if mcmeta_file.exists():
+                                    try:
+                                        m_data = json.loads(mcmeta_file.read_text(encoding="utf-8"))
+                                        actual_fmt = m_data.get("pack", {}).get("pack_format")
+                                        if actual_fmt != expected_format:
+                                            errors.append(f"Expected pack_format {expected_format}, got {actual_fmt}")
+                                    except Exception as e:
+                                        errors.append(f"Failed to read pack.mcmeta: {e}")
+
                             val = DatapackValidator(version_context=v_context)
                             val_res = val.validate(pack_path)
-                            validation_passed = val_res.is_valid
+                            validation_passed = val_res.is_valid and (not errors)
                             if not val_res.is_valid:
                                 errors.extend([e.message for e in val_res.errors])
 
-                            qa_res = self.reviewer.review(pack_path, original_request=case.request, plan=plan)
+                            reviewer = self._get_reviewer(v_context)
+                            qa_res = reviewer.review(pack_path, original_request=case.request, plan=plan)
                             qa_passed = qa_res.is_pass
                             if not qa_res.is_pass:
                                 errors.extend([f.problem for f in qa_res.findings])
@@ -307,6 +375,7 @@ class BenchmarkRunner:
             case_id=case.id,
             category=case.category,
             request=case.request,
+            minecraft_version=case_version,
             passed=passed,
             semantic_interpretation_passed=semantic_passed,
             clarification_passed=clarification_passed,
@@ -529,12 +598,15 @@ class BenchmarkRunner:
         self,
         cases: Optional[List[BenchmarkCase]] = None,
         category: Optional[str] = None,
-        limit: Optional[int] = None
+        limit: Optional[int] = None,
+        version: Optional[str] = None
     ) -> BenchmarkSummary:
         """
         Runs the benchmark over the provided cases (or all cases in dataset).
         """
         all_cases = cases or self.load_dataset()
+        if version:
+            all_cases = [c for c in all_cases if c.minecraft_version == version]
         if category:
             all_cases = [c for c in all_cases if c.category.lower() == category.lower()]
         if limit and limit > 0:
@@ -542,6 +614,7 @@ class BenchmarkRunner:
 
         results: List[CaseEvaluationResult] = []
         cat_metrics: Dict[str, Dict[str, Any]] = {}
+        ver_metrics: Dict[str, Dict[str, Any]] = {}
 
         total_duration = 0.0
         passed_count = 0
@@ -587,9 +660,24 @@ class BenchmarkRunner:
             else:
                 cat_metrics[c_name]["failed"] += 1
 
+            # Version metrics tracking
+            v_name = case.minecraft_version or get_default_version()
+            if v_name not in ver_metrics:
+                ver_metrics[v_name] = {"total": 0, "passed": 0, "failed": 0, "duration_ms": 0.0}
+            ver_metrics[v_name]["total"] += 1
+            ver_metrics[v_name]["duration_ms"] += res.duration_ms
+            if res.passed:
+                ver_metrics[v_name]["passed"] += 1
+            else:
+                ver_metrics[v_name]["failed"] += 1
+
         avg_duration = total_duration / max(len(all_cases), 1)
 
         for c_name, data in cat_metrics.items():
+            data["accuracy_pct"] = round((data["passed"] / max(data["total"], 1)) * 100.0, 1)
+            data["avg_duration_ms"] = round(data["duration_ms"] / max(data["total"], 1), 2)
+
+        for v_name, data in ver_metrics.items():
             data["accuracy_pct"] = round((data["passed"] / max(data["total"], 1)) * 100.0, 1)
             data["avg_duration_ms"] = round(data["duration_ms"] / max(data["total"], 1), 2)
 
@@ -604,6 +692,7 @@ class BenchmarkRunner:
             repair_attempts=total_repairs,
             average_duration_ms=round(avg_duration, 2),
             category_metrics=cat_metrics,
+            version_metrics=ver_metrics,
             results=results
         )
 
@@ -623,9 +712,19 @@ class BenchmarkRunner:
             f"Repair Attempts:             {summary.repair_attempts}",
             f"Average Duration Per Case:   {summary.average_duration_ms:.2f} ms",
             "-" * 76,
-            f"{'Category':<28} {'Passed':<8} {'Total':<8} {'Accuracy':<10} {'Avg Time (ms)'}",
+            "Version Summary",
             "-" * 76,
         ]
+        for v_name, metrics in sorted(summary.version_metrics.items()):
+            acc_str = f"{metrics['accuracy_pct']:.1f}%"
+            lines.append(f"VERSION {v_name}")
+            lines.append(f"  Cases:   {metrics['total']}")
+            lines.append(f"  Passed:  {metrics['passed']} ({acc_str})")
+            lines.append(f"  Failed:  {metrics['failed']}")
+            lines.append("")
+        lines.append("-" * 76)
+        lines.append(f"{'Category':<28} {'Passed':<8} {'Total':<8} {'Accuracy':<10} {'Avg Time (ms)'}")
+        lines.append("-" * 76)
         for cat_name, metrics in sorted(summary.category_metrics.items()):
             acc_str = f"{metrics['accuracy_pct']:.1f}%"
             time_str = f"{metrics['avg_duration_ms']:.2f}"
@@ -653,12 +752,13 @@ class BenchmarkRunner:
 def main():
     parser = argparse.ArgumentParser(description="MinecraftAI Automated Evaluation Benchmark")
     parser.add_argument("--category", type=str, default=None, help="Filter benchmark by specific category")
+    parser.add_argument("--version", type=str, default=None, help="Filter benchmark by Minecraft version (e.g. 1.21.1, 1.21.11)")
     parser.add_argument("--summary-only", action="store_true", help="Print only the final summary table")
     parser.add_argument("--json", action="store_true", help="Output results in JSON format")
     args = parser.parse_args()
 
     runner = BenchmarkRunner()
-    summary = runner.run(category=args.category)
+    summary = runner.run(category=args.category, version=args.version)
 
     if args.json:
         print(summary.model_dump_json(indent=2))

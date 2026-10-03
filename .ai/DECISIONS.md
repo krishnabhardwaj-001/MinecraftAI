@@ -493,3 +493,28 @@ To eliminate 75 `PytestReturnNotNoneWarning` warnings across 9 legacy test files
    Standalone test runners (`run_all_tests()` loops and `if __name__ == "__main__":` entry points) were updated to catch `AssertionError` rather than checking return value truthiness. This preserves the ability to run these legacy test files standalone (`python test_xyz.py`) with proper non-zero exit codes on failure, while complying 100% with standard pytest runner semantics.
 4. Strict Test Invariant Preservation:
    Zero assertions were weakened or deleted. Zero production code was changed. Zero test function signatures or names were changed. AST inspection confirmed exactly zero non-None return statements remain in any `test_*` function across the entire repository. Full test suite (560/560), multi-version suites (60/60), and evaluation benchmark (53/53) pass cleanly with 0 warnings.
+
+## D047 — Dual-Version Evaluation Benchmark Suite Architecture (Phase 25.4)
+To extend the automated evaluation benchmark to rigorously evaluate both supported Minecraft versions (1.21.11 and 1.21.1) while preserving existing benchmark coverage and preventing version leakage:
+1. Dataset as Single Source of Truth (`eval/models.py` & `eval/dataset.json`):
+   Added `minecraft_version: str = Field(default="1.21.11")` to `BenchmarkCase` with a Pydantic field validator mapping `None` or omitted values to the registered project default (`1.21.11`). The benchmark runner never hardcodes version overrides; the dataset explicitly dictates the target version for every case.
+2. Dynamic Runner Version Scoping (`eval/benchmark.py`):
+   Replaced static QA reviewer, generator, and analyzer instances with dynamic version-scoped factory methods (`_get_reviewer(v_context)`, `_get_func_gen(v_context)`, `_get_qa_analyzer(v_context)`). This ensures the benchmark evaluates datapacks, pack.mcmeta formatting, and semantic checks strictly against the target version's rules and knowledge assets.
+3. Meaningful, Non-Redundant 1.21.1 Coverage (25 new cases across all 16 domains):
+   Rather than cloning all 53 existing 1.21.11 cases, added 25 targeted cases (`case_1211_01` through `case_1211_25`) exercising:
+   - Mob loot with authoritative 1.21.1 vanilla drop preservation (creeper, skeleton, spider) and explicit `expected_pack_format: 48` verification.
+   - Functions and commands (regeneration, night vision, effect clear).
+   - Function tags (`#minecraft:tick`, `#minecraft:load`).
+   - Condition predicates (weather check, time check).
+   - Custom advancements.
+   - Shaped, shapeless, and smelting recipes.
+   - Multi-tick state machines (weather rain counter).
+   - Scoreboard objectives and arithmetic operations.
+   - All property modification kinds (multiplier, relative, percentage, absolute, entity-specific targets).
+   - Compound requests, clarification handling, and negative safety hazard rejection.
+4. Version-Specific Expectations & Strict Rejection:
+   The benchmark asserts that generated `pack.mcmeta` strictly matches the expected version format (48 for 1.21.1, 94 for 1.21.11). An unsupported version is caught immediately by `VersionRegistry.is_supported` and fails with an explicit error rather than silently defaulting.
+5. Version Breakdown Reporting & CLI Filtering:
+   Extended `BenchmarkSummary` with `version_metrics` and updated `format_report()` to display a clean per-version breakdown (cases, passed, failed, percentage) alongside the existing category matrix. Added `--version` CLI flag allowing selective execution of specific versions (e.g. `python -m eval.benchmark --version 1.21.1`).
+6. Preserved 100% Determinism & Backward Compatibility:
+   All 53 existing 1.21.11 cases continue to pass 53/53. The expanded suite of 78 cases passes 78/78 (100.0%) deterministically in ~35ms avg duration per case without external API dependencies. Full pytest suite passes 570/570 under `-W error`.

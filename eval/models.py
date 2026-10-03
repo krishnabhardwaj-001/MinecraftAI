@@ -8,7 +8,7 @@ Defines structured data contracts for:
 """
 
 from typing import Any, Dict, List, Optional, Union
-from pydantic import BaseModel, Field, ConfigDict
+from pydantic import BaseModel, Field, ConfigDict, field_validator
 
 
 class BenchmarkCase(BaseModel):
@@ -22,6 +22,11 @@ class BenchmarkCase(BaseModel):
     request: str = Field(..., description="Natural-language request text")
     description: Optional[str] = Field(default=None, description="Human-readable description of the case")
     minecraft_version: str = Field(default="1.21.11", description="Target Minecraft Java Edition version (default: 1.21.11)")
+
+    @field_validator("minecraft_version", mode="before")
+    @classmethod
+    def default_version_if_none(cls, v: Any) -> str:
+        return v if v else "1.21.11"
 
     # Expected semantic and implementation specifications
     expected_mechanism: Optional[str] = Field(
@@ -88,6 +93,7 @@ class CaseEvaluationResult(BaseModel):
     case_id: str
     category: str
     request: str
+    minecraft_version: str = Field(default="1.21.11", description="Target Minecraft version evaluated")
     passed: bool
     semantic_interpretation_passed: bool
     clarification_passed: bool
@@ -117,4 +123,5 @@ class BenchmarkSummary(BaseModel):
     repair_attempts: int
     average_duration_ms: float
     category_metrics: Dict[str, Dict[str, Any]]
+    version_metrics: Dict[str, Dict[str, Any]] = Field(default_factory=dict, description="Per-version evaluation metrics")
     results: List[CaseEvaluationResult]
