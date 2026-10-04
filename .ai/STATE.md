@@ -162,15 +162,36 @@
      - Multi-version test suites (`test_step23_versioning.py`, `test_step24_multiversion.py`, `test_step25_1_loot_knowledge.py`, `test_step25_2_version_context.py`, `test_step25_4_dual_version_benchmark.py`, `test_step25_5_final_verification.py`) pass 80/80 tests.
      - `git diff --check` passes cleanly.
 
+- Interaction Data Contracts, Specifications & Knowledge Base (Phase 26.1) operational:
+  1. Typed Interaction Models (`generator/models.py`):
+     - `InteractionOption`: unique positive integer `id` (rejecting booleans and values `<= 0`), non-empty `label`, optional `description`, list of structured `ActionSpecification` gameplay actions, and optional `condition_predicate`.
+     - `InteractionSpecification`: validated alphanumeric `name`, modalities (`chat_menu`, `item_trigger`, `dialogue`, `target_selector`, `confirmation`), options list with duplicate ID rejection, required `trigger_item` for `item_trigger`, cancellation controls (`allow_cancel`, `cancel_label`), positive integer `timeout_seconds`, and target scopes (`self`, `player`, `all_players`, `target`).
+     - Added constants `VALID_INTERACTION_TYPES`, `VALID_TARGET_SCOPES`, and `INTERACTION_NAME_REGEX`.
+  2. MechanismSpecification Integration:
+     - Extended `MechanismSpecification` strictly with `interaction: Optional[InteractionSpecification] = None` as the single source of truth, avoiding duplicate flattened fields.
+     - Enforced canonical mechanism type `"interaction"`, rejecting non-canonical aliases (`menu`, `dialogue`, `choice`, `interactive`).
+     - Added `to_interaction_specification()` returning `self.interaction` (or raising `ValueError` if unset).
+     - Added branch 11 to `validate_mechanism_specification()` strictly validating interaction mechanism specifications across both typed models and raw dictionaries while preserving all existing mechanism types.
+     - Exported `InteractionOption` and `InteractionSpecification` in `generator/__init__.py`.
+  3. Canonical Concept Knowledge Base (`knowledge/concepts/interactions.json`, `knowledge_retriever.py`):
+     - Created `knowledge/concepts/interactions.json` containing 8 version-neutral interaction concepts (`concept_player_driven_interaction`, `concept_selectable_choices`, `concept_interaction_lifecycle`, `concept_trigger_based_interaction`, `concept_interaction_state`, `concept_cancellation`, `concept_timeout`, `concept_target_selection`).
+     - Wired into `knowledge_retriever.py` with `load_interaction_knowledge(version=None)` and exposed on `MinecraftKnowledgeRetriever.interactions`, consistent with all domain loaders.
+  4. Unit Test Suite (`test_step26_1_models.py`, 28 tests):
+     - Comprehensive unit tests covering option creation, specification validation, error handling, serialization roundtrips, mechanism integration, retriever loading, and package exports (28/28 passed in 0.69s).
+  5. Regression Gate & Benchmark:
+     - Full test suite: 608/608 passed with 0 warnings under `-W error`.
+     - Benchmark: 78/78 passed (100.0% accuracy across both 1.21.11 and 1.21.1).
+     - `git diff --check` clean.
+
 ## Known issues / gaps
 1. Web UI static status line in `web/static/js/app.js` (line 308) reads `resultMeta.textContent = "Datapack ready for Minecraft 1.21.11";`. This is a minor cosmetic frontend string, identified during the Phase 25.5 hardcoded-version audit. Per strict Phase 25.5 scope rules ("DO NOT change the web UI"), this is catalogued for update in a future UI milestone.
 2. In live end-to-end pipeline execution with local Ollama LLMs (`test_pipeline.py`), stochastic variation in generative responses on ambiguous prompts can occasionally produce interactive clarification requests. The deterministic pipeline, benchmark, and generator suites are 100% deterministic and immune to LLM temperature variations.
 
 ## Current priority
-Phase 25 is fully complete and verified. Dual-version Minecraft Java 1.21.11 and 1.21.1 support is fully audited, verified in real headless server runtimes, deterministically tested, and benchmarked at 100% (78/78 cases). 580/580 pytest tests passing with 0 warnings under `-W error`.
+Phase 26.1 is complete and verified. Data contracts, specifications, and concept knowledge for the Dynamic In-Game Interaction System are established with 0 warnings across 608 tests and 100% benchmark parity.
 
 ## Next logical work
-1. Proceed to Phase 26: Next major capability milestone (e.g. Extended Multi-Version Support, Advanced Datapack Mechanics, or UI Multi-Version Dynamic Metadata).
+1. Proceed to Phase 26.2: Deterministic Interaction Generator (`generator/mechanisms/interaction_mech.py` generating trigger scoreboards, presentation functions, tellraw clickEvents, action dispatchers, and cleanup functions).
 
 ## Agent handoff rule
 Before changing code, verify this state against the actual repository and Git history. After significant changes, update this file and the other relevant `.ai/` files.

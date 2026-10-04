@@ -1,0 +1,74 @@
+[
+  {
+    "id": "concept_player_driven_interaction",
+    "name": "Player-Driven Interaction",
+    "category": "interaction",
+    "description": "A gameplay pattern where mechanics require explicit player input, choice, or selection rather than triggering passively or automatically in the game loop. Allows players to activate abilities, choose options, select targets, or configure settings.",
+    "minecraft_mechanisms": ["tellraw", "trigger", "scoreboard", "interaction"],
+    "keywords": ["interaction", "menu", "choice", "player_choice", "selection", "dialogue", "interactive"],
+    "lifecycle_role": "general"
+  },
+  {
+    "id": "concept_selectable_choices",
+    "name": "Selectable Choices",
+    "category": "interaction",
+    "description": "Discrete options presented to a player in an interaction session. Each choice is mapped to a deterministic integer choice identifier and one or more gameplay actions executed upon selection.",
+    "minecraft_mechanisms": ["tellraw", "clickEvent", "trigger"],
+    "keywords": ["options", "choices", "buttons", "actions", "alternatives", "selectable"],
+    "lifecycle_role": "presentation"
+  },
+  {
+    "id": "concept_interaction_lifecycle",
+    "name": "Interaction Lifecycle",
+    "category": "interaction",
+    "description": "The deterministic sequence of phases governing an in-game interaction session: (1) Trigger and Enablement (authorizing player input), (2) Prompt Presentation (displaying dialogue or menu), (3) Input Waiting (detecting player action), (4) Action Dispatch (executing chosen behavior), and (5) State Reset and Cleanup (clearing scores and disabling triggers).",
+    "minecraft_mechanisms": ["scoreboard", "function", "trigger", "function_tag"],
+    "keywords": ["lifecycle", "session", "phases", "stages", "cleanup", "reset", "flow"],
+    "lifecycle_role": "lifecycle"
+  },
+  {
+    "id": "concept_trigger_based_interaction",
+    "name": "Trigger-Based Interaction",
+    "category": "interaction",
+    "description": "Using Minecraft's native '/trigger' command and trigger-criterion scoreboards to allow unprivileged (non-operator) players to safely submit choices via chat clickEvents without permission errors or command injection risks.",
+    "minecraft_mechanisms": ["scoreboard", "trigger", "clickEvent"],
+    "keywords": ["trigger", "scoreboard_trigger", "click_event", "non_op", "permissions", "safe_input"],
+    "lifecycle_role": "selection"
+  },
+  {
+    "id": "concept_interaction_state",
+    "name": "Interaction State Tracking",
+    "category": "interaction",
+    "description": "Per-player state tracking that maintains the active phase of an interaction (e.g. idle=0, open=1, awaiting_confirmation=2), ensuring actions are processed only during valid states and isolating simultaneous interactions between multiple players.",
+    "minecraft_mechanisms": ["scoreboard", "dummy_criteria", "per_player_score"],
+    "keywords": ["state", "session_state", "per_player", "concurrency", "isolation", "tracking"],
+    "lifecycle_role": "state"
+  },
+  {
+    "id": "concept_cancellation",
+    "name": "Interaction Cancellation",
+    "category": "interaction",
+    "description": "A safety mechanism allowing players to decline or exit an open interaction without executing actions, safely resetting session scores, clearing temporary tags, and disabling triggers.",
+    "minecraft_mechanisms": ["trigger", "scoreboard", "tellraw"],
+    "keywords": ["cancel", "decline", "abort", "close", "dismiss", "exit"],
+    "lifecycle_role": "cleanup"
+  },
+  {
+    "id": "concept_timeout",
+    "name": "Interaction Timeout",
+    "category": "interaction",
+    "description": "An automatic session expiration mechanism using tick timers that terminates an inactive interaction session if the player fails to respond within a configured duration, preventing dangling state and game resource leaks.",
+    "minecraft_mechanisms": ["scoreboard", "tick_function", "dummy_counter"],
+    "keywords": ["timeout", "expiration", "timer", "auto_cancel", "safety", "duration"],
+    "lifecycle_role": "cleanup"
+  },
+  {
+    "id": "concept_target_selection",
+    "name": "Player and Target Selection",
+    "category": "interaction",
+    "description": "A pattern for presenting a dynamic list of candidate online players or entities to an initiator, assigning temporary selector IDs to candidates and allowing the initiator to choose a specific target entity for a gameplay action.",
+    "minecraft_mechanisms": ["tellraw", "trigger", "scoreboard_id", "execute_as"],
+    "keywords": ["target", "target_player", "select_player", "player_list", "entity_target", "selector"],
+    "lifecycle_role": "selection"
+  }
+]

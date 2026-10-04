@@ -39,6 +39,9 @@ def get_scoreboards_file(version: str = VERSION) -> Path:
     ver = str(version or VERSION).strip()
     return BASE_DIR / "knowledge" / "scoreboards" / "java" / ver / "scoreboards.json"
 
+def get_interactions_file() -> Path:
+    return BASE_DIR / "knowledge" / "concepts" / "interactions.json"
+
 # Backwards-compatible path constants pointing to default version
 COMMANDS_FILE = get_commands_file(VERSION)
 SEMANTIC_FILE = BASE_DIR / "knowledge" / "descriptions" / "semantic_commands.json"
@@ -48,6 +51,7 @@ ITEMS_FILE = get_items_file(VERSION)
 PREDICATES_FILE = get_predicates_file(VERSION)
 TAGS_FILE = get_tags_file(VERSION)
 SCOREBOARDS_FILE = get_scoreboards_file(VERSION)
+INTERACTIONS_FILE = get_interactions_file()
 
 
 # ============================================================
@@ -340,6 +344,21 @@ def load_scoreboard_knowledge(version=None):
     if sc_file.exists():
         try:
             with open(sc_file, "r", encoding="utf-8") as f:
+                return json.load(f)
+        except Exception:
+            return []
+    return []
+
+
+# ============================================================
+# LOAD INTERACTION KNOWLEDGE
+# ============================================================
+
+def load_interaction_knowledge(version=None) -> list:
+    int_file = get_interactions_file()
+    if int_file.exists():
+        try:
+            with open(int_file, "r", encoding="utf-8") as f:
                 return json.load(f)
         except Exception:
             return []
@@ -1290,6 +1309,10 @@ class MinecraftKnowledgeRetriever:
 
         self.scoreboards = (
             load_scoreboard_knowledge(version=self.version)
+        )
+
+        self.interactions = (
+            load_interaction_knowledge(version=self.version)
         )
 
     # --------------------------------------------------------

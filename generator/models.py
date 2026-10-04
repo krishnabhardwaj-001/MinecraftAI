@@ -763,6 +763,238 @@ class GenerationResult(BaseModel):
     message: Optional[str] = None
 
 
+# ==============================================================================
+# INTERACTION CONSTANTS & MODELS (Phase 26.1)
+# ==============================================================================
+
+VALID_INTERACTION_TYPES = {
+    "chat_menu",
+    "item_trigger",
+    "dialogue",
+    "target_selector",
+    "confirmation",
+}
+
+VALID_TARGET_SCOPES = {
+    "self",
+    "player",
+    "all_players",
+    "target",
+}
+
+INTERACTION_NAME_REGEX = re.compile(r"^[a-zA-Z0-9_\-]+$")
+
+
+class InteractionOption(BaseModel):
+    """
+    Represents one selectable option in an in-game interaction.
+    """
+    model_config = ConfigDict(extra="allow")
+
+    id: int = Field(
+        ...,
+        description="Deterministic integer choice identifier (unique within interaction, >= 1)"
+    )
+    label: str = Field(
+        ...,
+        description="User-facing display label for this choice (cannot be empty)"
+    )
+    description: Optional[str] = Field(
+        default=None,
+        description="Optional tooltip or hover description for the option"
+    )
+    actions: List[Union[ActionSpecification, Dict[str, Any]]] = Field(
+        default_factory=list,
+        description="List of gameplay actions executed when this option is selected"
+    )
+    condition_predicate: Optional[str] = Field(
+        default=None,
+        description="Optional predicate identifier required for this option to be available"
+    )
+
+    @field_validator("id", mode="before")
+    @classmethod
+    def validate_id(cls, v: Any) -> int:
+        if isinstance(v, bool):
+            raise ValueError("Option id cannot be a boolean")
+        if not isinstance(v, int):
+            try:
+                v = int(v)
+            except (ValueError, TypeError):
+                raise ValueError(f"Option id must be an integer, got {type(v).__name__}")
+        if v < 1:
+            raise ValueError(f"Option id must be a positive integer (>= 1). Got {v}")
+        return v
+
+    @field_validator("label")
+    @classmethod
+    def validate_label(cls, v: Any) -> str:
+        if v is None:
+            raise ValueError("Option label cannot be None")
+        v_str = str(v).strip()
+        if not v_str:
+            raise ValueError("Option label cannot be empty or whitespace only")
+        return v_str
+
+    @field_validator("actions", mode="before")
+    @classmethod
+    def validate_actions(cls, v: Any) -> List[Any]:
+        if v is None:
+            return []
+        if not isinstance(v, list):
+            raise ValueError(f"Option actions must be a list, got {type(v).__name__}")
+        validated = []
+        for act in v:
+            if isinstance(act, ActionSpecification):
+                validated.append(act)
+            elif isinstance(act, dict):
+                validated.append(ActionSpecification(**act))
+            else:
+                raise ValueError(f"Invalid action item in InteractionOption: {type(act).__name__}")
+        return validated
+
+
+class InteractionSpecification(BaseModel):
+    """
+    Structured specification for a player-driven in-game interaction mechanism.
+    Represents menus, target selectors, item triggers, and confirmation dialogs.
+    """
+    model_config = ConfigDict(extra="allow")
+
+    name: str = Field(
+        ...,
+        description="Machine-readable name identifier for this interaction (e.g. 'warp_menu')"
+    )
+    interaction_type: str = Field(
+        default="chat_menu",
+        description="Interaction modality: chat_menu, item_trigger, dialogue, target_selector, confirmation"
+    )
+    prompt: Optional[str] = Field(
+        default=None,
+        description="Header prompt or message displayed to the player"
+    )
+    options: List[InteractionOption] = Field(
+        default_factory=list,
+        description="List of selectable options (must have unique IDs)"
+    )
+    trigger_item: Optional[str] = Field(
+        default=None,
+        description="Item resource ID if triggered by right-clicking an item in hand"
+    )
+    allow_cancel: bool = Field(
+        default=True,
+        description="Whether this interaction supports cancellation"
+    )
+    cancel_label: str = Field(
+        default="Cancel",
+        description="Display label for cancellation"
+    )
+    timeout_seconds: Optional[int] = Field(
+        default=None,
+        description="Timeout in seconds before session auto-cancels"
+    )
+    target_scope: str = Field(
+        default="self",
+        description="Target scope: 'self', 'player', 'all_players', 'target'"
+    )
+    description: Optional[str] = Field(
+        default=None,
+        description="Optional human-readable explanation"
+    )
+    namespace: str = Field(
+        default="minecraft_ai",
+        description="Resource namespace (default: 'minecraft_ai')"
+    )
+
+    @field_validator("name")
+    @classmethod
+    def validate_name(cls, v: Any) -> str:
+        if v is None:
+            raise ValueError("Interaction name cannot be None")
+        v_str = str(v).strip()
+        if not v_str:
+            raise ValueError("Interaction name cannot be empty")
+        if not INTERACTION_NAME_REGEX.match(v_str):
+            raise ValueError(
+                f"Invalid interaction name '{v_str}'. Must be alphanumeric with underscores or hyphens."
+            )
+        return v_str
+
+    @field_validator("interaction_type")
+    @classmethod
+    def validate_interaction_type(cls, v: Any) -> str:
+        if v is None:
+            raise ValueError("interaction_type cannot be None")
+        v_str = str(v).strip().lower()
+        if v_str not in VALID_INTERACTION_TYPES:
+            raise ValueError(
+                f"Invalid interaction_type '{v}'. Must be one of: {sorted(VALID_INTERACTION_TYPES)}"
+            )
+        return v_str
+
+    @field_validator("target_scope")
+    @classmethod
+    def validate_target_scope(cls, v: Any) -> str:
+        if v is None:
+            return "self"
+        v_str = str(v).strip().lower()
+        if v_str not in VALID_TARGET_SCOPES:
+            raise ValueError(
+                f"Invalid target_scope '{v}'. Must be one of: {sorted(VALID_TARGET_SCOPES)}"
+            )
+        return v_str
+
+    @field_validator("timeout_seconds", mode="before")
+    @classmethod
+    def validate_timeout(cls, v: Any) -> Optional[int]:
+        if v is None:
+            return None
+        if isinstance(v, bool):
+            raise ValueError("timeout_seconds cannot be a boolean")
+        try:
+            int_v = int(v)
+        except (ValueError, TypeError):
+            raise ValueError(f"timeout_seconds must be an integer, got {v}")
+        if int_v <= 0:
+            raise ValueError(f"timeout_seconds must be positive (> 0). Got {int_v}")
+        return int_v
+
+    @field_validator("options", mode="before")
+    @classmethod
+    def validate_options_list(cls, v: Any) -> List[Any]:
+        if v is None:
+            return []
+        if not isinstance(v, list):
+            raise ValueError(f"options must be a list, got {type(v).__name__}")
+        validated = []
+        for opt in v:
+            if isinstance(opt, InteractionOption):
+                validated.append(opt)
+            elif isinstance(opt, dict):
+                validated.append(InteractionOption(**opt))
+            else:
+                raise ValueError(f"Invalid option item: {type(opt).__name__}")
+        return validated
+
+    @model_validator(mode="after")
+    def validate_interaction_integrity(self) -> "InteractionSpecification":
+        seen_ids = set()
+        for opt in self.options:
+            if opt.id in seen_ids:
+                raise ValueError(
+                    f"Duplicate option id '{opt.id}' in interaction '{self.name}'. Option IDs must be unique."
+                )
+            seen_ids.add(opt.id)
+
+        if self.interaction_type == "item_trigger":
+            if not self.trigger_item or not str(self.trigger_item).strip():
+                raise ValueError(
+                    "interaction_type 'item_trigger' requires 'trigger_item' to be specified."
+                )
+
+        return self
+
+
 class MechanismSpecification(BaseModel):
     """
     Structured specification of a Minecraft datapack implementation mechanism.
@@ -969,6 +1201,12 @@ class MechanismSpecification(BaseModel):
         description="Sub-condition for inverted predicate type ('inverted')"
     )
 
+    # Interaction parameters (Phase 26.1)
+    interaction: Optional[InteractionSpecification] = Field(
+        default=None,
+        description="Structured interaction specification (Phase 26)"
+    )
+
     def validate_completeness(self) -> None:
         """
         Validates that required fields for this mechanism type are populated.
@@ -1091,6 +1329,15 @@ class MechanismSpecification(BaseModel):
             namespace=self.namespace or "minecraft_ai"
         )
 
+    def to_interaction_specification(self) -> InteractionSpecification:
+        """
+        Returns the structured InteractionSpecification for this mechanism.
+        Raises ValueError if interaction is not configured.
+        """
+        if self.interaction is not None:
+            return self.interaction
+        raise ValueError("MechanismSpecification does not contain an interaction specification.")
+
 
 def validate_mechanism_specification(spec: Union[MechanismSpecification, Dict[str, Any], ScoreboardObjectiveDefinition]) -> None:
     """
@@ -1123,6 +1370,7 @@ def validate_mechanism_specification(spec: Union[MechanismSpecification, Dict[st
         display_slot = spec.get("display_slot")
         source_holder = spec.get("source_holder")
         source_objective = spec.get("source_objective")
+        interaction = spec.get("interaction")
     elif isinstance(spec, MechanismSpecification):
         spec_type = str(spec.type).lower()
         target = spec.target or spec.path
@@ -1149,6 +1397,7 @@ def validate_mechanism_specification(spec: Union[MechanismSpecification, Dict[st
         display_slot = spec.display_slot
         source_holder = spec.source_holder
         source_objective = spec.source_objective
+        interaction = spec.interaction
     elif isinstance(spec, ScoreboardObjectiveDefinition):
         spec_type = "scoreboard_objective"
         target = None
@@ -1175,6 +1424,7 @@ def validate_mechanism_specification(spec: Union[MechanismSpecification, Dict[st
         display_slot = spec.display_slot
         source_holder = None
         source_objective = None
+        interaction = None
     else:
         raise ValueError(f"Expected MechanismSpecification, ScoreboardObjectiveDefinition, or dict, got {type(spec)}")
 
@@ -1320,6 +1570,17 @@ def validate_mechanism_specification(spec: Union[MechanismSpecification, Dict[st
             for act in actions:
                 if isinstance(act, dict):
                     ActionSpecification(**act)
+
+    # 11. Interaction (Phase 26.1)
+    elif spec_type == "interaction":
+        if interaction is None:
+            raise ValueError("Incomplete interaction specification: missing 'interaction'.")
+        if isinstance(interaction, dict):
+            InteractionSpecification.model_validate(interaction)
+        elif isinstance(interaction, InteractionSpecification):
+            pass
+        else:
+            raise ValueError(f"Invalid interaction specification type: {type(interaction).__name__}")
 
     else:
         raise ValueError(f"Unsupported mechanism specification type: '{spec_type}'")

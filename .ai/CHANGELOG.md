@@ -1,5 +1,27 @@
 # AI Change Log
 
+- Implemented PHASE 26.1: Interaction Data Contracts, Specifications & Knowledge Base (`generator/models.py`, `generator/__init__.py`, `knowledge/concepts/interactions.json`, `knowledge_retriever.py`, `test_step26_1_models.py`):
+  1. Typed Interaction Models (`generator/models.py`):
+     - Added `InteractionOption` Pydantic model with unique positive int `id` (`>= 1`, rejecting booleans and values `<= 0`), non-empty `label`, optional `description`, list of structured `ActionSpecification` gameplay actions, and optional `condition_predicate`.
+     - Added `InteractionSpecification` model with validated `name` (alphanumeric regex `^[a-zA-Z0-9_\-]+$`), modality `interaction_type` (`chat_menu`, `item_trigger`, `dialogue`, `target_selector`, `confirmation`), `options` list with duplicate ID rejection, required `trigger_item` for `item_trigger`, cancellation controls (`allow_cancel`, `cancel_label`), positive integer `timeout_seconds`, and `target_scope` (`self`, `player`, `all_players`, `target`).
+     - Added constants `VALID_INTERACTION_TYPES`, `VALID_TARGET_SCOPES`, and `INTERACTION_NAME_REGEX`.
+  2. MechanismSpecification Integration (`generator/models.py`, `generator/__init__.py`):
+     - Extended `MechanismSpecification` strictly with `interaction: Optional[InteractionSpecification] = None` as the single source of truth, avoiding duplicate flattened fields.
+     - Enforced canonical mechanism type `"interaction"`, rejecting non-canonical aliases (`menu`, `dialogue`, `choice`, `interactive`).
+     - Added `to_interaction_specification()` returning `self.interaction` (or raising `ValueError` if unset).
+     - Added branch 11 to `validate_mechanism_specification()` strictly validating interaction mechanism specifications across both typed models and raw dictionaries while preserving all existing mechanism types.
+     - Exported `InteractionOption` and `InteractionSpecification` in `generator/__init__.py`.
+  3. Canonical Concept Knowledge Base (`knowledge/concepts/interactions.json`, `knowledge_retriever.py`):
+     - Created `knowledge/concepts/interactions.json` with 8 generic interaction concepts (`concept_player_driven_interaction`, `concept_selectable_choices`, `concept_interaction_lifecycle`, `concept_trigger_based_interaction`, `concept_interaction_state`, `concept_cancellation`, `concept_timeout`, `concept_target_selection`).
+     - Added `get_interactions_file()`, `INTERACTIONS_FILE`, and `load_interaction_knowledge(version=None)` in `knowledge_retriever.py`.
+     - Populated `self.interactions` on `MinecraftKnowledgeRetriever.__init__`, consistent with all domain loaders.
+  4. Unit Test Suite (`test_step26_1_models.py`, 28 tests):
+     - Validates options, specifications, validators, error rejection, serialization roundtrips, mechanism integration, retriever loading, and module exports (28/28 passed in 0.69s).
+  5. Regression Gate & Benchmark:
+     - Full test suite: 608/608 passed, 0 warnings under `-W error`.
+     - Evaluation benchmark: 78/78 passed (100.0% accuracy across both 1.21.11 and 1.21.1).
+     - `git diff --check` passes cleanly.
+
 - Implemented PHASE 25.5: Final Dual-Version Verification, Documentation & Handoff (`test_step25_5_final_verification.py`, `.ai/STATE.md`, `.ai/TASKS.md`, `.ai/DECISIONS.md`, `.ai/CHANGELOG.md`):
   1. Dedicated Verification Suite (`test_step25_5_final_verification.py`, 10 tests):
      - End-to-end `VersionContext` propagation and metadata integrity (pack format 94 vs 48, min/max format arrays, singular directory layout, data pack versions 94.1 vs 48.0).

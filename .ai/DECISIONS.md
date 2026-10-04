@@ -536,3 +536,21 @@ To formally verify, audit, and lock down the completed multi-version architectur
    Verified that repeated generation of identical requests under identical version targets yields byte-identical ZIP files (stable SHA256 hashes), while generation under different version targets correctly produces version-appropriate outputs (`pack.mcmeta` format 94 vs 48, attribute namespaces).
 5. Comprehensive Regression Gate:
    Established a dedicated verification suite (`test_step25_5_final_verification.py`, 10 tests). Full test suite passes 580/580 with 0 errors, 0 failures, and 0 warnings under `-W error`. Evaluation benchmark passes 78/78 cases (100.0% accuracy across all 16 domains).
+
+## D049 — Interaction Data Contracts, Specifications & Knowledge Base (Phase 26.1)
+To establish the foundational boundary and data-driven contracts for player-driven interaction mechanics (menus, dialogues, triggers, and choice selectors) without generator or planner side effects:
+1. Typed Pydantic Interaction Contracts (`generator/models.py`):
+   - Defined `InteractionOption` with unique positive integer IDs (`id >= 1`, rejecting booleans and <= 0), non-empty user-facing display labels, optional tooltips, structured gameplay actions (`ActionSpecification`), and optional condition predicates.
+   - Defined `InteractionSpecification` with machine-readable names (`^[a-zA-Z0-9_\-]+$`), validated modalities (`chat_menu`, `item_trigger`, `dialogue`, `target_selector`, `confirmation`), options list, trigger item requirements for `item_trigger`, cancellation controls (`allow_cancel`, `cancel_label`), positive integer timeout controls (`timeout_seconds`), and target scopes (`self`, `player`, `all_players`, `target`).
+2. Clean Single Source of Truth Mechanism Integration:
+   - Extended `MechanismSpecification` strictly with `interaction: Optional[InteractionSpecification] = None` as the single source of truth, deliberately avoiding flattened duplicate fields (`options`, `interaction_type`, `prompt`, `trigger_item`, `timeout_seconds`, etc.) on the mechanism model.
+   - Enforced single canonical mechanism type `"interaction"`, rejecting ambiguous aliases (`menu`, `dialogue`, `choice`, `interactive`) to ensure unambiguous planner/generator/validator contracts.
+   - Implemented `to_interaction_specification()` as a deterministic getter returning `self.interaction` (or raising `ValueError` if unset).
+   - Updated `validate_mechanism_specification()` to validate `spec.interaction` (or `spec["interaction"]`), strictly checking model integrity and rejecting missing specifications.
+3. Canonical Interaction Concept Knowledge Base (`knowledge/concepts/interactions.json`):
+   - Established 8 version-neutral gameplay interaction concepts (`concept_player_driven_interaction`, `concept_selectable_choices`, `concept_interaction_lifecycle`, `concept_trigger_based_interaction`, `concept_interaction_state`, `concept_cancellation`, `concept_timeout`, `concept_target_selection`).
+   - Wired concept loading into `knowledge_retriever.py` via `load_interaction_knowledge(version=None)` and exposed on `MinecraftKnowledgeRetriever.interactions`, matching the signature convention of all existing domain loaders.
+4. Strict Scope Discipline:
+   - Scope strictly confined to data contracts, specification validation, and knowledge base integration. Zero generator command compilation, planner prompt mutations, or QA validator changes were introduced in this phase (reserved for Phases 26.2–26.5).
+5. Comprehensive Test Gate:
+   - Added `test_step26_1_models.py` (28 unit tests). Full regression test suite passes 608/608 tests with 0 warnings under `-W error`. Dual-version benchmark passes 78/78 cases (100.0%).
