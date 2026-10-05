@@ -183,15 +183,43 @@
      - Benchmark: 78/78 passed (100.0% accuracy across both 1.21.11 and 1.21.1).
      - `git diff --check` clean.
 
+- Deterministic Interaction Mechanism Generator & Resource Assembly (Phase 26.2) operational:
+  1. Interaction Mechanism Generator (`generator/mechanisms/interaction_mech.py`):
+     - Implements `BaseMechanismGenerator` and consumes semantic `InteractionSpecification` and `InteractionOption` models.
+     - Deterministic, collision-resistant 16-character objective naming (`derive_objective_name`) enforcing Minecraft's 1-16 char objective name limits (`trg_<name>`, `act_<name>`, `tmr_<name>`) with SHA256 truncation.
+     - Generates discrete lifecycle functions under `data/<namespace>/function/interaction/<name>/`:
+       - `init.mcfunction`: declares trigger and timer objectives.
+       - `open.mcfunction`: enables player `/trigger`, active state tracking, timer reset, and `tellraw` rendering.
+       - `tick.mcfunction`: choice detection for each option ID, cancellation check, item-trigger check, and timeout timer loop.
+       - `select_<id>.mcfunction`: per-option action execution via `FunctionMechanismGenerator.synthesize_action()` with condition predicate wrapping, followed by score and active state reset.
+       - `cancel.mcfunction`: cleans up trigger and active state, providing cancellation feedback.
+       - `timeout.mcfunction`: cleans up trigger and active state, providing expiration feedback.
+  2. Safe Player Interaction Model:
+     - Uses native vanilla `/trigger` scoreboard criteria for safe non-operator player choice selection via chat `tellraw` `clickEvent`s with zero elevated permission requirements.
+  3. Game Loop Tag Integration:
+     - Emits `#minecraft:load` -> `init.mcfunction` and `#minecraft:tick` -> `tick.mcfunction`.
+     - Zero dangling references: all referenced functions physically exist on disk.
+  4. Datapack Generator Integration:
+     - Wired into `DatapackGenerator.extract_mechanisms()` and `generate()`, allowing seamless composition with recipes, loot tables, advancements, functions, and state machines.
+     - Exported in `generator/mechanisms/__init__.py` and `generator/__init__.py`.
+  5. Multi-Version Support & Determinism:
+     - Supports Minecraft Java 1.21.11 (`pack_format: 94`) and 1.21.1 (`pack_format: 48`).
+     - Verified byte-identical ZIP archive generation across repeated runs.
+  6. Comprehensive Verification Suite (`test_step26_2_generator.py`, 16 tests):
+     - 16/16 unit tests passed in 1.72s.
+     - Full regression suite: 624/624 passed with 0 warnings under `-W error`.
+     - Dual-version evaluation benchmark: 78/78 passed (100.0%).
+     - `git diff --check` clean.
+
 ## Known issues / gaps
 1. Web UI static status line in `web/static/js/app.js` (line 308) reads `resultMeta.textContent = "Datapack ready for Minecraft 1.21.11";`. This is a minor cosmetic frontend string, identified during the Phase 25.5 hardcoded-version audit. Per strict Phase 25.5 scope rules ("DO NOT change the web UI"), this is catalogued for update in a future UI milestone.
 2. In live end-to-end pipeline execution with local Ollama LLMs (`test_pipeline.py`), stochastic variation in generative responses on ambiguous prompts can occasionally produce interactive clarification requests. The deterministic pipeline, benchmark, and generator suites are 100% deterministic and immune to LLM temperature variations.
 
 ## Current priority
-Phase 26.1 is complete and verified. Data contracts, specifications, and concept knowledge for the Dynamic In-Game Interaction System are established with 0 warnings across 608 tests and 100% benchmark parity.
+Phase 26.2 is complete and verified. Deterministic interaction mechanism generator, resource assembly, and game-loop lifecycle functions are established with 0 warnings across 624 tests and 100% benchmark parity.
 
 ## Next logical work
-1. Proceed to Phase 26.2: Deterministic Interaction Generator (`generator/mechanisms/interaction_mech.py` generating trigger scoreboards, presentation functions, tellraw clickEvents, action dispatchers, and cleanup functions).
+1. Proceed to Phase 26.3: Interaction Static Semantic Validator (`validator/datapack_validator.py` rules for interaction structure, trigger objectives, lifecycle functions, tellraw JSON syntax, clickEvent targets, and cross-reference integrity).
 
 ## Agent handoff rule
 Before changing code, verify this state against the actual repository and Git history. After significant changes, update this file and the other relevant `.ai/` files.

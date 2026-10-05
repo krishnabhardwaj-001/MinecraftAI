@@ -554,3 +554,33 @@ To establish the foundational boundary and data-driven contracts for player-driv
    - Scope strictly confined to data contracts, specification validation, and knowledge base integration. Zero generator command compilation, planner prompt mutations, or QA validator changes were introduced in this phase (reserved for Phases 26.2–26.5).
 5. Comprehensive Test Gate:
    - Added `test_step26_1_models.py` (28 unit tests). Full regression test suite passes 608/608 tests with 0 warnings under `-W error`. Dual-version benchmark passes 78/78 cases (100.0%).
+
+## D050 — Deterministic Interaction Mechanism Generator & Resource Assembly (Phase 26.2)
+To translate high-level semantic `InteractionSpecification` contracts into server-side, vanilla-compatible Minecraft resources:
+1. Modular Generator (`InteractionMechanismGenerator` in `generator/mechanisms/interaction_mech.py`):
+   - Implements `BaseMechanismGenerator` and consumes semantic `InteractionSpecification` models.
+   - Sourced strictly from the semantic specification with zero hardcoded mob/item/request hacks.
+2. Unprivileged Choice Submission via `/trigger`:
+   - Employs Minecraft's native `/trigger` command and trigger criteria objectives (`scoreboard objectives add <obj> trigger`).
+   - Chat `tellraw` clickable options map to `run_command` with `/trigger <obj> set <id>`, enabling non-operator players to make selections without permissions or command injection vulnerabilities.
+3. Deterministic, Collision-Resistant 16-Character Objective Naming:
+   - In accordance with Minecraft's 16-character objective limit, `derive_objective_name` deterministically derives `trg_<clean>` (or `trg_<clean[:6]>_<hash5>`), `act_<clean>`, and `tmr_<clean>`.
+   - Guarantees deterministic, collision-resistant 16-character objective naming across multiple coexisting interactions.
+4. Lifecycle Stage Separation:
+   - Deterministically generates isolated lifecycle functions under `data/<ns>/function/interaction/<name>/`:
+     - `init.mcfunction`: declares trigger and timer scoreboard objectives.
+     - `open.mcfunction`: enables player trigger, sets active state, resets timer, and renders `tellraw` menu.
+     - `tick.mcfunction`: detects player trigger scores, dispatches to option handlers, handles cancellation and timeout.
+     - `select_<id>.mcfunction`: executes option gameplay actions via `FunctionMechanismGenerator.synthesize_action()` with condition predicate wrapping, then resets player score and active state.
+     - `cancel.mcfunction`: resets scores/state and displays cancellation feedback.
+     - `timeout.mcfunction`: resets scores/state and displays expiration feedback.
+5. Game Loop Tags & Dangling Reference Prevention:
+   - Registers `#minecraft:load` -> `init.mcfunction` and `#minecraft:tick` -> `tick.mcfunction`.
+   - Both functions are physically emitted, guaranteeing zero dangling references and tag loader integrity.
+6. Datapack Integration:
+   - Integrated into `DatapackGenerator.extract_mechanisms()` and `generate()`, allowing seamless composition with recipes, loot tables, advancements, functions, and state machines.
+7. Dual-Version Compatibility & Determinism:
+   - Supports both Minecraft Java 1.21.11 (`pack_format: 94`) and 1.21.1 (`pack_format: 48`).
+   - Verified byte-identical ZIP output across repeated runs.
+8. Comprehensive Verification Gate:
+   - Added `test_step26_2_generator.py` (16 unit tests). Full regression suite passes 624/624 tests with 0 warnings under `-W error`. Evaluation benchmark passes 78/78 cases (100.0%).

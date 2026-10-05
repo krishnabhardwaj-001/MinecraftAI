@@ -1,5 +1,33 @@
 # AI Change Log
 
+- Implemented PHASE 26.2: Deterministic Interaction Mechanism Generator & Resource Assembly (`generator/mechanisms/interaction_mech.py`, `generator/mechanisms/__init__.py`, `generator/__init__.py`, `generator/datapack_generator.py`, `test_step26_2_generator.py`):
+  1. Interaction Mechanism Generator (`generator/mechanisms/interaction_mech.py`):
+     - Implements `BaseMechanismGenerator` and processes semantic `InteractionSpecification` and `InteractionOption` models.
+     - Deterministic, collision-resistant 16-character objective naming (`derive_objective_name`) enforcing Minecraft's 1-16 char objective name limits (`trg_<name>`, `act_<name>`, `tmr_<name>`) with SHA256 truncation.
+     - Generates discrete lifecycle functions under `data/<namespace>/function/interaction/<name>/`:
+       - `init.mcfunction`: declares trigger and timer objectives.
+       - `open.mcfunction`: enables player `/trigger`, active state tracking, timer reset, and `tellraw` rendering.
+       - `tick.mcfunction`: choice detection for each option ID, cancellation check, item-trigger check, and timeout timer loop.
+       - `select_<id>.mcfunction`: per-option action execution via `FunctionMechanismGenerator.synthesize_action()` with condition predicate wrapping, followed by score and active state reset.
+       - `cancel.mcfunction`: cleans up trigger and active state, providing cancellation feedback.
+       - `timeout.mcfunction`: cleans up trigger and active state, providing expiration feedback.
+  2. Safe Player Interaction Model:
+     - Uses native vanilla `/trigger` scoreboard criteria for safe non-operator player choice selection via chat `tellraw` `clickEvent`s with zero elevated permission requirements.
+  3. Game Loop Tag Integration:
+     - Emits `#minecraft:load` -> `init.mcfunction` and `#minecraft:tick` -> `tick.mcfunction`.
+     - Zero dangling references: all referenced functions physically exist on disk.
+  4. Datapack Generator Integration:
+     - Wired into `DatapackGenerator.extract_mechanisms()` and `generate()`, allowing seamless composition with recipes, loot tables, advancements, functions, and state machines.
+     - Exported in `generator/mechanisms/__init__.py` and `generator/__init__.py`.
+  5. Multi-Version Support & Determinism:
+     - Supports Minecraft Java 1.21.11 (`pack_format: 94`) and 1.21.1 (`pack_format: 48`).
+     - Verified byte-identical ZIP archive generation across repeated runs.
+  6. Comprehensive Verification Suite (`test_step26_2_generator.py`, 16 tests):
+     - 16/16 unit tests passed in 1.72s.
+     - Full regression suite: 624/624 passed with 0 warnings under `-W error`.
+     - Dual-version evaluation benchmark: 78/78 passed (100.0%).
+     - `git diff --check` clean.
+
 - Implemented PHASE 26.1: Interaction Data Contracts, Specifications & Knowledge Base (`generator/models.py`, `generator/__init__.py`, `knowledge/concepts/interactions.json`, `knowledge_retriever.py`, `test_step26_1_models.py`):
   1. Typed Interaction Models (`generator/models.py`):
      - Added `InteractionOption` Pydantic model with unique positive int `id` (`>= 1`, rejecting booleans and values `<= 0`), non-empty `label`, optional `description`, list of structured `ActionSpecification` gameplay actions, and optional `condition_predicate`.

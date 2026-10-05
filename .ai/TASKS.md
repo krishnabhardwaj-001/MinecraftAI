@@ -110,8 +110,9 @@
   - [x] Phase 25.5.8: Project documentation and memory synchronization (`.ai/STATE.md`, `.ai/TASKS.md`, `.ai/DECISIONS.md`, `.ai/CHANGELOG.md`).
 - [ ] Phase 26: Dynamic In-Game Interaction System.
   - [x] Phase 26.1: Interaction Data Contracts, Specifications & Knowledge Base (`generator/models.py`, `generator/__init__.py`, `knowledge/concepts/interactions.json`, `knowledge_retriever.py`, `test_step26_1_models.py`, 28 tests).
-  - [ ] Phase 26.2: Deterministic Interaction Generator (`generator/mechanisms/interaction_mech.py`).
+  - [x] Phase 26.2: Deterministic Interaction Generator (`generator/mechanisms/interaction_mech.py`, `test_step26_2_generator.py`, 16 tests).
   - [ ] Phase 26.3: Static Interaction Validation & Safety Checks (`validator/datapack_validator.py`).
+
   - [ ] Phase 26.4: Autonomous QA Review, Semantic Analysis & Simulation (`qa/interaction_semantics.py`).
   - [ ] Phase 26.5: Planner Alignment, Intent Verification & Golden Suite (`ai/planner.py`, `test_step26_golden.py`).
 - [x] Keep AI context files synchronized after significant changes.

@@ -2,6 +2,7 @@ from generator.datapack_generator import DatapackGenerator, generate_datapack
 from generator.loot_table_generator import LootTableGenerator
 from generator.mechanisms.recipe_mech import RecipeMechanismGenerator
 from generator.mechanisms.predicate_mech import PredicateMechanismGenerator
+from generator.mechanisms.interaction_mech import InteractionMechanismGenerator
 from generator.models import (
     AdvancementDefinition,
     DatapackManifest,
@@ -34,6 +35,7 @@ __all__ = [
     "RecipeMechanismGenerator",
     "PredicateDefinition",
     "PredicateMechanismGenerator",
+    "InteractionMechanismGenerator",
     "InteractionOption",
     "InteractionSpecification",
     "MechanismSpecification",

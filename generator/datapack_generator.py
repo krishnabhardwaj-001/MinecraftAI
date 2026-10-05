@@ -3,7 +3,7 @@ import re
 import shutil
 import zipfile
 from pathlib import Path
-from typing import Any, Dict, List, Optional
+from typing import Any, Dict, List, Optional, Union
 
 from ai.version_registry import VersionContext
 from generator.loot_table_generator import LootTableGenerator
@@ -11,6 +11,7 @@ from generator.mechanisms import (
     AdvancementMechanismGenerator,
     FunctionMechanismGenerator,
     FunctionTagMechanismGenerator,
+    InteractionMechanismGenerator,
     LootTableMechanismGenerator,
     PredicateMechanismGenerator,
     RecipeMechanismGenerator,
@@ -24,6 +25,7 @@ from generator.models import (
     FunctionDefinition,
     FunctionTagDefinition,
     GenerationResult,
+    InteractionSpecification,
     LootTableModification,
     MechanismSpecification,
     PredicateDefinition,
@@ -71,6 +73,8 @@ class DatapackGenerator:
         self.recipe_mech = RecipeMechanismGenerator(version=self.version)
         self.predicate_mech = PredicateMechanismGenerator(version=self.version)
         self.state_machine_mech = StateMachineMechanismGenerator(version=self.version)
+        self.interaction_mech = InteractionMechanismGenerator(version=self.version, version_context=self.version_context)
+
 
     def extract_loot_modifications(
         self,
@@ -211,6 +215,7 @@ class DatapackGenerator:
         predicates: List[PredicateDefinition] = []
         state_machines: List[MechanismSpecification] = []
         scoreboard_objectives: List[ScoreboardObjectiveDefinition] = []
+        interactions: List[MechanismSpecification] = []
 
         # 0. Check for explicit specifications directly in plan
         if plan:
@@ -264,6 +269,18 @@ class DatapackGenerator:
                     elif isinstance(raw, dict):
                         state_machines.append(MechanismSpecification(**raw))
 
+            if plan.get("interactions"):
+                for raw in plan["interactions"]:
+                    if isinstance(raw, MechanismSpecification):
+                        interactions.append(raw)
+                    elif isinstance(raw, InteractionSpecification):
+                        interactions.append(MechanismSpecification(type="interaction", interaction=raw))
+                    elif isinstance(raw, dict):
+                        if raw.get("type") == "interaction" or "interaction" in raw:
+                            interactions.append(MechanismSpecification(**raw))
+                        else:
+                            interactions.append(MechanismSpecification(type="interaction", interaction=InteractionSpecification(**raw)))
+
             raw_sb = plan.get("scoreboard_objectives") or plan.get("objectives") or plan.get("scoreboards")
             if raw_sb:
                 for raw in raw_sb:
@@ -272,7 +289,7 @@ class DatapackGenerator:
                     elif isinstance(raw, dict):
                         scoreboard_objectives.append(ScoreboardObjectiveDefinition(**raw))
 
-            if loot_modifications or functions or tags or advancements or recipes or predicates or state_machines or scoreboard_objectives:
+            if loot_modifications or functions or tags or advancements or recipes or predicates or state_machines or scoreboard_objectives or interactions:
                 return {
                     "loot_modifications": loot_modifications,
                     "functions": functions,
@@ -282,6 +299,7 @@ class DatapackGenerator:
                     "predicates": predicates,
                     "state_machines": state_machines,
                     "scoreboard_objectives": scoreboard_objectives,
+                    "interactions": interactions,
                 }
 
         # 1. Direct consumption from structured MechanismSpecification in implementation_plan
@@ -299,7 +317,7 @@ class DatapackGenerator:
                             "result_item", "recipe_type", "ingredients", "pattern", "key",
                             "condition_type", "condition_params", "predicate_path",
                             "objective", "condition_predicate", "on_enter", "on_exit",
-                            "property_modification", "implementation"
+                            "property_modification", "implementation", "interaction"
                         ]
                     )
                     if has_structured_fields:
@@ -310,7 +328,9 @@ class DatapackGenerator:
 
                 if spec is not None:
                     m_type = str(spec.type).lower()
-                    if any(t in m_type for t in ["state_machine", "event_latch", "event_trigger"]):
+                    if m_type == "interaction" or spec.interaction is not None:
+                        interactions.append(spec)
+                    elif any(t in m_type for t in ["state_machine", "event_latch", "event_trigger"]):
                         state_machines.append(spec)
                     elif any(t in m_type for t in ["continuous_action", "tick_action"]):
                         parsed_acts = [a if isinstance(a, ActionSpecification) else ActionSpecification(**a) for a in (spec.actions or [])]
@@ -345,7 +365,7 @@ class DatapackGenerator:
                         if spec.actions or spec.commands:
                             functions.append(spec.to_function_definition())
 
-        if loot_modifications or functions or tags or advancements or recipes or predicates or state_machines or scoreboard_objectives:
+        if loot_modifications or functions or tags or advancements or recipes or predicates or state_machines or scoreboard_objectives or interactions:
             return {
                 "loot_modifications": loot_modifications,
                 "functions": functions,
@@ -355,6 +375,7 @@ class DatapackGenerator:
                 "predicates": predicates,
                 "state_machines": state_machines,
                 "scoreboard_objectives": scoreboard_objectives,
+                "interactions": interactions,
             }
 
         # 2. Fallback heuristic inspection for minimal or legacy plans
@@ -531,6 +552,7 @@ class DatapackGenerator:
         predicates: Optional[List[PredicateDefinition]] = None,
         state_machines: Optional[List[MechanismSpecification]] = None,
         scoreboard_objectives: Optional[List[ScoreboardObjectiveDefinition]] = None,
+        interactions: Optional[List[Union[MechanismSpecification, InteractionSpecification]]] = None,
         datapack_name: Optional[str] = None,
         description: Optional[str] = None,
         create_zip: bool = True,
@@ -548,6 +570,7 @@ class DatapackGenerator:
         pred_defs: List[PredicateDefinition] = list(predicates) if predicates is not None else []
         sm_defs: List[MechanismSpecification] = list(state_machines) if state_machines is not None else []
         sb_defs: List[ScoreboardObjectiveDefinition] = list(scoreboard_objectives) if scoreboard_objectives is not None else []
+        int_defs: List[Union[MechanismSpecification, InteractionSpecification]] = list(interactions) if interactions is not None else []
 
         # If no explicit mechanism parameters provided, extract generically
         if (
@@ -559,6 +582,7 @@ class DatapackGenerator:
             and predicates is None
             and state_machines is None
             and scoreboard_objectives is None
+            and interactions is None
         ):
             extracted = self.extract_mechanisms(
                 plan=plan,
@@ -573,8 +597,9 @@ class DatapackGenerator:
             pred_defs = extracted.get("predicates", [])
             sm_defs = extracted.get("state_machines", [])
             sb_defs = extracted.get("scoreboard_objectives", [])
+            int_defs = extracted.get("interactions", [])
 
-        if not (loot_mods or funcs or tag_defs or adv_defs or rec_defs or pred_defs or sm_defs or sb_defs):
+        if not (loot_mods or funcs or tag_defs or adv_defs or rec_defs or pred_defs or sm_defs or sb_defs or int_defs):
             raise ValueError(
                 "No valid modifications or mechanisms could be determined from the plan and context."
             )
@@ -608,8 +633,18 @@ class DatapackGenerator:
             elif sb_defs:
                 first_sb = sb_defs[0]
                 datapack_name = f"{first_sb.objective}_scoreboard_datapack"
+            elif int_defs:
+                first_int = int_defs[0]
+                if isinstance(first_int, MechanismSpecification) and first_int.interaction:
+                    int_name = first_int.interaction.name
+                elif isinstance(first_int, InteractionSpecification):
+                    int_name = first_int.name
+                else:
+                    int_name = "interaction"
+                datapack_name = f"{slugify(int_name)}_interaction_datapack"
             else:
                 datapack_name = "minecraft_datapack"
+
 
         # Resolve description
         if not description:
@@ -686,6 +721,10 @@ class DatapackGenerator:
         # State machines
         for sm in sm_defs:
             resources.extend(self.state_machine_mech.generate(sm))
+
+        # Interactions
+        for int_item in int_defs:
+            resources.extend(self.interaction_mech.generate(int_item))
 
         # Consolidate scoreboard objectives and detect conflicts
         consolidated_sb: Dict[str, ScoreboardObjectiveDefinition] = {}
@@ -961,6 +1000,7 @@ def generate_datapack(
     predicates: Optional[List[PredicateDefinition]] = None,
     state_machines: Optional[List[MechanismSpecification]] = None,
     scoreboard_objectives: Optional[List[ScoreboardObjectiveDefinition]] = None,
+    interactions: Optional[List[Union[MechanismSpecification, InteractionSpecification]]] = None,
     output_dir: Optional[Path] = None,
     datapack_name: Optional[str] = None,
     description: Optional[str] = None,
@@ -984,8 +1024,8 @@ def generate_datapack(
         predicates=predicates,
         state_machines=state_machines,
         scoreboard_objectives=scoreboard_objectives,
+        interactions=interactions,
         datapack_name=datapack_name,
         description=description,
         create_zip=create_zip
     )
-
