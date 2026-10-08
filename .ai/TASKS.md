@@ -108,14 +108,50 @@
   - [x] Phase 25.5.6: Dual-version evaluation benchmark regression (78/78 cases, 100.0% accuracy across all 16 domains).
   - [x] Phase 25.5.7: Full test suite regression gate (580/580 PASS under `-W error`).
   - [x] Phase 25.5.8: Project documentation and memory synchronization (`.ai/STATE.md`, `.ai/TASKS.md`, `.ai/DECISIONS.md`, `.ai/CHANGELOG.md`).
-- [ ] Phase 26: Dynamic In-Game Interaction System.
-  - [x] Phase 26.1: Interaction Data Contracts, Specifications & Knowledge Base (`generator/models.py`, `generator/__init__.py`, `knowledge/concepts/interactions.json`, `knowledge_retriever.py`, `test_step26_1_models.py`, 28 tests).
-  - [x] Phase 26.2: Deterministic Interaction Generator (`generator/mechanisms/interaction_mech.py`, `test_step26_2_generator.py`, 16 tests).
-  - [ ] Phase 26.3: Static Interaction Validation & Safety Checks (`validator/datapack_validator.py`).
-
-  - [ ] Phase 26.4: Autonomous QA Review, Semantic Analysis & Simulation (`qa/interaction_semantics.py`).
-  - [ ] Phase 26.5: Planner Alignment, Intent Verification & Golden Suite (`ai/planner.py`, `test_step26_golden.py`).
+- [x] Final Production Milestone: Production Datapack Generation Website, Backend & Security Architecture.
+  - [x] Task 1: Complete Security Architecture (`security/`)
+    - [x] Centralized security configuration (`security/config.py`).
+    - [x] Input security and prompt sanitization (`security/input_security.py`).
+    - [x] Path security, traversal defense, and canonical output confinement (`security/path_security.py`).
+    - [x] Archive security, Zip Slip protection, and zip bomb defense (`security/archive_security.py`).
+    - [x] Command security, verb whitelisting, and shell metacharacter blocking (`security/command_security.py`).
+    - [x] In-memory sliding-window rate limiter & concurrency slots (`security/rate_limit.py`).
+    - [x] Hardened HTTP security headers middleware (`security/headers.py`).
+    - [x] Safe logging with IP anonymization and text masking (`security/logging.py`).
+    - [x] Production error sanitizer stripping stack traces and server paths (`security/error_sanitizer.py`).
+  - [x] Task 2: Legal & Compliance Documentation (`security/legal/`)
+    - [x] Local-first privacy policy (`security/legal/privacy_policy.md`).
+    - [x] Terms of service with Mojang/Microsoft disclaimer (`security/legal/terms_of_service.md`).
+    - [x] Responsible disclosure security policy (`security/legal/security_policy.md`).
+  - [x] Task 3: Web Application & REST API Hardening (`web/`)
+    - [x] Integrated security middleware, rate limiter, input guards, and safe download handler (`web/app.py`).
+    - [x] Legal pages and REST API endpoints (`/privacy`, `/terms`, `/security`, `/api/legal/{doc_name}`).
+    - [x] Health and diagnostic endpoint (`/api/health`).
+    - [x] Obsidian & Emerald single-page UI with 8-stage tracker, version selector, and dynamic clarification chips.
+  - [x] Task 4: Docker & Container Deployment
+    - [x] Production multi-stage `Dockerfile` with non-root security (`appuser` UID 10001).
+    - [x] Production `docker-compose.yml` with host-gateway connectivity.
+    - [x] Environment configuration template (`.env.example`).
+  - [x] Task 5: Core Engine Reliability Hardening
+    - [x] Compatible scoreboard objective definition deduplication (`generator/datapack_generator.py`).
+    - [x] JSON text component validation & formatting for `tellraw` and chat actions (`generator/models.py`, `generator/mechanisms/function_mech.py`).
+    - [x] CP1252 Windows console Unicode fallback in pipeline logger (`pipeline/minecraft_pipeline.py`).
+    - [x] Safe NoneType action iteration guard in QA reviewer (`qa/reviewer.py`).
+  - [x] Task 6: Verification Suites
+    - [x] Security test suite: 67/67 PASS (`test_security_*.py`).
+    - [x] Full regression test suite: 708/708 PASS with 0 warnings under `-W error`.
+    - [x] Dual-version evaluation benchmark: 78/78 PASS (100.0%).
+- [x] Ollama Cloud Production Provider Configuration Fixes:
+  - [x] Load `.env` before any SDK client is initialized (`ai/provider.py`).
+  - [x] Explicit `ollama.Client` instantiation with `Authorization: Bearer <token>` header (`ai/provider.py`).
+  - [x] Default production target is Ollama Cloud (`https://ollama.com`, `gpt-oss:120b-cloud`).
+  - [x] Strict error handling: fail safely on missing `OLLAMA_API_KEY` when targeting Cloud; zero silent local fallback.
+  - [x] Respect `LLM_PROVIDER` in `ai/provider.py`, `pipeline/minecraft_pipeline.py`, `run_pipeline.py`, and `web/app.py`.
+  - [x] Update `.env.example`, `docker-compose.yml`, and `Dockerfile`.
+  - [x] Diagnostic messages in `run_pipeline.py` distinguish Cloud vs Local and remove obsolete `ollama pull llama3.1:8b`.
+  - [x] Focused tests in `test_provider_cloud.py` (7/7 PASS) and full regression suite (715/715 PASS with 0 warnings under `-W error`).
 - [x] Keep AI context files synchronized after significant changes.
+
 
 
 ## Completed / established

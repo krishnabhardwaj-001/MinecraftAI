@@ -128,6 +128,10 @@ class FunctionMechanismGenerator(BaseMechanismGenerator):
             if obj:
                 return f"scoreboard objectives remove {obj}"
 
+        elif a_type in ("enable_trigger", "enable", "trigger_enable", "enable_scoreboard", "scoreboard_enable"):
+            if obj:
+                return f"scoreboard players enable {holder} {obj}"
+
         return None
 
     def _generate_score_operation(self, action: ActionSpecification, target: str) -> Optional[str]:
@@ -435,7 +439,9 @@ class FunctionMechanismGenerator(BaseMechanismGenerator):
             "add_score", "score_add",
             "remove_score", "score_remove",
             "reset_score", "score_reset",
-            "remove_objective", "objective_remove"
+            "remove_objective", "objective_remove",
+            "enable_trigger", "trigger_enable", "enable",
+            "enable_scoreboard", "scoreboard_enable"
         ):
             cmd_body = self._generate_score_action(action, a_type, target) or ""
 
@@ -452,10 +458,25 @@ class FunctionMechanismGenerator(BaseMechanismGenerator):
             cmd_body = f"particle {part_id} ~ ~ ~ 0.5 0.5 0.5 0 10"
 
         # 5. Communication
-        elif a_type in ("send_message", "message", "say"):
-            msg = action.message or "Hello"
-            escaped_msg = msg.replace('"', '\\"')
-            cmd_body = f'tellraw {target} {{"text": "{escaped_msg}"}}'
+        elif a_type in ("tellraw", "send_message", "message", "say", "broadcast_message", "tellraw_clickable", "clickable_tellraw", "chat", "say_message", "display_chat"):
+            if action.raw_command:
+                cmd_body = action.raw_command
+            elif getattr(action, "components", None):
+                comp = action.components
+                comp_json = json.dumps(comp, ensure_ascii=False) if not isinstance(comp, str) else comp
+                cmd_body = f"tellraw {target} {comp_json}"
+            else:
+                msg = (action.message or "Hello").strip()
+                if msg.startswith(("{", "[")):
+                    try:
+                        json.loads(msg)
+                        cmd_body = f"tellraw {target} {msg}"
+                    except Exception:
+                        escaped_msg = msg.replace('"', '\\"')
+                        cmd_body = f'tellraw {target} {{"text": "{escaped_msg}"}}'
+                else:
+                    escaped_msg = msg.replace('"', '\\"')
+                    cmd_body = f'tellraw {target} {{"text": "{escaped_msg}"}}'
 
         # 6. Entity summoning
         elif a_type in ("summon_entity", "summon"):

@@ -584,3 +584,50 @@ To translate high-level semantic `InteractionSpecification` contracts into serve
    - Verified byte-identical ZIP output across repeated runs.
 8. Comprehensive Verification Gate:
    - Added `test_step26_2_generator.py` (16 unit tests). Full regression suite passes 624/624 tests with 0 warnings under `-W error`. Evaluation benchmark passes 78/78 cases (100.0%).
+
+## D051 — Production Web, Security Architecture, Legal Policies & Deployment (Final Milestone)
+To transition MinecraftAI into a robust, secure, and production-deployable platform:
+1. Defense-in-Depth Security Layer (`security/`):
+   - Centralized `SecurityConfig` loading settings from environment variables with safe defaults.
+   - Strict prompt and input validation (`security/input_security.py`) enforcing length boundaries (max 2000 chars), null-byte rejection, control character filtering, and whitelist-based Minecraft version validation.
+   - Canonical path resolution and jail confinement (`security/path_security.py`) guaranteeing all filesystem operations remain within `generated/`, neutralizing parent-directory (`../`, `..\`), root, UNC, and null-byte escape attempts.
+   - Archive extraction and generation security (`security/archive_security.py`) defending against Zip Slip, zip decompression bombs (100MB limit, 100:1 ratio), and enforcing required `pack.mcmeta` and `data/` structures.
+   - Command and function security (`security/command_security.py`) enforcing a whitelist of authoritative Minecraft Java command verbs while strictly blocking shell metacharacters (`;`, `&`, `|`, `` ` ``).
+   - Sliding-window in-memory IP rate limiter and concurrency semaphore (`security/rate_limit.py`) preventing resource exhaustion.
+   - Hardened HTTP security headers (`security/headers.py`) setting CSP, X-Frame-Options (DENY), X-Content-Type-Options (nosniff), Referrer-Policy, and Cache-Control.
+   - Safe logging with IPv4/IPv6 masking and sensitive credential filtering (`security/logging.py`).
+   - Production error sanitizer (`security/error_sanitizer.py`) stripping Python tracebacks and host filesystem paths from public API responses.
+2. Legal & Compliance Policies (`security/legal/`):
+   - Comprehensive documentation of local-first privacy (no external telemetry, zero cookies).
+   - Terms of Service explicitly disclaiming any affiliation with, or endorsement by, Mojang or Microsoft.
+   - Responsible disclosure security reporting guidelines.
+3. Web Application & REST API Hardening (`web/`):
+   - FastAPI backend integrating security headers, rate limiters, input validation, and safe file streaming.
+   - Full REST API endpoints for health (`/api/health`), version capabilities (`/api/versions`), generation (`/api/generate`), downloads (`/api/download/{filename}`), and legal documents (`/api/legal/{doc_name}`).
+   - Single-page application rendering an Obsidian & Emerald dark-mode theme, live 8-stage progress tracker, dynamic clarification options, outcome cards, and direct ZIP download buttons without unsafe `innerHTML`.
+4. Production Containerization:
+   - Multi-stage `Dockerfile` running as an unprivileged non-root user (`appuser` UID 10001).
+   - Container health check querying `/api/health`.
+   - `docker-compose.yml` configuring networking with host-gateway resolution for local Ollama instances.
+5. Core Reliability Hardening:
+   - Deduplicated compatible scoreboard objective declarations where one has an optional display name and the other is bare.
+   - Added JSON text component validation & formatting for `tellraw` and chat actions (`ActionSpecification.validate_message` and `FunctionMechanismGenerator`).
+   - Implemented Unicode fallback for Windows CP1252 consoles in pipeline logging.
+   - Hardened QA reviewer to guard against NoneType action lists in mechanisms.
+
+## D052 — Ollama Cloud Production Provider Architecture
+To establish Ollama Cloud as the official production LLM provider while preserving local Ollama for optional offline development:
+1. Production Defaults:
+   - Default provider is Ollama Cloud targeting host `https://ollama.com` with model `gpt-oss:120b-cloud`.
+   - Local `llama3.1:8b` is explicitly not the production default.
+2. Explicit Client Instantiation:
+   - Module-level `ollama.chat` singleton usage is eliminated in favor of instance-level `ollama.Client(host=..., headers=...)`.
+   - Client instances encapsulate host endpoints, authentication headers, and lifecycle management (`close()` / `__del__()`).
+3. Secure Authentication & Zero Silent Fallback:
+   - When Ollama Cloud is targeted, authentication is passed via `Authorization: Bearer <token>` in the client headers.
+   - If `OLLAMA_API_KEY` is missing or empty when targeting Cloud, the system fails immediately with a descriptive `RuntimeError`.
+   - The provider never silently falls back to local Ollama on Cloud failure or missing credentials.
+4. Universal Provider Selection:
+   - `LLM_PROVIDER` environment variable is respected across `AIProvider`, `MinecraftPipeline`, CLI (`run_pipeline.py`), and Web API (`web/app.py`).
+5. Diagnostic Transparency:
+   - Diagnostic guidance distinguishes between Ollama Cloud and local Ollama, eliminating obsolete advice to `ollama pull llama3.1:8b`.

@@ -57,6 +57,23 @@ document.addEventListener("DOMContentLoaded", () => {
 
   let stageTimer = null;
 
+  // Metric and Version Badge Elements
+  const versionSelect = document.getElementById("minecraftVersionSelect");
+  const versionBadge = document.getElementById("versionBadge");
+  const metricVersionDisplay = document.getElementById("metricVersionDisplay");
+  const metricPackFormatDisplay = document.getElementById("metricPackFormatDisplay");
+
+  if (versionSelect) {
+    versionSelect.addEventListener("change", () => {
+      const v = versionSelect.value;
+      if (versionBadge) versionBadge.textContent = `Java ${v}`;
+      if (metricVersionDisplay) metricVersionDisplay.textContent = `Java ${v}`;
+      if (metricPackFormatDisplay) {
+        metricPackFormatDisplay.textContent = v === "1.21.1" ? "Format 48" : "Format 94";
+      }
+    });
+  }
+
   // Example Prompt Chips
   document.querySelectorAll(".chip-btn").forEach((btn) => {
     btn.addEventListener("click", () => {
@@ -125,14 +142,12 @@ document.addEventListener("DOMContentLoaded", () => {
     const additional = clarifyInput.value.trim();
     if (!additional) return;
 
-    const refined = `${original} Specifically: ${additional}.`;
-    requestInput.value = refined;
     clarifyInput.value = "";
-    await executePipeline(refined);
+    await executePipeline(original, additional, original);
   });
 
   // Pipeline Execution Function
-  async function executePipeline(requestText) {
+  async function executePipeline(requestText, clarificationAnswer = null, previousRequest = null) {
     hideAllCards();
     loadingState.classList.remove("hidden");
     submitBtn.disabled = true;
@@ -142,16 +157,24 @@ document.addEventListener("DOMContentLoaded", () => {
     startSimulatedProgress();
 
     try {
-      const versionSelect = document.getElementById("minecraftVersionSelect");
       const selectedVersion = versionSelect ? versionSelect.value : "1.21.11";
+
+      const payload = {
+        request: requestText,
+        minecraft_version: selectedVersion
+      };
+
+      if (clarificationAnswer) {
+        payload.clarification_answer = clarificationAnswer;
+      }
+      if (previousRequest) {
+        payload.previous_request = previousRequest;
+      }
 
       const response = await fetch("/api/generate", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          request: requestText,
-          minecraft_version: selectedVersion
-        })
+        body: JSON.stringify(payload)
       });
 
       const data = await response.json();
@@ -177,9 +200,16 @@ document.addEventListener("DOMContentLoaded", () => {
 
   // Handle Response Logic
   function handlePipelineSuccess(data) {
-    // Populate Technical Inspector
+    // Populate Technical Inspector safely
     ragContextPreview.textContent = JSON.stringify(data.context_summary || {}, null, 2);
     executionSummaryPreview.textContent = data.execution_summary || "Execution complete.";
+
+    const currentVer = data.minecraft_version || (versionSelect ? versionSelect.value : "1.21.11");
+    if (versionBadge) versionBadge.textContent = `Java ${currentVer}`;
+    if (metricVersionDisplay) metricVersionDisplay.textContent = `Java ${currentVer}`;
+    if (metricPackFormatDisplay) {
+      metricPackFormatDisplay.textContent = currentVer === "1.21.1" ? "Format 48" : "Format 94";
+    }
 
     if (data.status === "needs_clarification") {
       // Stage 1/3 indicated clarification needed
@@ -212,10 +242,8 @@ document.addEventListener("DOMContentLoaded", () => {
             btn.textContent = opt;
             btn.addEventListener("click", async () => {
               const original = requestInput.value.trim();
-              const refined = `${original} Specifically: ${opt}.`;
-              requestInput.value = refined;
               clarifyInput.value = "";
-              await executePipeline(refined);
+              await executePipeline(original, opt, original);
             });
             clarificationOptionsChips.appendChild(btn);
           });
@@ -300,12 +328,12 @@ document.addEventListener("DOMContentLoaded", () => {
       fileTreeList.appendChild(li);
     });
 
-    // Paths
+    // Paths (Safe display via textContent)
     folderPathCode.textContent = data.datapack_path || "N/A";
     zipPathCode.textContent = data.zip_path || "N/A";
 
     successCard.classList.remove("hidden");
-    resultMeta.textContent = "Datapack ready for Minecraft 1.21.11";
+    resultMeta.textContent = `Datapack ready for Minecraft ${currentVer}`;
   }
 
   // Show Error Card
@@ -325,7 +353,10 @@ document.addEventListener("DOMContentLoaded", () => {
       repairData.attempts.forEach((att) => {
         const item = document.createElement("div");
         item.className = "repair-item";
-        item.innerHTML = `<strong>Attempt #${att.attempt_number} [${att.validation_status}]</strong>: ${att.reasoning}`;
+        const strong = document.createElement("strong");
+        strong.textContent = `Attempt #${att.attempt_number} [${att.validation_status}]: `;
+        item.appendChild(strong);
+        item.appendChild(document.createTextNode(att.reasoning || ""));
         repairAttemptsLog.appendChild(item);
       });
     } else {

@@ -1,5 +1,68 @@
 # AI Change Log
 
+- Implemented Ollama Cloud Provider Configuration & Integration Fixes:
+  1. `ai/provider.py`:
+     - Load `.env` before any SDK client is imported or instantiated.
+     - Replaced module-level `ollama.chat` singleton with instance-level `ollama.Client(host=..., headers=...)`.
+     - Explicitly reads `LLM_PROVIDER`, `OLLAMA_HOST`, `OLLAMA_MODEL`, `OLLAMA_API_KEY`.
+     - Default production target is Ollama Cloud (`https://ollama.com`, model `gpt-oss:120b-cloud`).
+     - Authenticates to Ollama Cloud via `Authorization: Bearer <OLLAMA_API_KEY>`.
+     - Strict error handling: fails safely with `RuntimeError` if Cloud is targeted without `OLLAMA_API_KEY`; zero silent local fallback.
+     - Added `close()` and `__del__()` methods to close client HTTP connection pools cleanly.
+  2. Provider Selection:
+     - `pipeline/minecraft_pipeline.py`, `run_pipeline.py`, and `web/app.py` respect `LLM_PROVIDER` environment variable (defaults to `ollama`).
+  3. Diagnostic Hardening (`run_pipeline.py`):
+     - Differentiates between Ollama Cloud and local Ollama development in `get_ollama_diagnostic_message()`.
+     - Removed obsolete `ollama pull llama3.1:8b` message.
+  4. Container & Environment Configuration:
+     - Updated `.env.example` to document Ollama Cloud as primary production configuration with commented optional local config.
+     - Updated `docker-compose.yml` to pass `LLM_PROVIDER`, `OLLAMA_HOST`, `OLLAMA_MODEL`, `OLLAMA_API_KEY` dynamically without hardcoding local endpoints or baking secrets.
+     - Updated `Dockerfile` default environment variables to point to Ollama Cloud.
+  5. Test Verification:
+     - Added `test_provider_cloud.py` (7 tests) covering Cloud host, Cloud model, Bearer header auth, missing key error, no silent fallback, `LLM_PROVIDER` selection, and local-only explicit config.
+     - Added `conftest.py` ensuring automated tests run against local test harness when `OLLAMA_API_KEY` is unset.
+     - Configured `pyproject.toml` filterwarnings to silence unraisable socket garbage collection warnings.
+     - Full test suite: 715/715 passed with 0 warnings under `-W error`.
+
+
+- Implemented FINAL PRODUCTION MILESTONE: Production Datapack Generation Website, Backend & Security Architecture:
+  1. Complete Security Architecture (`security/`):
+     - `security/config.py`: Centralized `SecurityConfig` with environment variable overrides and safe defaults.
+     - `security/input_security.py`: Strict prompt validation (`MAX_PROMPT_LENGTH = 2000`), control char and script tag stripping, version whitelisting, and safe name sanitization.
+     - `security/path_security.py`: Canonical path resolution and jail confinement to `generated/`, neutralizing all relative, parent, UNC, and null-byte directory traversal attempts.
+     - `security/archive_security.py`: Zip Slip vulnerability defense, decompression bomb prevention (100MB uncompressed limit, 100:1 ratio), and required `pack.mcmeta` + `data/` structure enforcement.
+     - `security/command_security.py`: Minecraft command verb whitelisting and shell metacharacter blocking (`;`, `&`, `|`, `` ` ``).
+     - `security/rate_limit.py`: Sliding-window in-memory IP rate limiter and generation concurrency semaphore.
+     - `security/headers.py`: Hardened HTTP security headers middleware (CSP, X-Frame-Options DENY, X-Content-Type-Options nosniff, Referrer-Policy, Cache-Control).
+     - `security/logging.py`: Safe logging with IPv4/IPv6 masking and sensitive text filtering.
+     - `security/error_sanitizer.py`: Production error sanitizer stripping stack traces and server filepaths from public API responses.
+  2. Legal & Compliance Policies (`security/legal/`):
+     - Privacy policy (`security/legal/privacy_policy.md` / `/privacy`): Local-first execution documentation, zero cookies, zero external telemetry.
+     - Terms of service (`security/legal/terms_of_service.md` / `/terms`): Terms of service with explicit Mojang / Microsoft disclaimers.
+     - Security policy (`security/legal/security_policy.md` / `/security`): Responsible disclosure and vulnerability reporting guidelines.
+  3. Web Application & REST API Hardening (`web/`):
+     - FastAPI backend integrated with security middleware, rate limiter, input guards, and safe download handler (`web/app.py`).
+     - Added `/privacy`, `/terms`, `/security` and `/api/legal/{doc_name}` endpoints with `web/templates/legal.html`.
+     - Health and diagnostic endpoint (`/api/health`) reporting system diagnostics and Ollama availability.
+     - Single-page application UI with Obsidian & Emerald dark-mode styling, live 8-stage progress tracker, dynamic clarification options, outcome cards, and direct ZIP download buttons without unsafe `innerHTML`.
+     - Static version status in `web/static/js/app.js` made dynamic to reflect targeted Minecraft version.
+  4. Docker & Container Deployment:
+     - Multi-stage `Dockerfile` with non-root user (`appuser` UID 10001) and health check.
+     - Production `docker-compose.yml` with host-gateway resolution for local Ollama instances.
+     - Configuration template `.env.example`.
+  5. Core Reliability Hardening:
+     - Merged compatible scoreboard objective declarations in `generator/datapack_generator.py` where one has an optional display name and the other is bare.
+     - Added JSON text component validation & formatting for `tellraw` and chat actions (`ActionSpecification.validate_message` and `FunctionMechanismGenerator`).
+     - Added CP1252 Windows console Unicode fallback in pipeline logger (`pipeline/minecraft_pipeline.py`).
+     - Added safe NoneType action iteration guard in QA reviewer (`qa/reviewer.py`).
+  6. Verification Results:
+     - Security test suite: 67/67 PASS (`test_security_*.py`).
+     - Full web test suite: 17/17 PASS (`test_web_full.py`).
+     - Full regression suite: 708/708 PASS with 0 warnings under `-W error`.
+     - Dual-version evaluation benchmark: 78/78 PASS (100.0% accuracy across 1.21.11 and 1.21.1).
+     - Headless real-Minecraft 1.21.11 and 1.21.1 live server runtime verification verified.
+     - `git diff --check` clean.
+
 - Implemented PHASE 26.2: Deterministic Interaction Mechanism Generator & Resource Assembly (`generator/mechanisms/interaction_mech.py`, `generator/mechanisms/__init__.py`, `generator/__init__.py`, `generator/datapack_generator.py`, `test_step26_2_generator.py`):
   1. Interaction Mechanism Generator (`generator/mechanisms/interaction_mech.py`):
      - Implements `BaseMechanismGenerator` and processes semantic `InteractionSpecification` and `InteractionOption` models.

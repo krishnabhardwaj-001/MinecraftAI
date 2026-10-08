@@ -25,7 +25,7 @@
         </div>
         <div class="title-group">
           <h1 class="brand-title">MinecraftAI</h1>
-          <span class="brand-subtitle">Automatic Java 1.21.11 Datapack Generator</span>
+          <span class="brand-subtitle" id="brandSubtitle">Automatic Minecraft Java Datapack Generator</span>
         </div>
       </div>
       <div class="header-badges">
@@ -50,7 +50,7 @@
             </svg>
             Describe Your Datapack
           </h2>
-          <span class="panel-hint">Natural language &bull; Generic &bull; 1.21.11</span>
+          <span class="panel-hint" id="panelHint">Natural language &bull; Generic &bull; Java 1.21.11 &amp; 1.21.1</span>
         </div>
 
         <form id="generatorForm" class="generator-form">
@@ -255,11 +255,11 @@
               <div class="metrics-grid">
                 <div class="metric-box">
                   <span class="metric-label">Minecraft Version</span>
-                  <span class="metric-value">Java 1.21.11</span>
+                  <span class="metric-value" id="metricVersionDisplay">Java 1.21.11</span>
                 </div>
                 <div class="metric-box">
                   <span class="metric-label">Pack Format</span>
-                  <span class="metric-value">94.1 (Dual Range)</span>
+                  <span class="metric-value" id="metricPackFormatDisplay">94.1 (Dual Range)</span>
                 </div>
                 <div class="metric-box">
                   <span class="metric-label">Validation</span>
@@ -375,8 +375,18 @@
     </main>
 
     <!-- Footer -->
-    <footer class="app-footer">
-      <span>MinecraftAI &bull; Java Edition 1.21.11 &bull; Deterministic &bull; Zero Hardcoding</span>
+    <footer class="app-footer" id="appFooter">
+      <div class="footer-legal-links">
+        <a href="/privacy" class="footer-link">Privacy Policy</a> &bull;
+        <a href="/terms" class="footer-link">Terms of Service</a> &bull;
+        <a href="/security" class="footer-link">Security Policy</a>
+      </div>
+      <div class="footer-meta">
+        <span>MinecraftAI &bull; Java Edition 1.21.11 &amp; 1.21.1 &bull; Deterministic &bull; Zero Hardcoding</span>
+      </div>
+      <div class="footer-disclaimer">
+        Disclaimer: MinecraftAI is an independent, community-driven project and is not affiliated with, endorsed by, or sponsored by Mojang Studios or Microsoft. Minecraft is a registered trademark of Mojang Synergies AB / Microsoft Corporation.
+      </div>
     </footer>
   </div>
 

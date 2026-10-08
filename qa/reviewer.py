@@ -242,9 +242,9 @@ class AutonomousQAReviewer:
                     pmod = _to_property_mod(pm)
                     if pmod and not any(getattr(m, "property", None) == pmod.property for m in requested_mods):
                         requested_mods.append(pmod)
-                    for mech in ip.get("mechanisms", []):
+                    for mech in (ip.get("mechanisms") or []):
                         if isinstance(mech, dict):
-                            for action in mech.get("actions", []):
+                            for action in (mech.get("actions") or []):
                                 act_pm = action.get("property_modification") if isinstance(action, dict) else getattr(action, "property_modification", None)
                                 pmod = _to_property_mod(act_pm)
                                 if pmod and not any(getattr(m, "property", None) == pmod.property for m in requested_mods):

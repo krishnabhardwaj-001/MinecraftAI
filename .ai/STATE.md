@@ -211,15 +211,73 @@
      - Dual-version evaluation benchmark: 78/78 passed (100.0%).
      - `git diff --check` clean.
 
+- Final Production Milestone: Production Datapack Generation Website, Backend & Security Architecture operational:
+  1. Complete Security Architecture (`security/`):
+     - Centralized security configuration (`security/config.py`) loading environment variables.
+     - Input validation and prompt security (`security/input_security.py`) enforcing length limits, control-char stripping, and version whitelisting.
+     - Path security (`security/path_security.py`) strictly confining filesystem write/read operations to canonical `generated/`.
+     - Archive security (`security/archive_security.py`) with Zip Slip defense, decompression bomb prevention, and structure validation.
+     - Command security (`security/command_security.py`) with command verb whitelisting and shell injection blocking.
+     - In-memory rate limiting (`security/rate_limit.py`) with sliding-window accounting and generation concurrency semaphore.
+     - HTTP security headers middleware (`security/headers.py`) setting CSP, X-Frame-Options, X-Content-Type-Options, Referrer-Policy.
+     - Safe logging (`security/logging.py`) with IPv4/IPv6 masking and sensitive text filtering.
+     - Production error sanitizer (`security/error_sanitizer.py`) stripping stack traces and server filepaths.
+  2. Legal & Compliance Policies (`security/legal/`):
+     - Comprehensive privacy policy (`security/legal/privacy_policy.md`) detailing local-first execution and zero tracking.
+     - Terms of service (`security/legal/terms_of_service.md`) with explicit Mojang / Microsoft disclaimers.
+     - Security policy (`security/legal/security_policy.md`) with responsible disclosure protocols.
+  3. Web Application Hardening (`web/`):
+     - FastAPI backend integrated with security middleware, rate limiter, input guards, and safe download streaming.
+     - Full legal pages and REST API endpoints (`/privacy`, `/terms`, `/security`, `/api/legal/{doc_name}`).
+     - Health and diagnostic endpoint (`/api/health`) with Ollama and version checks.
+     - Dynamic version metrics and clarification options rendered without unsafe `innerHTML`.
+     - Static status line in `web/static/js/app.js` made dynamic to reflect targeted Minecraft version.
+  4. Docker & Production Deployment:
+     - Multi-stage `Dockerfile` with non-root security (`appuser` UID 10001) and health check.
+     - Production `docker-compose.yml` with host-gateway connectivity.
+     - Configuration template `.env.example`.
+  5. Core Engine Reliability Hardening:
+     - Merged compatible scoreboard objective definitions in `generator/datapack_generator.py` where one has an optional display name and the other is bare.
+     - Added JSON text component validation & formatting for `tellraw` and chat actions (`generator/models.py`, `generator/mechanisms/function_mech.py`).
+     - Added CP1252 Windows console Unicode fallback in pipeline logger (`pipeline/minecraft_pipeline.py`).
+     - Added safe NoneType action iteration guard in QA reviewer (`qa/reviewer.py`).
+  6. Verification Results:
+     - Security unit test suite: 67/67 PASS (`test_security_*.py`).
+     - Web application unit & full E2E suite: 23/23 PASS (`test_web.py` 6/6, `test_web_full.py` 17/17).
+     - Full regression suite: 708/708 PASS with 0 warnings under `-W error`.
+     - Dual-version evaluation benchmark: 78/78 PASS (100.0% accuracy across 1.21.11 and 1.21.1).
+     - Headless real-Minecraft 1.21.11 and 1.21.1 live server runtime verification verified.
+     - `git diff --check` clean.
+
+- Ollama Cloud Production Provider Architecture Fixes operational:
+  1. Production Default Target:
+     - Configured Ollama Cloud (`https://ollama.com`, model `gpt-oss:120b-cloud`) as production default.
+     - Local `llama3.1:8b` is explicitly not the default production runtime.
+  2. Provider Abstraction Hardening (`ai/provider.py`):
+     - Loads `.env` before any SDK client initialization.
+     - Replaced singleton `ollama.chat` with explicit `ollama.Client(host=..., headers=...)`.
+     - Supports `Authorization: Bearer <OLLAMA_API_KEY>` for cloud authentication.
+     - Fails safely with `RuntimeError` if Cloud is targeted without `OLLAMA_API_KEY`; zero silent local fallback.
+     - Clean connection pool disposal with `close()` / `__del__()`.
+  3. Universal Provider Selection:
+     - `LLM_PROVIDER` environment variable respected by `AIProvider`, `MinecraftPipeline`, CLI (`run_pipeline.py`), and Web API (`web/app.py`).
+  4. Diagnostic Transparency:
+     - Diagnostics in `run_pipeline.py` distinguish Cloud vs Local Ollama, eliminating obsolete `ollama pull llama3.1:8b`.
+  5. Deployment & Configuration:
+     - Updated `.env.example`, `docker-compose.yml`, and `Dockerfile` to pass and document Cloud configuration variables.
+  6. Automated Verification:
+     - Added `test_provider_cloud.py` (7 tests).
+     - Full regression suite: 715/715 passed with 0 warnings under `-W error`.
+
 ## Known issues / gaps
-1. Web UI static status line in `web/static/js/app.js` (line 308) reads `resultMeta.textContent = "Datapack ready for Minecraft 1.21.11";`. This is a minor cosmetic frontend string, identified during the Phase 25.5 hardcoded-version audit. Per strict Phase 25.5 scope rules ("DO NOT change the web UI"), this is catalogued for update in a future UI milestone.
-2. In live end-to-end pipeline execution with local Ollama LLMs (`test_pipeline.py`), stochastic variation in generative responses on ambiguous prompts can occasionally produce interactive clarification requests. The deterministic pipeline, benchmark, and generator suites are 100% deterministic and immune to LLM temperature variations.
+1. In live end-to-end pipeline execution with local Ollama LLMs (`test_pipeline.py`), stochastic variation in generative responses on ambiguous prompts can occasionally produce interactive clarification requests. The deterministic pipeline, benchmark, and generator suites are 100% deterministic and immune to LLM temperature variations.
 
 ## Current priority
-Phase 26.2 is complete and verified. Deterministic interaction mechanism generator, resource assembly, and game-loop lifecycle functions are established with 0 warnings across 624 tests and 100% benchmark parity.
+Ollama Cloud provider integration is complete and verified. The website, REST API, security layer, legal policies, Docker deployment, dual-version runtime, and Cloud provider are fully operational with 0 warnings across all test suites.
 
 ## Next logical work
-1. Proceed to Phase 26.3: Interaction Static Semantic Validator (`validator/datapack_validator.py` rules for interaction structure, trigger objectives, lifecycle functions, tellraw JSON syntax, clickEvent targets, and cross-reference integrity).
+1. Provide real `OLLAMA_API_KEY` in local uncommitted `.env` when deploying or making live Cloud requests.
+2. Await owner instructions for any future gameplay capability expansions.
 
 ## Agent handoff rule
 Before changing code, verify this state against the actual repository and Git history. After significant changes, update this file and the other relevant `.ai/` files.

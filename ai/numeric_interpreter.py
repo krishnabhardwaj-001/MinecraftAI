@@ -303,21 +303,22 @@ class NumericSemanticInterpreter:
                         extracted_target = ent
                         break
 
-        # Check adjective mappings (e.g. "faster" -> "speed", "stronger" -> missing)
-        for adj, prop_name in ADJECTIVE_TO_PROPERTY.items():
-            if re.search(rf"\b{adj}\b", norm_text):
-                if prop_name is None:
-                    property_missing = True
-                    extracted_property = None
-                else:
-                    extracted_property = prop_name
+        # Check explicit property names in text first
+        for syn, canon in KNOWN_PROPERTY_SYNONYMS.items():
+            if re.search(rf"\b{re.escape(syn)}\b", norm_text):
+                extracted_property = canon
+                property_missing = False
                 break
 
-        # Check explicit property names in text if not set by adjective
-        if not extracted_property and not property_missing:
-            for syn, canon in KNOWN_PROPERTY_SYNONYMS.items():
-                if re.search(rf"\b{re.escape(syn)}\b", norm_text):
-                    extracted_property = canon
+        # If no explicit property, check adjective mappings (e.g. "faster" -> "speed", "stronger" -> missing)
+        if not extracted_property:
+            for adj, prop_name in ADJECTIVE_TO_PROPERTY.items():
+                if re.search(rf"\b{adj}\b", norm_text):
+                    if prop_name is None:
+                        property_missing = True
+                        extracted_property = None
+                    else:
+                        extracted_property = prop_name
                     break
 
         # Check generic property extraction via grammatical patterns:

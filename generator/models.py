@@ -310,9 +310,10 @@ ALLOWED_ACTION_TYPES = {
     "reset_score", "score_reset",
     "remove_objective", "objective_remove",
     "operation_score", "score_operation",
+    "enable_trigger", "trigger_enable", "enable",
     "play_sound", "sound",
     "spawn_particle", "particle",
-    "send_message", "message", "say",
+    "send_message", "message", "say", "broadcast_message",
     "summon_entity", "summon",
     "teleport",
     "raw_command",
@@ -487,7 +488,36 @@ class ActionSpecification(BaseModel):
     @model_validator(mode="after")
     def validate_action_fields(self) -> "ActionSpecification":
         a_type = (self.action_type or "").strip().lower()
-        if not a_type or a_type not in ALLOWED_ACTION_TYPES:
+
+        # Canonical synonyms mapping
+        synonyms = {
+            "broadcast_message": "send_message",
+            "say_message": "send_message",
+            "tellraw": "send_message",
+            "tellraw_clickable": "send_message",
+            "clickable_tellraw": "send_message",
+            "chat": "send_message",
+            "message": "send_message",
+            "say": "send_message",
+            "display_chat": "send_message",
+            "give": "give_item",
+            "item": "give_item",
+            "clear": "clear_item",
+            "remove_item": "clear_item",
+            "effect": "apply_effect",
+            "give_effect": "apply_effect",
+            "remove_effect": "clear_effect",
+            "summon": "summon_entity",
+            "sound": "play_sound",
+            "particle": "spawn_particle",
+            "enable": "enable_trigger",
+            "trigger_enable": "enable_trigger",
+            "enable_scoreboard": "enable_trigger",
+            "scoreboard_enable": "enable_trigger",
+        }
+        norm_type = synonyms.get(a_type, a_type)
+
+        if not a_type or (a_type not in ALLOWED_ACTION_TYPES and norm_type not in ALLOWED_ACTION_TYPES):
             raise ValueError(
                 f"Invalid action_type: '{self.action_type}'. Must be one of {sorted(ALLOWED_ACTION_TYPES)}"
             )
@@ -495,14 +525,14 @@ class ActionSpecification(BaseModel):
         if self.objective:
             self.objective = validate_objective_name(self.objective)
 
-        if a_type in ("set_score", "score_set"):
+        if norm_type in ("set_score", "score_set"):
             holder = self.score_holder or self.target
             if not holder:
                 raise ValueError("set_score requires 'target' or 'score_holder'.")
             if not self.objective:
                 raise ValueError("set_score requires 'objective' to be specified.")
 
-        elif a_type in ("add_score", "score_add"):
+        elif norm_type in ("add_score", "score_add"):
             holder = self.score_holder or self.target
             if not holder:
                 raise ValueError("add_score requires 'target' or 'score_holder'.")
@@ -514,7 +544,7 @@ class ActionSpecification(BaseModel):
                     "Use remove_score or operation_score '-=' to subtract scores."
                 )
 
-        elif a_type in ("remove_score", "score_remove"):
+        elif norm_type in ("remove_score", "score_remove"):
             holder = self.score_holder or self.target
             if not holder:
                 raise ValueError("remove_score requires 'target' or 'score_holder'.")
@@ -527,7 +557,7 @@ class ActionSpecification(BaseModel):
                     f"remove_score score_value must be non-negative (>= 0). Got {self.score_value}."
                 )
 
-        elif a_type == "operation_score":
+        elif norm_type == "operation_score":
             holder = self.score_holder or self.target
             if not holder:
                 raise ValueError("operation_score requires 'target' (or 'score_holder').")
@@ -542,10 +572,14 @@ class ActionSpecification(BaseModel):
                 raise ValueError("operation_score requires 'source_objective' to be specified.")
             validate_objective_name(self.source_objective)
 
-        elif a_type in ("reset_score", "score_reset"):
+        elif norm_type in ("reset_score", "score_reset"):
             holder = self.score_holder or self.target
             if not holder:
                 raise ValueError("reset_score requires 'target' or 'score_holder'.")
+
+        elif norm_type in ("enable_trigger", "enable", "trigger_enable"):
+            if not self.objective:
+                raise ValueError("enable_trigger requires 'objective' to be specified.")
 
         return self
 
@@ -555,6 +589,17 @@ class ActionSpecification(BaseModel):
 
     # Communication
     message: Optional[str] = Field(default=None, description="Text message")
+    components: Optional[Any] = Field(default=None, description="Raw or structured JSON text components for tellraw")
+
+    @field_validator("message", mode="before")
+    @classmethod
+    def validate_message(cls, v: Any) -> Optional[str]:
+        if v is None:
+            return None
+        if isinstance(v, (dict, list)):
+            import json
+            return json.dumps(v, ensure_ascii=False)
+        return str(v)
 
     # Escape hatch for genuinely unmodeled operations (strictly audited)
     raw_command: Optional[str] = Field(default=None, description="Raw command fallback for unmodeled advanced operations")

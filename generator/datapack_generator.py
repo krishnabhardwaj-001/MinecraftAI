@@ -860,12 +860,12 @@ class DatapackGenerator:
                                 disp = (m_new_obj.group(3) or "").strip()
                                 if obj_name in existing_obj_adds:
                                     ex_crit, ex_disp, ex_cmd = existing_obj_adds[obj_name]
-                                    if ex_crit != crit or ex_disp != disp:
+                                    if ex_crit != crit or (ex_disp and disp and ex_disp != disp):
                                         raise ValueError(
                                             f"Conflicting scoreboard objective definition for '{obj_name}': "
                                             f"'{ex_cmd}' vs '{nl_strip}'"
                                         )
-                                    # Exactly identical definition: deduplicate (keep one)
+                                    # Compatible definition: deduplicate (keep one)
                                     continue
                                 else:
                                     existing_obj_adds[obj_name] = (crit, disp, nl_strip)

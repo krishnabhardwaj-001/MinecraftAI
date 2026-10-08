@@ -1,606 +1,427 @@
 # MinecraftAI
 
-**MinecraftAI** is an AI-powered, version-aware Minecraft Java datapack generator that converts natural-language gameplay requests into deterministic, validated datapacks.
+**MinecraftAI** is a production-grade, AI-powered, version-aware Minecraft Java datapack generation platform that converts natural-language gameplay requests into deterministic, structurally validated, and semantically verified datapacks.
 
-The project is designed around a strict separation between **AI reasoning** and **Minecraft implementation**:
+The platform provides both a **modern web application** and a **CLI pipeline**, backed by a hardened defense-in-depth security layer, comprehensive legal and privacy policies, multi-stage Docker deployment, and dual-version support for Minecraft Java **1.21.11** (default) and **1.21.1**.
 
-> Natural language → Understanding → Planning → Deterministic Generation → Validation → QA → Runtime Verification → ZIP
+```text
+Natural Language → AI Understanding → Version-Aware RAG → Structured Planning
+       │
+       ▼
+Deterministic Generation → Static Validation → Autonomous QA → Intent Verification → Validated ZIP
+```
 
-MinecraftAI is built to support arbitrary gameplay requests without relying on hard-coded request/entity mappings.
+MinecraftAI supports arbitrary gameplay requests without relying on hard-coded request/entity mappings.
 
 ---
 
-## Features
+## Key Features
 
-* Natural-language Minecraft gameplay requests
-* AI-assisted request understanding
-* Structured semantic planning
-* Version-aware Minecraft architecture
-* Deterministic datapack generation
-* Minecraft command knowledge and retrieval
-* Version-specific Minecraft knowledge
-* Datapack structural validation
-* Semantic and QA verification
-* Autonomous repair architecture
-* Runtime verification support
-* Deterministic benchmark evaluation
-* Multi-version support
-* CLI and web pipeline architecture
-* Automatic ZIP packaging
-* Persistent project memory and development documentation
+* **Natural-Language Understanding**: Converts user gameplay intent into strongly-typed semantic specifications.
+* **Modern Web Interface**: Single-page application featuring Obsidian & Emerald aesthetics, live 8-stage visual progress tracker, dynamic clarification options, outcome cards, and direct ZIP download.
+* **Full REST API**: Robust FastAPI endpoints for generation, streaming downloads, server health diagnostics, version metadata, and legal documentation.
+* **Dual-Version Minecraft Architecture**:
+  * **Minecraft Java 1.21.11** (default, `pack_format: 94`)
+  * **Minecraft Java 1.21.1** (`pack_format: 48`)
+* **7 Authoritative Mechanism Domains**:
+  * Entity Loot Tables (`data/<ns>/loot_table/...`)
+  * Custom Functions (`data/<ns>/function/...`)
+  * Function Tags (`data/<ns>/tags/function/...` including `#minecraft:load` and `#minecraft:tick`)
+  * Custom Advancements (`data/<ns>/advancement/...`)
+  * Custom Recipes (`data/<ns>/recipe/...`)
+  * Custom Predicates (`data/<ns>/predicate/...`)
+  * Event State Machines & Latches (scoreboard objectives and `#global` score holders)
+* **Defense-in-Depth Security Layer**:
+  * Strict input validation and prompt length limiting
+  * Canonical path-traversal prevention for file generation and ZIP downloads
+  * Zip Slip, path escape, and decompression bomb protection
+  * Minecraft command verb whitelisting and shell metacharacter blocking (`;`, `&`, `|`, `` ` ``)
+  * Sliding-window IP rate limiting and concurrent generation slot management
+  * Hardened HTTP security headers (CSP, X-Content-Type-Options, X-Frame-Options, Referrer-Policy)
+  * Safe logging with IP anonymization and sensitive text masking
+  * Production error sanitizer stripping stack traces and filesystem paths
+* **Legal & Privacy Policies**:
+  * Local-first execution (zero external telemetry, zero tracking cookies)
+  * Clear Terms of Service with explicit Mojang / Microsoft disclaimers
+  * Responsible disclosure security policy
+* **Docker & Container Deployment**:
+  * Multi-stage build with non-root security (`appuser` UID 10001)
+  * `docker-compose.yml` preconfigured for local Ollama host gateway
+* **Autonomous QA & Self-Repair**:
+  * Deterministic static structural validator
+  * Multi-tick scoreboard state-machine simulator
+  * Bounded automated repair loop recovering from validation defects
+  * Strict final READY gate verifying structural, QA, and intent requirements
 
 ---
 
 ## Supported Minecraft Versions
 
-MinecraftAI currently supports:
+MinecraftAI propagates version context through the entire pipeline:
 
-| Minecraft Version | Status    |
-| ----------------- | --------- |
-| **Java 1.21.11**  | Supported |
-| **Java 1.21.1**   | Supported |
+| Minecraft Version | Pack Format | Directory Structure | Status |
+| :--- | :---: | :---: | :--- |
+| **Java 1.21.11** | `94` | Singular (`recipe/`, `predicate/`, `loot_table/`) | Supported (Default) |
+| **Java 1.21.1** | `48` | Singular (`recipe/`, `predicate/`, `loot_table/`) | Supported |
 
-Minecraft **1.21.11** remains the default version.
-
-Version information is propagated through the pipeline using the project's centralized version architecture rather than allowing individual components to independently assume a Minecraft version.
+Version differences (such as item IDs, entity attributes, component schemas, and pack formats) are loaded from version-isolated registries rather than ad-hoc heuristics.
 
 ---
 
 ## Architecture
 
-MinecraftAI follows a staged pipeline:
+MinecraftAI enforces a strict separation between **AI reasoning** and **Minecraft implementation**:
 
 ```text
-Natural-Language Request
+Natural-Language Request (e.g. "When it starts raining, give every player one diamond.")
           │
           ▼
-┌──────────────────────┐
-│ AI Understanding     │
-│ Intent Extraction    │
-└──────────┬───────────┘
-           │
-           ▼
-┌──────────────────────┐
-│ Minecraft Knowledge  │
-│ Version-Aware RAG    │
-└──────────┬───────────┘
-           │
-           ▼
-┌──────────────────────┐
-│ Planner              │
-│ Structured Intent    │
-└──────────┬───────────┘
-           │
-           ▼
-┌──────────────────────┐
-│ Version Context      │
-└──────────┬───────────┘
-           │
-           ▼
-┌──────────────────────┐
-│ Deterministic        │
-│ Datapack Generator   │
-└──────────┬───────────┘
-           │
-           ▼
-┌──────────────────────┐
-│ Structural Validator │
-└──────────┬───────────┘
-           │
-           ▼
-┌──────────────────────┐
-│ QA / Semantic        │
-│ Verification         │
-└──────────┬───────────┘
-           │
-           ▼
-┌──────────────────────┐
-│ Runtime Verification │
-└──────────┬───────────┘
-           │
-           ▼
-      Final ZIP
+┌──────────────────────────────┐
+│ Stage 1: AI Understanding    │  Extracts gameplay goals, triggers, and targets.
+│ Intent & Ambiguity Analysis  │  Pauses on underspecified input for clarification.
+└──────────────┬───────────────┘
+               │
+               ▼
+┌──────────────────────────────┐
+│ Stage 2: Minecraft Knowledge │  Retrieves version-isolated domain knowledge:
+│ Version-Aware RAG            │  items, entities, attributes, predicates, tags.
+└──────────────┬───────────────┘
+               │
+               ▼
+┌──────────────────────────────┐
+│ Stage 3: Structured Planner  │  Synthesizes typed MechanismSpecifications
+│ Abstract Gameplay Contracts  │  without raw Minecraft commands or file paths.
+└──────────────┬───────────────┘
+               │
+               ▼
+┌──────────────────────────────┐
+│ Stage 4: Deterministic       │  Generates canonical, reproducible Minecraft
+│ Datapack Generator           │  resources, JSON files, and .mcfunction files.
+└──────────────┬───────────────┘
+               │
+               ▼
+┌──────────────────────────────┐
+│ Stage 5: Static Validator    │  Verifies JSON syntax, pack.mcmeta, tags,
+│ & Autonomous Repair Loop     │  command syntax, and vanilla loot preservation.
+└──────────────┬───────────────┘
+               │
+               ▼
+┌──────────────────────────────┐
+│ Stage 6: Autonomous QA       │  Simulates state-machine transitions, verifies
+│ Semantic Analysis            │  target context, and checks reference integrity.
+└──────────────┬───────────────┘
+               │
+               ▼
+┌──────────────────────────────┐
+│ Stage 7: Intent Verification │  Cross-examines generated datapack against
+│ Goal-to-Artifact Validation  │  original user request to ensure alignment.
+└──────────────┬───────────────┘
+               │
+               ▼
+┌──────────────────────────────┐
+│ Stage 8: READY Gate & ZIP    │  Creates byte-deterministic, production ZIP.
+│ Output Packaging             │  Ready for installation in .minecraft/saves.
+└──────────────────────────────┘
 ```
 
-### Design Principle
-
-The AI should determine **what the user wants**, while deterministic Minecraft-specific code determines **how that request is implemented**.
-
-This reduces the risk of invalid commands, incorrect datapack structures, and version-specific syntax errors.
-
 ---
 
-## Version-Aware Architecture
+## Web Application & REST API
 
-Minecraft versions are treated as first-class pipeline context.
+MinecraftAI includes a high-performance web interface built with FastAPI:
 
-A request can therefore be evaluated against a specific Minecraft version:
-
-```text
-Request
-   │
-   ├── Minecraft 1.21.11
-   │        │
-   │        └── Version-specific knowledge
-   │
-   └── Minecraft 1.21.1
-            │
-            └── Version-specific knowledge
-```
-
-The version context is propagated through:
-
-* Understanding
-* Planning
-* Generator
-* Validator
-* QA
-* Runtime verification
-* Evaluation benchmark
-
-Pack formats and other version-dependent behavior are resolved through the centralized version architecture.
-
----
-
-## Deterministic Generation
-
-MinecraftAI does not depend on the LLM to directly produce the final datapack implementation.
-
-Instead:
-
-1. The AI interprets the request.
-2. The planner creates a structured specification.
-3. The deterministic generator converts that specification into Minecraft files.
-4. Validators inspect the generated structure.
-5. QA checks the intended behavior.
-6. Runtime verification can test the result against Minecraft.
-
-This architecture makes generated output reproducible and easier to test.
-
----
-
-## Knowledge System
-
-MinecraftAI uses version-specific Minecraft knowledge to support generation and validation.
-
-Knowledge includes areas such as:
-
-* Commands
-* Command syntax
-* Command descriptions
-* Loot tables
-* Predicates
-* Version-specific Minecraft data
-* Other Minecraft implementation metadata used by the pipeline
-
-Knowledge is organized by Minecraft version where appropriate.
-
-Example:
-
-```text
-knowledge/
-├── commands/
-│   └── java/
-│       ├── 1.21.1/
-│       └── 1.21.11/
-│
-├── descriptions/
-│
-└── loot_tables/
-    └── java/
-        ├── 1.21.1/
-        └── 1.21.11/
-```
-
-The knowledge layer is intentionally separated from deterministic generation logic.
-
----
-
-## Validation
-
-Generated datapacks pass through structural validation before being considered valid.
-
-Validation covers areas such as:
-
-* Datapack structure
-* `pack.mcmeta`
-* Function files
-* Function tags
-* Function references
-* Version-specific pack formats
-* Minecraft resource paths
-* Vanilla-preservation requirements
-* Missing references
-* Generated datapack integrity
-
-This prevents structurally invalid datapacks from being treated as successful output.
-
----
-
-## QA and Verification
-
-MinecraftAI uses multiple levels of verification.
-
-### Structural Verification
-
-Checks whether the generated datapack is structurally valid.
-
-### Semantic Verification
-
-Checks whether the generated implementation corresponds to the requested behavior.
-
-### Runtime Verification
-
-Where supported, generated datapacks can be tested against an actual Minecraft runtime.
-
-This distinction is important because a datapack can be structurally valid while still failing to implement the requested gameplay behavior.
-
----
-
-## Benchmark
-
-MinecraftAI includes a deterministic evaluation benchmark covering multiple capability domains.
-
-### Current Benchmark
-
-**78 / 78 cases passing**
-
-| Version           |  Cases |    Result |
-| ----------------- | -----: | --------: |
-| Minecraft 1.21.11 |     53 |     53/53 |
-| Minecraft 1.21.1  |     25 |     25/25 |
-| **Total**         | **78** | **78/78** |
-
-The benchmark covers **16 capability domains** across the supported versions.
-
-The benchmark also verifies version-specific behavior rather than simply duplicating the same cases between versions.
-
----
-
-## Testing
-
-Current verified test state:
-
-```text
-Full pytest suite: 570 / 570
-Warnings:           0
-Benchmark:          78 / 78
-```
-
-The project treats warnings as errors during the full verification process.
-
-Example:
+### Running the Web Server
 
 ```bash
-pytest -W error
+# Start the web server on port 8000
+python run_web.py --port 8000
+
+# Or using the Windows launcher:
+launch_web.bat
 ```
 
-Additional verification includes:
+Access the web UI at `http://localhost:8000`.
+
+### REST API Endpoints
+
+| Method | Endpoint | Description |
+| :--- | :--- | :--- |
+| `GET` | `/` | Web application single-page interface |
+| `POST` | `/api/generate` | Generate datapack from natural-language request |
+| `GET` | `/api/download/{filename}` | Path-traversal protected ZIP download |
+| `GET` | `/api/health` | Service health, Ollama status, and diagnostic checks |
+| `GET` | `/api/versions` | List supported Minecraft versions and defaults |
+| `GET` | `/privacy` | Privacy Policy page |
+| `GET` | `/terms` | Terms of Service & Mojang disclaimer page |
+| `GET` | `/security` | Security & Responsible Disclosure policy page |
+| `GET` | `/api/legal/{doc_name}` | Raw legal policy markdown (`privacy`, `terms`, `security`) |
+
+### Generation Request Schema
+
+```json
+POST /api/generate
+Content-Type: application/json
+
+{
+  "request": "When it starts raining, give every player one diamond.",
+  "minecraft_version": "1.21.11",
+  "clarification_answer": null,
+  "previous_request": null
+}
+```
+
+### Generation Response Schema (Success)
+
+```json
+{
+  "status": "success",
+  "is_success": true,
+  "datapack_name": "when_it_starts_raining_give_every_player_one_diamond",
+  "download_url": "/api/download/when_it_starts_raining_give_every_player_one_diamond.zip",
+  "minecraft_version": "1.21.11",
+  "pack_format": 94,
+  "plan": { ... },
+  "clarification": null,
+  "clarification_requirements": null,
+  "errors": []
+}
+```
+
+### Clarification Handling
+
+When an ambiguous request is submitted (e.g. `"Make me faster."`), the API returns:
+
+```json
+{
+  "status": "needs_clarification",
+  "is_success": false,
+  "clarification": "How would you like your speed to be increased? Please specify...",
+  "clarification_requirements": [ ... ]
+}
+```
+
+The user can resolve the ambiguity by providing `clarification_answer` (e.g. `"10 times faster"`) and `previous_request`, which the pipeline synthesizes into a complete prompt without manual retyping.
+
+---
+
+## Security Architecture
+
+MinecraftAI features a dedicated security layer under `security/`:
+
+* **Input Security (`security/input_security.py`)**:
+  * Prompt length enforcement (`MAX_PROMPT_LENGTH = 2000`)
+  * Control character, null-byte, and `<script>` injection stripping
+  * Strict version whitelisting against `VersionRegistry`
+  * Safe alphanumeric filesystem naming (`sanitize_datapack_name`)
+* **Path Security (`security/path_security.py`)**:
+  * Resolves canonical absolute paths and strictly confines all write and read operations to `generated/`
+  * Neutralizes POSIX (`../`), Windows (`..\`), UNC (`\\`), and URL-encoded traversal attempts
+* **Archive Security (`security/archive_security.py`)**:
+  * Zip Slip vulnerability defense: inspects every ZIP entry before extraction
+  * Decompression bomb prevention: enforces maximum uncompressed size (`100 MB`) and expansion ratio (`100:1`)
+  * Structure verification: requires valid `pack.mcmeta` and `data/` namespace root
+* **Command Security (`security/command_security.py`)**:
+  * Whitelists valid Minecraft Java command verbs (`scoreboard`, `execute`, `give`, `effect`, `tellraw`, etc.)
+  * Blocks shell injection metacharacters (`;`, `&`, `|`, `` ` ``)
+* **Rate Limiting & Concurrency (`security/rate_limit.py`)**:
+  * Sliding-window in-memory IP rate limiter (e.g. 30 requests/minute)
+  * Concurrency semaphore preventing server saturation from simultaneous LLM generations
+* **HTTP Headers Middleware (`security/headers.py`)**:
+  * Content-Security-Policy (`default-src 'self'`)
+  * `X-Content-Type-Options: nosniff`
+  * `X-Frame-Options: DENY`
+  * `Referrer-Policy: strict-origin-when-cross-origin`
+* **Safe Logging & Error Sanitization (`security/logging.py`, `security/error_sanitizer.py`)**:
+  * Anonymizes IPv4 and IPv6 client addresses
+  * Masks potential credentials, tokens, and sensitive strings
+  * Sanitizes error messages returned over HTTP, stripping Python stack traces and server filepaths
+
+---
+
+## Legal & Compliance
+
+All legal and operational policies are located under `security/legal/` and accessible via the web interface:
+
+1. **Privacy Policy (`security/legal/privacy_policy.md` / `/privacy`)**:
+   * Local-first architecture: requests are processed on your hardware with no remote data collection.
+   * Zero tracking cookies, zero analytics beacons, zero third-party telemetry.
+2. **Terms of Service (`security/legal/terms_of_service.md` / `/terms`)**:
+   * Acceptable use policy for generated datapacks.
+   * **Mojang / Microsoft Disclaimer**: MinecraftAI is an independent, community-developed software project. It is **NOT AN OFFICIAL MINECRAFT PRODUCT** and is **NOT APPROVED BY OR ASSOCIATED WITH MOJANG OR MICROSOFT**.
+3. **Security Policy (`security/legal/security_policy.md` / `/security`)**:
+   * Responsible disclosure guidelines and security vulnerability reporting.
+
+---
+
+## Docker & Production Deployment
+
+### Prerequisites
+
+* [Docker](https://docs.docker.com/get-docker/) & Docker Compose
+* [Ollama Cloud](https://ollama.com/) account with API key (or local Ollama instance / OpenAI API key)
+
+### Running with Docker Compose
 
 ```bash
+# 1. Copy the environment configuration
+cp .env.example .env
+
+# 2. Build and start the container
+docker compose up -d --build
+
+# 3. View container logs
+docker compose logs -f minecraft-ai
+```
+
+The container runs as an unprivileged user (`appuser`, UID `10001`), mounts a persistent volume for `generated/`, binds to port `8000`, and includes an automatic health check querying `/api/health`.
+
+### Environment Configuration (`.env`)
+
+```ini
+HOST=0.0.0.0
+PORT=8000
+LLM_PROVIDER=ollama
+OLLAMA_HOST=https://ollama.com
+OLLAMA_MODEL=gpt-oss:120b-cloud
+OLLAMA_API_KEY=your_ollama_cloud_api_key_here
+RATE_LIMIT_ENABLED=true
+RATE_LIMIT_PER_MINUTE=30
+MAX_CONCURRENT_GENERATIONS=4
+```
+
+---
+
+## CLI Usage
+
+MinecraftAI provides a full command-line pipeline:
+
+```bash
+# Interactive CLI
+python run_pipeline.py
+
+# Or via Windows launcher:
+launch_cli.bat
+
+# Direct prompt execution
+python run_pipeline.py --request "When it starts raining, give every player one diamond." --version 1.21.11
+
+# Skeletons drop iron on 1.21.1
+python run_pipeline.py --request "Make every skeleton drop iron ingots." --version 1.21.1
+```
+
+---
+
+## Testing & Quality Assurance
+
+The codebase maintains strict quality gates with zero warnings under `-W error`:
+
+```bash
+# Run full unit and regression test suite
+python -m pytest -v
+
+# Run with warnings treated as errors
+python -m pytest -W error
+
+# Run security test suite
+python -m pytest test_security_input.py test_security_paths.py test_security_zip.py test_security_rate_limit.py test_security_headers.py -v
+
+# Run full web application suite
+python -m pytest test_web.py test_web_full.py -v
+
+# Run dual-version evaluation benchmark (78/78 cases)
+python -m eval.benchmark
+
+# Verify clean git whitespace
 git diff --check
 ```
 
-The project also maintains focused regression suites for previous architectural phases.
+### Evaluation Benchmark
+
+The deterministic benchmark evaluates **78 comprehensive cases** across 16 capability domains with **100% accuracy**:
+
+| Version | Cases | Status |
+| :--- | :---: | :---: |
+| Minecraft 1.21.11 | 53 | 53 / 53 Passed |
+| Minecraft 1.21.1 | 25 | 25 / 25 Passed |
+| **Total Benchmark** | **78** | **78 / 78 Passed (100.0%)** |
 
 ---
 
 ## Project Structure
 
-The repository is organized around the major components of the pipeline.
-
 ```text
 MinecraftAI/
+├── ai/                      # AI request understanding, context RAG, and planning
+│   ├── clarification.py     # Semantic ambiguity detection and option generation
+│   ├── implementation_mapper.py # Deterministic Minecraft mechanism mapping
+│   ├── numeric_interpreter.py   # Natural-language numeric parsing
+│   ├── planner.py           # Structured gameplay planner
+│   ├── property_registry.py # Version-aware property capabilities
+│   └── understanding.py     # Goal and trigger extraction
 │
-├── ai/
-│   └── understanding.py
+├── generator/               # Deterministic Minecraft Java datapack generation
+│   ├── mechanisms/          # Modular mechanism generators
+│   │   ├── advancement_mech.py  # Custom advancements
+│   │   ├── function_mech.py     # Command compilation & .mcfunction synthesis
+│   │   ├── interaction_mech.py  # Clickable chat /trigger interaction menus
+│   │   ├── predicate_mech.py    # Authoritative predicates
+│   │   ├── recipe_mech.py       # Custom crafting & smelting recipes
+│   │   ├── state_machine_mech.py# Scoreboard game loop state machines
+│   │   └── tag_mech.py          # Function tags (#minecraft:load, #minecraft:tick)
+│   ├── datapack_generator.py# Core datapack generator
+│   └── models.py            # Strongly-typed data contracts & ActionSpecifications
 │
-├── pipeline/
-│   └── minecraft_pipeline.py
+├── validator/               # Static structural validator
+│   └── datapack_validator.py# pack.mcmeta, JSON schemas, command syntax validation
 │
-├── generator/
-│   └── ...
+├── qa/                      # Autonomous QA & semantic verification
+│   ├── analyzer.py          # Static semantic analysis & reference checking
+│   ├── reviewer.py          # Autonomous QA review & intent verification
+│   ├── repair.py            # Structured plan repair engine
+│   ├── runtime.py           # Real Minecraft headless server verification harness
+│   └── scoreboard_semantics.py # Multi-tick scoreboard logic simulation
 │
-├── validator/
-│   └── ...
+├── security/                # Production security & compliance layer
+│   ├── archive_security.py  # Zip Slip & zip bomb defenses
+│   ├── command_security.py  # Command verb whitelisting & injection blocking
+│   ├── config.py            # Centralized security configuration
+│   ├── error_sanitizer.py   # Traceback & filesystem path stripping
+│   ├── headers.py           # CSP & HTTP security headers middleware
+│   ├── input_security.py    # Prompt & version validation
+│   ├── logging.py           # Safe logging with IP anonymization
+│   ├── path_security.py     # Canonical output confinement & traversal defense
+│   ├── rate_limit.py        # Sliding-window IP rate limiter
+│   └── legal/               # Legal & compliance policies
+│       ├── privacy_policy.md    # Local-first privacy documentation
+│       ├── terms_of_service.md  # Terms & Mojang/Microsoft disclaimer
+│       └── security_policy.md   # Responsible disclosure policy
 │
-├── knowledge/
-│   └── ...
+├── web/                     # FastAPI web application & user interface
+│   ├── static/              # Obsidian & Emerald dark-mode UI (CSS, JS)
+│   ├── templates/           # Jinja2 templates (index.html, legal.html)
+│   └── app.py               # REST API & application server
 │
-├── qa/
-│   ├── analyzer.py
-│   ├── reviewer.py
-│   ├── repair.py
-│   ├── runtime.py
-│   └── scoreboard_semantics.py
+├── versions/                # Version registries & headless server runtimes
+│   ├── 1.21.11/             # Minecraft 1.21.11 registry & server jar
+│   └── 1.21.1/              # Minecraft 1.21.1 registry & server jar
 │
-├── eval/
-│   ├── benchmark.py
-│   ├── dataset.json
-│   └── models.py
+├── eval/                    # Deterministic evaluation benchmark suite
+│   ├── benchmark.py         # Dual-version evaluation runner
+│   ├── dataset.json         # 78 verified benchmark test cases
+│   └── models.py            # Benchmark schema models
 │
-├── tests/
-│   └── ...
-│
-├── .ai/
-│   ├── STATE.md
-│   ├── TASKS.md
-│   ├── DECISIONS.md
-│   └── CHANGELOG.md
-│
-└── README.md
-```
-
-The exact repository structure may evolve as development continues.
-
----
-
-## AI Models
-
-MinecraftAI is designed to work with AI-assisted understanding and planning while keeping deterministic Minecraft implementation outside the model.
-
-The project has been developed with local AI tooling in mind, including Ollama-based models.
-
-Example local models previously used during development include:
-
-```text
-llama3.1:8b
-phi3:latest
-```
-
-Model selection is separate from the deterministic Minecraft generation layer.
-
----
-
-## Installation
-
-Clone the repository:
-
-```bash
-git clone https://github.com/krishnabhardwaj-001/MinecraftAI.git
-cd MinecraftAI
-```
-
-Create and activate a Python environment:
-
-```bash
-python -m venv .venv
-```
-
-Windows:
-
-```bash
-.venv\Scripts\activate
-```
-
-Install the project's dependencies according to the repository's current dependency configuration.
-
-Then run the project's existing CLI or application entry point.
-
-> The exact runtime commands should be taken from the current repository configuration rather than assumed here, as the project is still evolving.
-
----
-
-## Example Workflow
-
-A user could provide a request such as:
-
-```text
-When it rains, give every player one diamond.
-```
-
-MinecraftAI processes the request through the pipeline:
-
-```text
-Natural Language
-      ↓
-Intent Understanding
-      ↓
-Structured Gameplay Specification
-      ↓
-Minecraft Version Context
-      ↓
-Deterministic Datapack Generation
-      ↓
-Validation
-      ↓
-QA
-      ↓
-Runtime Verification
-      ↓
-ZIP Datapack
-```
-
-The important architectural property is that the AI does not need a special hard-coded implementation such as:
-
-```text
-rain_diamond.json
-```
-
-for every possible request.
-
-The system is intended to generalize through structured intent and deterministic generation.
-
----
-
-## Design Principles
-
-### 1. Generic Over Hard-Coded
-
-The system should support arbitrary valid gameplay requests rather than maintaining one implementation per request.
-
-### 2. AI for Reasoning, Code for Determinism
-
-The AI interprets and plans. Deterministic code generates Minecraft implementations.
-
-### 3. Version Awareness
-
-Minecraft version differences must be represented explicitly rather than hidden inside individual components.
-
-### 4. Validation Before Release
-
-Generated output should not be considered complete merely because an AI model produced it.
-
-### 5. Runtime Evidence Matters
-
-Where possible, generated datapacks should be verified in a real Minecraft runtime.
-
-### 6. Determinism
-
-The same input and version should produce reproducible deterministic output.
-
-### 7. No Silent Failure
-
-Unsupported versions, missing references, invalid structures, and failed verification should be surfaced explicitly.
-
-### 8. Scope Discipline
-
-Issues discovered outside the current milestone should be documented rather than implemented as unrelated "while we're here" changes.
-
----
-
-## Development Methodology
-
-The project follows a plan → implement → verify → review workflow.
-
-Each major phase is expected to:
-
-1. Define the scope.
-2. Inspect the existing architecture.
-3. Implement only the required changes.
-4. Add or update tests.
-5. Run focused verification.
-6. Run regression verification.
-7. Review the final diff.
-8. Update project memory/documentation.
-9. Commit and push only after verification.
-
-Project-level development memory is maintained under:
-
-```text
-.ai/
-├── STATE.md
-├── TASKS.md
-├── DECISIONS.md
-└── CHANGELOG.md
+├── generated/               # Output directory for generated datapacks & ZIPs
+├── Dockerfile               # Production multi-stage Docker container
+├── docker-compose.yml       # Production Docker Compose orchestration
+├── run_web.py               # Web server launcher
+├── run_pipeline.py          # CLI pipeline launcher
+└── pyproject.toml           # Project packaging specification
 ```
 
 ---
 
-## Current Development Status
+## Disclaimer
 
-### Completed
+**MinecraftAI is not an official Minecraft product. It is not approved by or associated with Mojang or Microsoft.**
 
-* Version-aware architecture
-* Multi-version support
-* Version-specific loot knowledge
-* Version propagation through the pipeline
-* Pytest warning cleanup
-* Dual-version evaluation benchmark
-
-### Current milestone
-
-**Phase 25.4 — Dual-Version Evaluation Benchmark Suite**
-
-Status:
-
-```text
-COMPLETE
-```
-
-Latest commit:
-
-```text
-e9b7fa2 Complete Phase 25.4 dual-version evaluation benchmark
-```
-
-Repository state:
-
-```text
-Branch: main
-Remote: origin/main
-Working tree: clean
-```
-
-### Next milestone
-
-**Phase 25.5 — Final Dual-Version Verification, Documentation & Handoff**
-
-Phase 25.5 is intended to perform the final audit and verification of the Phase 25 multi-version architecture without introducing unrelated gameplay capabilities.
-
----
-
-## Roadmap
-
-The project is being developed incrementally.
-
-Current roadmap direction:
-
-```text
-Phase 23
-Version-Aware Architecture
-        ↓
-Phase 24
-Multi-Version Support
-        ↓
-Phase 25.1
-Loot Knowledge
-        ↓
-Phase 25.2
-Version Propagation
-        ↓
-Phase 25.3
-Test/Warning Cleanup
-        ↓
-Phase 25.4
-Dual-Version Benchmark
-        ↓
-Phase 25.5
-Final Verification & Handoff
-```
-
-Future capabilities should be introduced as separate milestones after the current architecture is fully verified.
-
----
-
-## Contributing
-
-Development should preserve the project's architectural boundaries.
-
-Before making changes:
-
-* Understand the existing pipeline.
-* Check `.ai/STATE.md`.
-* Check `.ai/TASKS.md`.
-* Check `.ai/DECISIONS.md`.
-* Identify the current milestone.
-* Avoid unrelated refactoring.
-
-Before submitting changes:
-
-* Run focused tests.
-* Run regression tests.
-* Run the full test suite.
-* Run with warnings treated as errors.
-* Run `git diff --check`.
-* Review the complete diff.
-* Report skipped or unavailable verification honestly.
-
-Do not modify tests simply to make an implementation pass.
-
----
-
-## License
-
-A project license should be added to the repository before this section is treated as authoritative.
-
----
-
-## Project
-
-**MinecraftAI**
-AI-powered, deterministic, version-aware Minecraft Java datapack generation.
-
-GitHub:
-
-https://github.com/krishnabhardwaj-001/MinecraftAI
+Minecraft is a registered trademark of Mojang Synergies AB. All Minecraft-related assets, terms, and concepts referenced herein are the intellectual property of their respective owners.

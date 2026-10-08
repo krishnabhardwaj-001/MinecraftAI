@@ -1,0 +1,35 @@
+services:
+  minecraft-ai:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: minecraft-ai-service
+    restart: unless-stopped
+    ports:
+      - "8000:8000"
+    environment:
+      - ENVIRONMENT=production
+      - HOST=0.0.0.0
+      - PORT=8000
+      - LLM_PROVIDER=${LLM_PROVIDER:-ollama}
+      - OLLAMA_HOST=${OLLAMA_HOST:-https://ollama.com}
+      - OLLAMA_MODEL=${OLLAMA_MODEL:-gpt-oss:120b-cloud}
+      - OLLAMA_API_KEY=${OLLAMA_API_KEY:-}
+      - MC_MAX_PROMPT_LENGTH=2000
+      - MC_RATE_LIMIT_PER_MINUTE=30
+      - MC_BURST_ALLOWANCE=10
+      - MC_MAX_CONCURRENT_GENERATIONS=4
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
+    volumes:
+      - datapack-output:/app/generated
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8000/api/health"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 10s
+
+volumes:
+  datapack-output:
+    driver: local

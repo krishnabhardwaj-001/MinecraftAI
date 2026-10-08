@@ -1,3 +1,4 @@
+import os
 import sys
 from pathlib import Path
 from typing import Any, Dict, List, Optional
@@ -19,7 +20,11 @@ from ai.version_registry import VersionContext
 
 def _log(stage: str, message: str, verbose: bool = True) -> None:
     if verbose:
-        print(f"[{stage}] {message}")
+        try:
+            print(f"[{stage}] {message}")
+        except UnicodeEncodeError:
+            safe_message = message.encode("ascii", errors="replace").decode("ascii")
+            print(f"[{stage}] {safe_message}")
 
 
 class MinecraftPipeline:
@@ -39,7 +44,7 @@ class MinecraftPipeline:
 
     def __init__(
         self,
-        provider: str = "ollama",
+        provider: Optional[str] = None,
         version: Optional[str] = None,
         version_context: Optional[VersionContext] = None,
         output_dir: Optional[Path] = None,
@@ -55,7 +60,7 @@ class MinecraftPipeline:
         runtime_runner: Optional[RuntimeTestRunner] = None,
         ai_provider: Optional[AIProvider] = None
     ):
-        self.provider_name = provider
+        self.provider_name = (provider or os.getenv("LLM_PROVIDER") or "ollama").lower()
         self.version_context = version_context or VersionContext.from_version(version)
         self.version = self.version_context.version_id
         self.verbose = verbose
@@ -63,9 +68,9 @@ class MinecraftPipeline:
         self.max_qa_repair_attempts = max_qa_repair_attempts
 
         # Subsystems (supports dependency injection for testing)
-        self.ai = ai_provider or AIProvider(provider=provider)
+        self.ai = ai_provider or AIProvider(provider=self.provider_name)
         self.understanding = understanding_engine or MinecraftUnderstanding(
-            provider=provider,
+            provider=self.provider_name,
             ai_provider=self.ai,
             version=self.version,
             version_context=self.version_context
@@ -545,7 +550,7 @@ def run_minecraft_pipeline(
     request: str,
     minecraft_version: Optional[str] = None,
     version_context: Optional[VersionContext] = None,
-    provider: str = "ollama",
+    provider: Optional[str] = None,
     create_zip: bool = True,
     output_dir: Optional[Path] = None,
     max_repair_attempts: int = 3,
@@ -555,8 +560,9 @@ def run_minecraft_pipeline(
     """
     Public convenience entry point for the complete MinecraftAI pipeline.
     """
+    resolved_provider = provider or os.getenv("LLM_PROVIDER") or "ollama"
     pipeline = MinecraftPipeline(
-        provider=provider,
+        provider=resolved_provider,
         version=minecraft_version,
         version_context=version_context,
         output_dir=output_dir,

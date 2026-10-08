@@ -146,10 +146,10 @@ RULES:
 19. Keep implementation details useful for the future Generator.
 20. Do not turn general Minecraft concepts into fake commands.
 21. Low-level JSON syntax details (like pool condition format) are handled by the generator; if the required entity and item knowledge is present, mark the plan as 'ready' rather than 'missing_knowledge'.
-22. For standard mob drop requests (e.g. 'Make every creeper drop diamonds'), default to adding the item drop to the mob loot table alongside default drops. Do not ask for clarification regarding keeping or replacing default drops unless the user explicitly mentions default drops.
+22. For standard mob drop requests (e.g. 'Make every creeper drop diamonds'), default to adding the item drop to the mob loot table alongside default drops, with a default drop count of 1 when the quantity is not specified. Do not ask for clarification regarding drop count or keeping/replacing default drops unless the user explicitly mentions them.
 23. For predicate requests, if the predicate condition type is available in retrieved knowledge (under 'predicates') or supported Minecraft conditions, populate the structured predicate mechanism with type 'predicate' and mark status as 'ready'.
-24. For state-machine and event-trigger requests (e.g. 'only once when X starts', 'when X begins', 'on state change'):
-    - Use mechanism type 'state_machine' with 'objective', 'condition_predicate', 'state_scope' ('global' for environmental/world events like weather/time, or 'player' for individual player events), and 'on_enter' structured actions.
+24. For state-machine and event-trigger requests (e.g. 'whenever it rains', 'only once when X starts', 'when X begins', 'on state change'):
+    - Use mechanism type 'state_machine' with 'objective', 'condition_predicate', 'state_scope' ('global' for environmental/world events like weather/time, or 'player' for individual player events), and 'on_enter' structured actions. For event triggers like 'whenever it rains' or 'whenever night falls', default to executing once when the event begins (state_machine on_enter) using a global state latch, avoiding continuous tick spamming or unnecessary clarification.
     - The deterministic generator automatically handles safe scoreboard initialization in load.mcfunction (using persistent '#global' for global state or dynamic tick initialization for players) and sets up the tick transition and reset logic.
 25. For player-targeted actions, specify 'target': '@a' (or '@p' / '@s'). The generator automatically enforces correct execution context chaining ('execute as @a at @s run ...').
 26. For scoreboard objective requests (creating objectives, tracking player statistics, configuring display slots):

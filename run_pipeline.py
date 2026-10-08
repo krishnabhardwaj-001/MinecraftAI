@@ -68,10 +68,26 @@ def is_ollama_unreachable_error(exc: Optional[BaseException]) -> bool:
 def get_ollama_diagnostic_message(endpoint: Optional[str] = None) -> str:
     """
     Returns an actionable diagnostic message explaining that Ollama is unreachable,
-    displaying the endpoint, explaining how to start Ollama, and noting external
-    provider alternatives.
+    displaying the endpoint, explaining how to start Ollama or configure Ollama Cloud,
+    and noting external provider alternatives.
     """
-    resolved_endpoint = endpoint or os.getenv("OLLAMA_HOST") or "http://localhost:11434"
+    raw_endpoint = endpoint or os.getenv("OLLAMA_HOST")
+    resolved_endpoint = raw_endpoint or "http://localhost:11434"
+    is_cloud = (
+        raw_endpoint is not None
+        and (raw_endpoint.startswith("https://") or "ollama.com" in raw_endpoint.lower())
+    )
+
+    if is_cloud:
+        return (
+            f"The AI provider (Ollama Cloud) is unreachable or authentication failed at {resolved_endpoint}.\n\n"
+            "To resolve this issue:\n"
+            "  1. Verify your network connection to Ollama Cloud (https://ollama.com).\n"
+            "  2. Ensure your OLLAMA_API_KEY environment variable is configured with a valid key.\n"
+            "  3. Check that your configured model (OLLAMA_MODEL) is available in your Ollama Cloud account.\n"
+            "  4. Alternatively, configure local Ollama for development by setting OLLAMA_HOST=http://localhost:11434."
+        )
+
     return (
         f"The AI provider (Ollama) is unreachable or not running at {resolved_endpoint}.\n\n"
         "To resolve this issue:\n"
@@ -79,9 +95,10 @@ def get_ollama_diagnostic_message(endpoint: Optional[str] = None) -> str:
         "  2. Start the Ollama service by running:\n"
         "       ollama serve\n"
         "     or launch the Ollama desktop application.\n"
-        "  3. Ensure the required model is pulled (e.g. 'ollama pull llama3.1:8b').\n"
+        "  3. Ensure the required model is pulled or available in your Ollama instance.\n"
         "  4. Alternatively, configure an external AI provider if supported "
-        "(such as setting the OPENAI_API_KEY environment variable for OpenAI)."
+        "(such as setting the OPENAI_API_KEY environment variable for OpenAI, "
+        "or setting OLLAMA_HOST=https://ollama.com and OLLAMA_API_KEY for Ollama Cloud)."
     )
 
 
@@ -153,7 +170,7 @@ def run_cli(
             result = pipeline_fn(
                 request=request,
                 minecraft_version=selected_version,
-                provider="ollama",
+                provider=os.getenv("LLM_PROVIDER", "ollama"),
                 create_zip=True,
                 verbose=True
             )
