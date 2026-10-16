@@ -1,16 +1,20 @@
 # Current Project State
 
 ## Last synchronized
-2026-10-03
+2026-10-11
 
 ## Current implementation
 - Natural-language Minecraft request understanding is fully operational in the `ai/` package.
 - Minecraft command/entity/item knowledge/retrieval is available for Java 1.21.1 and 1.21.11 with full per-version isolation.
 - The 8-stage pipeline (Understanding → RAG → Planning → Generation → Validation/Repair → QA → Intent Verification → READY Gate) is operational.
-- Local Ollama inference is the default runtime path; OpenAI-compatible providers are also supported.
-- GitHub is the shared repository source; `main` is synchronized with `origin/main` at commit `e9b7fa2`.
+- Local website deployment supports zero-API-key Ollama Cloud inference using native `ollama signin` through the local Ollama daemon proxy (`http://127.0.0.1:11434`), consuming 0 bytes of local model weights and ~200-500MB local RAM.
+- Headless and containerized deployments also support direct remote Ollama Cloud with `OLLAMA_API_KEY`.
+- One-click Windows setup (`setup.bat`) and launch (`start.bat` with auto browser launch and port conflict checking) are fully implemented.
+- GitHub is the shared repository source; `main` is synchronized with `origin/main`.
 
 ## Working behavior verified during development
+- Phase 2.1 Refinements operational: Multi-requirement assumption association in `SpecificationBridge` supports explicit index targeting and unambiguous semantic matching while preserving unmatched/ambiguous assumptions as global context without requirement pollution. `ConversationSession` enforces complete-turn history trimming preserving Turn 0 (Initial User Goal) and recent active sliding window while keeping message and turn histories 100% consistent (`test_phase2_1_refinements.py`, 8/8 tests pass; full 41-test suite passes).
+- Phase 2 Conversational Engine & Local Web App Integration operational: `ConversationSession`, `ConversationalUnderstandingEngine`, `SpecificationBridge`, and conversational REST API endpoints (`/api/conversation/*`) integrated into core pipeline. Stage 1 specification handoff bypasses single-shot AI understanding when pre-confirmed specifications exist. Web app provides dual-mode UI (Conversational vs Direct) with interactive choice chips, proposal review cards, assumptions with technical rationale, and authoritative 8-stage progress tracking (`test_conversational_web_integration.py`, 14/14 tests pass).
 - Semantic retrieval works after a previous traceback fix.
 - Targets such as `@s` pass target validation.
 - Ambiguous requests can return a clarification state instead of forcing an arbitrary interpretation.
@@ -269,15 +273,64 @@
      - Added `test_provider_cloud.py` (7 tests).
      - Full regression suite: 715/715 passed with 0 warnings under `-W error`.
 
+- Zero-Setup Public Web Deployment & Async Job Architecture operational:
+  1. Zero-Setup Public User Experience:
+     - End-to-end client flow is 100% zero-setup: open website -> enter request -> click Generate -> download verified ZIP.
+     - Clients do not install Python, Ollama, local models, or desktop extensions, and never configure API keys or provider credentials.
+     - Server pipeline executes entirely server-side with provider credentials (`LLM_PROVIDER`, `OLLAMA_HOST`, `OLLAMA_MODEL`, `OLLAMA_API_KEY`).
+  2. Production Server Path Concealment & Error Masking:
+     - In production mode (`ENVIRONMENT=production`), server filesystem paths (`datapack_path`, `zip_path`) are strictly suppressed and returned as `None`.
+     - In production mode, provider unreachable/failure exceptions are masked as generic HTTP 503 `"Generation is temporarily unavailable. Please try again in a moment."` while logging actual diagnostics securely on the server.
+     - Removed server path cards from the web frontend inspector.
+  3. Hardened Public API & Concurrency Control:
+     - Converted synchronous blocking pipeline execution to non-blocking `await asyncio.to_thread(run_minecraft_pipeline, ...)` guarded by timeout and semaphore concurrency limits.
+     - Asynchronous job model endpoints added: `POST /api/jobs`, `GET /api/jobs/{job_id}`, and `GET /api/generate/{job_id}` alongside synchronous `POST /api/generate`.
+  4. Automatic Artifact Retention & Lifecycle Management:
+     - Added configurable artifact retention (`MC_ARTIFACT_RETENTION_SECONDS=3600`, default 1 hour).
+     - Automated `cleanup_expired_artifacts()` runs at startup and periodically, purging expired generation directories and ZIP archives.
+     - Migrated FastAPI startup lifecycle from deprecated `@app.on_event("startup")` to modern `lifespan` context manager, eliminating Starlette deprecation warnings under `-W error`.
+  5. Production Deployment Architecture & Documentation:
+     - Authored `DEPLOYMENT.md` detailing hardware sizing (RAM, CPU, concurrent generations, throughput), Docker Compose, Caddy/Nginx reverse proxy with HTTPS, rate limiting, and artifact management.
+     - Updated `README.md` highlighting zero-setup client flow, job API endpoints, and production deployment instructions.
+  6. Automated Verification:
+     - Added dedicated deployment test suite `test_web_deployment.py` (8 tests) verifying zero-setup flow, ZIP root format, production path concealment, error masking, async job polling, and artifact cleanup.
+     - Full test suites pass with 0 failures, 0 errors, 0 warnings under `-W error`.
+     - Live secret scan passed with 0 live secrets found.
+
+- Phase 2: Conversational Engine & Local Web App Integration operational:
+  1. Conversational Understanding Engine Integration:
+     - Integrated `ConversationSession`, `ConversationSessionManager`, `ConversationalUnderstandingEngine`, and `SpecificationBridge` into the MinecraftAI core.
+     - Preserves conversational context across multi-turn exchanges, infers sensible defaults, explains technical assumptions in plain English, and Formulates concrete proposals prior to compilation.
+     - Enforces stale proposal invalidation: any requirement edit clears previously confirmed specifications and resets proposal status to `"proposed"`.
+     - Blocks confirmation if open choices exist or if capability is unsupported.
+  2. Pipeline Stage 1 Specification Handoff:
+     - `MinecraftPipeline.run()` and `run_minecraft_pipeline()` accept optional `understanding: Optional[Dict[str, Any]] = None` and `session: Optional[Any] = None`.
+     - Directly routes pre-confirmed specifications to Stage 2 RAG and Stage 3 Planning without invoking single-shot AI understanding.
+     - Direct string execution (`run(request)`) and existing CLI/web flows remain 100% backward-compatible.
+  3. Conversational Web REST Endpoints:
+     - `POST /api/conversation/session` (creates isolated session).
+     - `GET /api/conversation/session/{id}` (retrieves session state without internal paths or secrets).
+     - `POST /api/conversation/message` (processes natural-language turns, infers defaults, returns assumptions & open choices).
+     - `POST /api/conversation/confirm` (validates proposal, locks specification, acquires concurrency slot, and triggers pipeline generation).
+     - `DELETE /api/conversation/session/{id}` (resets/deletes active session).
+  4. Local Web Interface Conversational Mode:
+     - Single-page web UI updated with mode selector tabs ("Conversational" vs "Direct").
+     - Conversational panel displays real-time chat dialogue thread, active proposal card, trigger and target pills, inferred assumptions with technical rationale tooltips, and clickable choice chips to resolve ambiguity.
+     - "Confirm & Build Datapack" button invokes `/api/conversation/confirm` and drives the authoritative 8-stage visual pipeline tracker, displaying the final Success Card with the verified ZIP download.
+  5. Automated Verification:
+     - Added `test_conversational_web_integration.py` (14 tests). All 14 tests pass cleanly in 6.85s.
+     - Standalone conversational suites (`test_conversation_state.py`, `test_conversational_understanding.py`, `test_specification_bridge.py`) pass: 19/19 tests pass in 4.78s.
+     - Total 33/33 conversational integration tests pass with 0 failures and 0 warnings.
+
 ## Known issues / gaps
 1. In live end-to-end pipeline execution with local Ollama LLMs (`test_pipeline.py`), stochastic variation in generative responses on ambiguous prompts can occasionally produce interactive clarification requests. The deterministic pipeline, benchmark, and generator suites are 100% deterministic and immune to LLM temperature variations.
 
 ## Current priority
-Ollama Cloud provider integration is complete and verified. The website, REST API, security layer, legal policies, Docker deployment, dual-version runtime, and Cloud provider are fully operational with 0 warnings across all test suites.
+Phase 2 Conversational Engine & Local Web App Integration is complete, fully tested with safe in-memory test doubles, and verified. The local web interface seamlessly supports both Conversational mode and Direct mode, bound strictly to 127.0.0.1.
 
 ## Next logical work
-1. Provide real `OLLAMA_API_KEY` in local uncommitted `.env` when deploying or making live Cloud requests.
-2. Await owner instructions for any future gameplay capability expansions.
+1. Manual end-to-end user verification of the local web interface (`start.bat` or `python run_web.py --open-browser`).
+2. Optional headless real-Minecraft server verification using manual terminal commands if generation/regeneration is desired by the user.
 
 ## Agent handoff rule
 Before changing code, verify this state against the actual repository and Git history. After significant changes, update this file and the other relevant `.ai/` files.

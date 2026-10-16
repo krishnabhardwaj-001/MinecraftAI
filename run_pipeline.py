@@ -10,7 +10,8 @@ from ai.version_registry import get_version_registry, get_default_version
 def is_ollama_unreachable_error(exc: Optional[BaseException]) -> bool:
     """
     Determines whether an exception indicates that the Ollama service
-    is offline, unreachable, not running, or failed to connect.
+    is offline, unreachable, not running, failed to connect, or returned
+    an Ollama provider error (such as sign-in required or missing model).
     """
     if exc is None:
         return False
@@ -22,6 +23,7 @@ def is_ollama_unreachable_error(exc: Optional[BaseException]) -> bool:
         "ConnectionRefusedError",
         "RequestError",
         "ReadTimeout",
+        "ResponseError",
     ):
         return True
 
@@ -36,6 +38,8 @@ def is_ollama_unreachable_error(exc: Optional[BaseException]) -> bool:
         import ollama
         if hasattr(ollama, "RequestError") and isinstance(exc, ollama.RequestError):
             return True
+        if hasattr(ollama, "ResponseError") and isinstance(exc, ollama.ResponseError):
+            return True
     except ImportError:
         pass
 
@@ -43,7 +47,7 @@ def is_ollama_unreachable_error(exc: Optional[BaseException]) -> bool:
         return True
 
     msg = str(exc).lower()
-    indicators = [
+    connection_indicators = [
         "connection refused",
         "connecterror",
         "failed to connect",
@@ -54,7 +58,20 @@ def is_ollama_unreachable_error(exc: Optional[BaseException]) -> bool:
         "is ollama running",
         "no such host",
     ]
-    if any(ind in msg for ind in indicators):
+    if any(ind in msg for ind in connection_indicators):
+        return True
+
+    ollama_indicators = [
+        "ollama signin",
+        "sign in to ollama",
+        "ollama unauthorized",
+        "ollama error",
+        "ollama cloud",
+    ]
+    if any(ind in msg for ind in ollama_indicators):
+        return True
+
+    if "ollama" in msg and any(k in msg for k in ("unauthorized", "model not found", "quota", "allowance", "signin", "sign in")):
         return True
 
     if exc.__cause__ and is_ollama_unreachable_error(exc.__cause__):
@@ -65,10 +82,13 @@ def is_ollama_unreachable_error(exc: Optional[BaseException]) -> bool:
     return False
 
 
-def get_ollama_diagnostic_message(endpoint: Optional[str] = None) -> str:
+def get_ollama_diagnostic_message(
+    endpoint: Optional[str] = None,
+    exc: Optional[BaseException] = None
+) -> str:
     """
     Returns an actionable diagnostic message explaining that Ollama is unreachable,
-    displaying the endpoint, explaining how to start Ollama or configure Ollama Cloud,
+    displaying the endpoint, explaining how to start Ollama or sign in to Ollama Cloud,
     and noting external provider alternatives.
     """
     raw_endpoint = endpoint or os.getenv("OLLAMA_HOST")
@@ -77,6 +97,44 @@ def get_ollama_diagnostic_message(endpoint: Optional[str] = None) -> str:
         raw_endpoint is not None
         and (raw_endpoint.startswith("https://") or "ollama.com" in raw_endpoint.lower())
     )
+
+    err_str = str(exc).lower() if exc else ""
+    status_code = getattr(exc, "status_code", None)
+
+    # 1. Authentication / Sign-in required
+    if status_code in (401, 403) or any(k in err_str for k in ("unauthorized", "sign in", "signin", "authenticate")):
+        return (
+            f"Ollama Cloud authentication required at {resolved_endpoint}.\n\n"
+            "To resolve this issue:\n"
+            "  1. Sign in with your Ollama account in your terminal:\n"
+            "       ollama signin\n"
+            "  2. Follow the prompt to complete sign-in in your browser.\n"
+            "  3. Once signed in, restart the server or retry your request.\n\n"
+            "Note: You do not need to paste an API key into MinecraftAI."
+        )
+
+    # 2. Cloud model not found / not pulled
+    if status_code == 404 or "not found" in err_str:
+        target_model = os.getenv("OLLAMA_MODEL", "gpt-oss:120b-cloud")
+        return (
+            f"Cloud model '{target_model}' not found in your Ollama library at {resolved_endpoint}.\n\n"
+            "To resolve this issue:\n"
+            f"  1. Register the cloud model pointer by running:\n"
+            f"       ollama pull {target_model}\n"
+            "     (This only downloads a lightweight ~384-byte cloud manifest; no model weights are stored locally.)\n"
+            "  2. Ensure you are signed in:\n"
+            "       ollama signin\n"
+            "  3. Retry your request."
+        )
+
+    # 3. Cloud quota / usage limit exceeded
+    if status_code == 429 or any(k in err_str for k in ("rate limit", "quota", "allowance", "exceeded")):
+        return (
+            f"Ollama Cloud usage limit or rate limit exceeded at {resolved_endpoint}.\n\n"
+            "To resolve this issue:\n"
+            "  1. Check your account status and usage allowance at https://ollama.com.\n"
+            "  2. Please wait before submitting additional generation requests."
+        )
 
     if is_cloud:
         return (
@@ -95,7 +153,7 @@ def get_ollama_diagnostic_message(endpoint: Optional[str] = None) -> str:
         "  2. Start the Ollama service by running:\n"
         "       ollama serve\n"
         "     or launch the Ollama desktop application.\n"
-        "  3. Ensure the required model is pulled or available in your Ollama instance.\n"
+        "  3. Ensure you are signed in to Ollama Cloud ('ollama signin') and the model is registered ('ollama pull gpt-oss:120b-cloud').\n"
         "  4. Alternatively, configure an external AI provider if supported "
         "(such as setting the OPENAI_API_KEY environment variable for OpenAI, "
         "or setting OLLAMA_HOST=https://ollama.com and OLLAMA_API_KEY for Ollama Cloud)."
@@ -179,7 +237,7 @@ def run_cli(
                 print("\n" + "=" * 70)
                 print("[!] OLLAMA SERVICE UNREACHABLE")
                 print("=" * 70)
-                print(get_ollama_diagnostic_message())
+                print(get_ollama_diagnostic_message(exc=e))
                 print("=" * 70)
                 return 1
             print(f"\n[-] Unexpected pipeline execution error: {e}")

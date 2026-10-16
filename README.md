@@ -15,6 +15,141 @@ MinecraftAI supports arbitrary gameplay requests without relying on hard-coded r
 
 ---
 
+## Quick Start: Local Website with Ollama Cloud Sign-In
+
+Anyone can clone MinecraftAI and run the local website on their computer **without downloading a large 120-billion-parameter model locally and without needing to paste an API key into MinecraftAI**.
+
+Inference runs on **Ollama Cloud** using Ollama's official sign-in authentication (`ollama signin`), while the web interface, Minecraft knowledge retrieval, validation, and ZIP generation run on your local machine.
+
+```
++-----------------------------------------------------------------------------------------+
+|                               LOCAL WEBSITE USER JOURNEY                                |
+|                                                                                         |
+|  1. Clone Repo -> 2. Run setup.bat -> 3. Run start.bat -> 4. Enter Prompt -> 5. Get ZIP |
+|                                                                                         |
+|  * ZERO Large Model Downloads (Cloud inference)    * ZERO API Keys to Paste             |
+|  * Uses 'ollama signin' account authentication    * Local RAM only ~200MB - 500MB       |
++-----------------------------------------------------------------------------------------+
+```
+
+### 1. Prerequisites
+
+* **Operating System**: Windows 10/11, macOS, or Linux
+* **Python**: Version **3.10 or newer** ([python.org](https://www.python.org/)) with "Add Python to PATH" enabled
+* **Ollama**: Official Ollama application ([ollama.com/download](https://ollama.com/download))
+* **Ollama Account**: Sign in to your account via `ollama signin` (free tier or paid)
+* **Internet Connection**: Required for cloud AI inference
+
+### 2. Windows 10/11 Setup (One-Click)
+
+1. **Clone the repository**:
+   ```powershell
+   git clone https://github.com/krishnabhardwaj-001/MinecraftAI.git
+   cd MinecraftAI
+   ```
+
+2. **Run the setup script**:
+   ```cmd
+   setup.bat
+   ```
+   This automated script:
+   * Checks for Python 3.10+
+   * Creates and activates a virtual environment (`.venv`)
+   * Installs project dependencies (`pip install -e .`)
+   * Verifies Ollama is installed
+   * Registers the lightweight cloud model pointer (`ollama pull gpt-oss:120b-cloud` — downloads only a 384-byte manifest, **zero large model weights**)
+   * Creates a default local configuration (no API key required)
+
+3. **Sign in to Ollama** (if you haven't already):
+   ```cmd
+   ollama signin
+   ```
+   Follow the prompt to authenticate with your Ollama account in your browser.
+
+4. **Launch the local website**:
+   ```cmd
+   start.bat
+   ```
+   The local server starts at `http://127.0.0.1:8000`, verifies port availability, and **automatically opens your default web browser** once ready!
+
+5. **Stop the server**:
+   Press `Ctrl+C` in the command prompt window at any time.
+
+---
+
+### 3. macOS / Linux Setup (Manual Commands)
+
+```bash
+# 1. Clone repository
+git clone https://github.com/krishnabhardwaj-001/MinecraftAI.git
+cd MinecraftAI
+
+# 2. Create and activate virtual environment
+python3 -m venv .venv
+source .venv/bin/activate
+
+# 3. Install dependencies
+pip install -e .
+
+# 4. Sign in to Ollama and register cloud model
+ollama signin
+ollama pull gpt-oss:120b-cloud
+
+# 5. Launch local website
+python run_web.py --open-browser
+```
+
+---
+
+### 4. How to Generate & Download a Datapack
+
+1. Open `http://127.0.0.1:8000` in your browser.
+2. Select target Minecraft version (**Java 1.21.11** or **Java 1.21.1**).
+3. Type your natural-language request (e.g., *"When it starts raining, give every player one diamond."*).
+4. Click **Generate Datapack** — watch the 8-stage progress tracker execute.
+5. If the request is ambiguous (e.g. *"make me faster"*), click a suggested option or type your clarification.
+6. Click **Download Datapack (.zip)**.
+7. Place the ZIP file directly into your Minecraft world's `datapacks/` folder (`.minecraft/saves/<world_name>/datapacks/`) and run `/reload`.
+
+---
+
+### 5. Local Hardware vs. Cloud Execution
+
+| Component | Where It Runs | Resource Usage |
+| :--- | :--- | :--- |
+| **AI Model (`gpt-oss:120b-cloud`)** | **Ollama Cloud** | **0 GB Local VRAM / RAM** (116.8B parameters execute entirely in the cloud; only a 384-byte pointer is stored locally) |
+| **Web Server & UI** | Local Machine (`127.0.0.1:8000`) | ~50 MB RAM |
+| **Minecraft RAG & Generator** | Local Machine | ~100–150 MB RAM |
+| **Structural Validator & QA** | Local Machine | ~50–100 MB RAM |
+| **Total Local Footprint** | Local Machine | **~200–500 MB RAM total** (runs smoothly on any standard PC or laptop) |
+
+> [!NOTE]
+> Python, FastAPI, knowledge retrieval, and static validation still consume ~200–500 MB of local system memory even though the large AI model executes remotely in the cloud.
+
+---
+
+### 6. Cloud Usage, Privacy & Limitations
+
+* **No API Key Required**: When using `ollama signin` through your local Ollama installation, you **never** need to paste an API key into MinecraftAI or `.env`. Authentication is handled directly by Ollama.
+* **Usage Allowances & Limits**: Access to cloud models depends on your Ollama account tier and current usage allowances. Account eligibility, hourly/daily usage caps, model availability, and service terms are determined by Ollama ([ollama.com](https://ollama.com)).
+* **Privacy Considerations**: Your natural-language datapack requests are sent to Ollama Cloud for model inference. No telemetry, analytics beacons, or personal data are collected or sent by MinecraftAI.
+* **No Silent Local Fallback**: If Ollama Cloud inference is unavailable or interrupted, MinecraftAI **strictly reports the error** instead of silently falling back to a small local model.
+
+---
+
+### 7. Troubleshooting
+
+| Issue | Cause | Solution |
+| :--- | :--- | :--- |
+| `[!] OLLAMA SERVICE UNREACHABLE` | Local Ollama daemon is offline | Start Ollama from your desktop menu or run `ollama serve` in a terminal. |
+| `Ollama Cloud authentication required` | Account not signed in | Open a terminal and run `ollama signin` to authenticate with Ollama. |
+| `Cloud model 'gpt-oss:120b-cloud' not found` | Manifest not registered | Run `ollama pull gpt-oss:120b-cloud` (only downloads 384 bytes, no weights). |
+| `Port 8000 is already in use` | Server already running | Close the existing terminal, or start on a new port: `python run_web.py --port 8001 --open-browser` |
+| `Usage limit or rate limit exceeded` | Account quota reached | Check your account status at [ollama.com](https://ollama.com) or wait before submitting requests. |
+| `Python is not found in your PATH` | Python not in PATH | Reinstall Python from [python.org](https://www.python.org/) and check **"Add Python to PATH"**. |
+
+---
+
 ## Key Features
 
 * **Natural-Language Understanding**: Converts user gameplay intent into strongly-typed semantic specifications.
@@ -147,9 +282,12 @@ Access the web UI at `http://localhost:8000`.
 | Method | Endpoint | Description |
 | :--- | :--- | :--- |
 | `GET` | `/` | Web application single-page interface |
-| `POST` | `/api/generate` | Generate datapack from natural-language request |
+| `POST` | `/api/generate` | Synchronous / non-blocking datapack generation |
+| `POST` | `/api/jobs` | Asynchronous job submission (returns job ID) |
+| `GET` | `/api/jobs/{job_id}` | Poll generation job progress, status, and download URL |
+| `GET` | `/api/generate/{job_id}` | Alias endpoint for polling generation job status |
 | `GET` | `/api/download/{filename}` | Path-traversal protected ZIP download |
-| `GET` | `/api/health` | Service health, Ollama status, and diagnostic checks |
+| `GET` | `/api/health` | Service health, provider readiness, and security checks |
 | `GET` | `/api/versions` | List supported Minecraft versions and defaults |
 | `GET` | `/privacy` | Privacy Policy page |
 | `GET` | `/terms` | Terms of Service & Mojang disclaimer page |
@@ -253,40 +391,92 @@ All legal and operational policies are located under `security/legal/` and acces
 
 ---
 
-## Docker & Production Deployment
+## Deployment & Development Modes
 
-### Prerequisites
+MinecraftAI clearly separates **Public Production Deployment** from **Local Development**:
 
-* [Docker](https://docs.docker.com/get-docker/) & Docker Compose
-* [Ollama Cloud](https://ollama.com/) account with API key (or local Ollama instance / OpenAI API key)
-
-### Running with Docker Compose
-
-```bash
-# 1. Copy the environment configuration
-cp .env.example .env
-
-# 2. Build and start the container
-docker compose up -d --build
-
-# 3. View container logs
-docker compose logs -f minecraft-ai
+```text
+PUBLIC PRODUCTION FLOW:
+Browser (Zero-Setup Client)
+   │  HTTPS (Prompt / No Credentials)
+   ▼
+Hosting Platform / Reverse Proxy (Caddy, Nginx, Cloudflare)
+   │  HTTP (Port 8000)
+   ▼
+MinecraftAI Container (Non-root `appuser`, Port 8000)
+   │  Server-Side Secret (`OLLAMA_API_KEY`)
+   ▼
+AI Provider Backend (Ollama Cloud: gpt-oss:120b-cloud)
+   │  Mechanisms / Plans
+   ▼
+Deterministic Generator → Static Validator → Autonomous QA → ZIP
+   │
+   ▼
+Browser downloads verified datapack ZIP
 ```
 
-The container runs as an unprivileged user (`appuser`, UID `10001`), mounts a persistent volume for `generated/`, binds to port `8000`, and includes an automatic health check querying `/api/health`.
+### 1. Public Production Deployment (Server-Side AI Provider)
 
-### Environment Configuration (`.env`)
+In production, **all AI credentials and model execution belong strictly to the server**. End-users browsing the public website never provide API keys, install Ollama, or run local models.
+
+* **Server Prerequisites**: Docker & Docker Compose, and a server-side AI provider account (e.g. Ollama Cloud).
+* **Security & Non-Root**: Runs under unprivileged user `appuser` (UID 10001).
+* **Automatic Retention**: Expired generated archives are automatically purged after 1 hour.
+* **CORS Restraint**: Configure `PUBLIC_ORIGIN` to your production domain.
+
+#### Production Configuration (`.env` on server only — NEVER committed)
 
 ```ini
+ENVIRONMENT=production
 HOST=0.0.0.0
 PORT=8000
+PUBLIC_ORIGIN=https://minecraftai.yourdomain.com
+
+# Server-Side AI Provider (Ollama Cloud)
 LLM_PROVIDER=ollama
 OLLAMA_HOST=https://ollama.com
 OLLAMA_MODEL=gpt-oss:120b-cloud
-OLLAMA_API_KEY=your_ollama_cloud_api_key_here
-RATE_LIMIT_ENABLED=true
-RATE_LIMIT_PER_MINUTE=30
-MAX_CONCURRENT_GENERATIONS=4
+OLLAMA_API_KEY=<SERVER_SECRET_MANAGED_BY_HOSTING_PLATFORM>
+
+# Abuse Protection & Artifact Lifecycle
+MC_MAX_PROMPT_LENGTH=2000
+MC_RATE_LIMIT_PER_MINUTE=30
+MC_BURST_ALLOWANCE=10
+MC_MAX_CONCURRENT_GENERATIONS=4
+MC_GENERATION_TIMEOUT_SECONDS=60.0
+MC_ARTIFACT_RETENTION_SECONDS=3600
+```
+
+#### Launching with Docker Compose
+
+```bash
+# Build and start container in detached mode
+docker compose up -d --build
+
+# Monitor container health and logs
+docker compose logs -f minecraft-ai
+```
+
+---
+
+### 2. Local Development (For Contributors)
+
+Developers modifying MinecraftAI source code can run local development servers with local Ollama or mock backends:
+
+```ini
+ENVIRONMENT=development
+HOST=127.0.0.1
+PORT=8000
+
+# Local Ollama daemon
+LLM_PROVIDER=ollama
+OLLAMA_HOST=http://127.0.0.1:11434
+OLLAMA_MODEL=llama3.1:8b
+```
+
+Run locally:
+```bash
+python run_web.py --port 8000
 ```
 
 ---

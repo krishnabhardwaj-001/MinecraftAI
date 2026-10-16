@@ -1,0 +1,14 @@
+{
+  "pack": {
+    "pack_format": 94,
+    "description": "Add a diamond drop to the creeper entity loot table, preserving existing drops.",
+    "min_format": [
+      94,
+      0
+    ],
+    "max_format": [
+      94,
+      1
+    ]
+  }
+}

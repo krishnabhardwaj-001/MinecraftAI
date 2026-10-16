@@ -16,6 +16,7 @@ from qa.runtime import RuntimeTestMode, RuntimeTestRunner
 from repair.repair_loop import AIRepairLoop
 from validator.datapack_validator import DatapackValidator
 from ai.version_registry import VersionContext
+from ai.specification import SpecificationBridge
 
 
 def _log(stage: str, message: str, verbose: bool = True) -> None:
@@ -103,10 +104,13 @@ class MinecraftPipeline:
         self,
         request: str,
         datapack_name: Optional[str] = None,
-        create_zip: bool = True
+        create_zip: bool = True,
+        understanding: Optional[Dict[str, Any]] = None,
+        session: Optional[Any] = None
     ) -> PipelineResult:
         """
         Executes the complete pipeline end-to-end.
+        Accepts optional pre-confirmed understanding or conversation session from Phase 2.
         """
         request_clean = request.strip()
         if not request_clean:
@@ -119,25 +123,59 @@ class MinecraftPipeline:
             )
 
         # -------------------------------------------------------------
-        # STAGE 1: Natural Language Understanding
+        # STAGE 1: Natural Language Understanding / Specification Bridge
         # -------------------------------------------------------------
-        _log("1/8", f"Understanding request: '{request_clean}'", self.verbose)
-        try:
-            understanding = self.understanding.understand(request_clean)
-        except Exception as e:
-            err_msg = f"AI Understanding failed: {e}"
-            _log("1/8", f"ERROR: {err_msg}", self.verbose)
+        if understanding is None and session is not None:
+            bridge = SpecificationBridge()
+            ok, spec_dict, err = bridge.convert_session_to_specification(session)
+            if not ok or not spec_dict:
+                err_msg = err or "Failed to extract specification from conversation session."
+                _log("1/8", f"ERROR: {err_msg}", self.verbose)
+                return PipelineResult(
+                    status="failed",
+                    minecraft_version=self.version,
+                    original_request=request_clean,
+                    errors=[err_msg],
+                    execution_summary="Pipeline aborted: conversation session is unconfirmed or invalid."
+                )
+            understanding = spec_dict
+
+        if understanding is not None:
+            _log("1/8", f"Using pre-confirmed understanding specification: '{request_clean}'", self.verbose)
+        else:
+            _log("1/8", f"Understanding request: '{request_clean}'", self.verbose)
+            try:
+                understanding = self.understanding.understand(request_clean)
+            except Exception as e:
+                err_msg = f"AI Understanding failed: {e}"
+                _log("1/8", f"ERROR: {err_msg}", self.verbose)
+                return PipelineResult(
+                    status="error",
+                    minecraft_version=self.version,
+                    original_request=request_clean,
+                    errors=[err_msg],
+                    execution_summary="Pipeline error during natural-language understanding stage."
+                )
+
+        # Check for unsupported capability
+        status_und = understanding.get("status")
+        if status_und == "unsupported":
+            clarification_req = understanding.get("clarification")
+            reason = "Unsupported capability"
+            if isinstance(clarification_req, dict):
+                reason = clarification_req.get("reason") or "Unsupported capability"
+            _log("1/8", f"Unsupported request rejected: {reason}", self.verbose)
             return PipelineResult(
-                status="error",
+                status="unsupported",
                 minecraft_version=self.version,
                 original_request=request_clean,
-                errors=[err_msg],
-                execution_summary="Pipeline error during natural-language understanding stage."
+                understanding=understanding,
+                errors=[reason],
+                execution_summary="Pipeline halted: requested capability is not supported by vanilla Minecraft datapacks."
             )
 
         # Check for clarification or ambiguity
         clarification_req = understanding.get("clarification")
-        status_und = understanding.get("status")
 
         if status_und == "needs_clarification" or clarification_req:
             question = ""
@@ -555,7 +593,10 @@ def run_minecraft_pipeline(
     output_dir: Optional[Path] = None,
     max_repair_attempts: int = 3,
     max_qa_repair_attempts: int = 3,
-    verbose: bool = True
+    verbose: bool = True,
+    understanding: Optional[Dict[str, Any]] = None,
+    session: Optional[Any] = None,
+    datapack_name: Optional[str] = None
 ) -> PipelineResult:
     """
     Public convenience entry point for the complete MinecraftAI pipeline.
@@ -570,5 +611,11 @@ def run_minecraft_pipeline(
         max_qa_repair_attempts=max_qa_repair_attempts,
         verbose=verbose
     )
-    return pipeline.run(request, create_zip=create_zip)
+    return pipeline.run(
+        request=request,
+        datapack_name=datapack_name,
+        create_zip=create_zip,
+        understanding=understanding,
+        session=session
+    )
 

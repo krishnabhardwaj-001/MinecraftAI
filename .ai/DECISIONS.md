@@ -631,3 +631,87 @@ To establish Ollama Cloud as the official production LLM provider while preservi
    - `LLM_PROVIDER` environment variable is respected across `AIProvider`, `MinecraftPipeline`, CLI (`run_pipeline.py`), and Web API (`web/app.py`).
 5. Diagnostic Transparency:
    - Diagnostic guidance distinguishes between Ollama Cloud and local Ollama, eliminating obsolete advice to `ollama pull llama3.1:8b`.
+
+## D053 — Zero-Setup Public Deployment Architecture and Server-Side Provider Decoupling
+To enable a completely zero-setup, friction-free public web deployment where ordinary Minecraft players can generate and download verified datapacks directly from their browser:
+1. Zero-Setup User Model:
+   - The user opens the public website, enters a natural-language description, clicks Generate, and downloads a ready-to-use datapack ZIP.
+   - The client browser never interacts with AI providers, never handles API keys, and never requires local software (no Python, Ollama, local models, or desktop extensions).
+   - All AI orchestration, knowledge retrieval, planning, deterministic generation, validation, and QA review execute strictly server-side.
+2. Server-Side Provider Credentials & Production Error Masking:
+   - Provider credentials (`OLLAMA_API_KEY`, `OLLAMA_HOST`, `OLLAMA_MODEL`) are securely held by the server runtime.
+   - In production mode (`ENVIRONMENT=production`), internal filesystem paths (`datapack_path`, `zip_path`) are suppressed (`None`) in API responses to prevent server directory layout exposure.
+   - On provider network or quota failure, public API responses are masked with HTTP 503 `"Generation is temporarily unavailable. Please try again in a moment."` while complete diagnostic details are logged securely to server logs.
+3. Asynchronous Job Model & Concurrency Protection:
+   - Large or complex datapack generations can take 5–25 seconds depending on LLM response latency.
+   - To support long-running tasks without HTTP gateway timeouts, the Web API provides an asynchronous job model (`POST /api/jobs`, `GET /api/jobs/{job_id}`, `GET /api/generate/{job_id}`) alongside the synchronous `/api/generate` endpoint.
+   - Generation tasks execute off the main event loop via `asyncio.to_thread()`, guarded by timeouts and concurrency semaphores to protect server capacity.
+4. Automatic Artifact Lifecycle & Retention:
+   - Datapacks and ZIP archives are stored in `generated/` with automated expiration cleanup (`cleanup_expired_artifacts()`).
+   - Configurable retention window (`MC_ARTIFACT_RETENTION_SECONDS=3600`, default 1 hour) balances user download windows against server disk usage.
+   - Modern FastAPI `lifespan` context manager handles startup cleanup cleanly without deprecation warnings under strict `-W error` testing.
+
+## D054 — Local Website Architecture with Ollama Cloud Sign-In Authentication (Zero API Key Requirement)
+To allow anyone to clone the repository and run MinecraftAI locally without downloading a large 120-billion-parameter model and without needing to paste an API key:
+1. Local Ollama Daemon Proxy with Cloud Model:
+   - Inference uses Ollama Cloud (`gpt-oss:120b-cloud`) through Ollama's official sign-in authentication (`ollama signin`).
+   - The local Ollama daemon (`http://127.0.0.1:11434`) transparently proxies requests for cloud models (`*-cloud`) to `https://ollama.com:443` using the user's signed-in Ollama account session.
+   - Zero API keys are required in `.env`, configuration files, or Python code.
+   - Zero large model weights are downloaded to the user's disk (the registered manifest is only 384 bytes).
+2. Strict Cloud Model Execution & No Silent Fallback:
+   - Inference strictly uses the configured cloud model (`gpt-oss:120b-cloud`).
+   - If cloud inference is unavailable or interrupted, the application strictly reports the error with actionable diagnostic guidance (`ollama signin`, `ollama serve`, `ollama pull gpt-oss:120b-cloud`), and never silently falls back to local models.
+3. Automated Local Setup & Launch Scripts:
+   - `setup.bat` automated setup for Windows: validates Python 3.10+, provisions `.venv`, installs dependencies, checks Ollama, pulls the 384-byte cloud manifest, and writes local `.env` defaults (with zero API keys requested).
+   - `start.bat` launch script: verifies prerequisites, checks port 8000 availability to prevent duplicate instances, launches `run_web.py --open-browser`, and automatically launches the default browser once the server is listening.
+4. Privacy & Local Resource Consumption:
+   - Local website binds strictly to `127.0.0.1` by default.
+   - Local system RAM usage is limited to ~200–500MB (Python web server, knowledge retrieval, and static validation), while 100% of the 120B parameter model execution runs remotely on Ollama Cloud.
+
+## D055 — General Lifecycle Reconciliation, Independent State Isolation, and Multi-Predicate QA Simulation
+To eliminate conflicting state machines, unlatched repetitive actions, and simulator blind spots without hardcoding specific game scenarios:
+1. Lifecycle Reconciliation Architecture:
+   - When multiple planned requirements describe the same underlying lifecycle (such as an activation condition and its logical complement/reset action), they are reconciled into a single unified `state_machine` specification (`DEFAULT_LIFECYCLE_RECONCILER`).
+   - Actions (such as rewards or effects) are unified into `on_enter`, while complementary reset conditions are recognized as part of the state machine's natural transition cycle.
+2. Independent State Isolation:
+   - When independent lifecycles (governed by unrelated predicates) happen to be planned with conflicting or duplicate objective names, their objectives are deterministically disambiguated (`{objective}_{index}` or derived from the driving predicate) so independent game events never corrupt each other's score holders.
+3. Multi-Predicate Scoreboard Semantic Simulation:
+   - `ScoreboardSemanticSimulator` in `qa/scoreboard_semantics.py` evaluates all environmental predicates discovered in `tick.mcfunction` across multi-tick state transitions, rather than only testing the first discovered predicate.
+   - Prevents false-positive `STATE_EVENT_UNREACHABLE` findings on valid multi-mechanism datapacks.
+4. General Semantic Repair Loop Integration:
+   - `QARepairEngine` in `qa/repair.py` catches unreachable logic or conflicting state machine findings and triggers general lifecycle reconciliation on the plan mechanisms.
+   - When no deterministic repair is applicable, `QARepairEngine` sets `regenerate=False` and cleanly halts to prevent endless regeneration loops.
+
+## D056 — Conversational Understanding Engine Integration & Web App Specification Handoff (Phase 2)
+To provide an interactive, conversational user experience that clarifies ambiguity, infers sensible defaults, explains technical rationale, and obtains explicit user confirmation before generation:
+1. Pipeline Specification Handoff:
+   - `MinecraftPipeline.run()` and `run_minecraft_pipeline()` extended with optional `understanding: Optional[Dict[str, Any]] = None` and `session: Optional[Any] = None`.
+   - When provided, Stage 1 uses the pre-confirmed understanding specification directly without invoking single-shot AI understanding, and hands off to Stage 2 (RAG) and Stage 3 (Planning).
+   - Direct string execution (`run(request)`) and existing CLI/web flows remain 100% backward-compatible.
+2. Stale Confirmation Invalidation & Requirement Amendments:
+   - In `ConversationSession`, any new user message or requirement amendment invalidates previous confirmations (`self.confirmed_specification = None`), resetting active proposal status to `"proposed"`.
+   - A confirmation cannot trigger generation unless a valid, complete proposal is pending without unresolved choices.
+3. Strict Confirmation Blockers:
+   - Confirmation is strictly blocked (returning HTTP 400) if: (a) no proposal is pending, (b) the proposal is incomplete, (c) open choices remain unresolved, or (d) the requested capability is unsupported.
+4. Pre-Flight Capability Validation:
+   - `SpecificationBridge.validate_capabilities()` inspects proposed behaviors against vanilla Minecraft datapack boundaries (rejecting custom 3D entity models, external HTTP calls, audio files, client shaders, custom GUIs) before planning or generation begins.
+5. Session Isolation & Secure Web API:
+   - `ConversationSessionManager` maintains isolated multi-turn sessions keyed by UUID with TTL expiration (default 1 hour).
+   - Endpoints added: `POST /api/conversation/session`, `GET /api/conversation/session/{id}`, `POST /api/conversation/message`, `POST /api/conversation/confirm`, `DELETE /api/conversation/session/{id}`.
+   - Concurrency throttling, rate limiting, and production path masking are preserved across all conversational endpoints.
+6. Local Web Interface Conversational Mode:
+   - Single-page web UI updated with mode selector tabs ("Conversational" vs "Direct").
+   - Conversational panel displays real-time chat thread, active proposal card, assumptions with technical rationale, clickable choice chips, and an explicit "Confirm & Build Datapack" button that drives the authoritative 8-stage progress tracker and renders the verified ZIP download.
+
+## D057 — Multi-Requirement Assumption Association & Complete-Turn Bounded History (Phase 2.1)
+To address assumption pinning and unbounded history growth in conversational state management:
+1. Multi-Requirement Assumption Association (`ai/specification.py`):
+   - Single requirement: preserves existing behavior, attaching assumptions to `reqs[0]["details"]`.
+   - Multi-requirement: prefers explicit index matching (`target_requirement_index`), uses semantic matching only when unambiguous (`len(matches) == 1`).
+   - Unmatched or ambiguous assumptions: preserved as global context in `understanding["assumptions"]` with `"scope": "global"` and strictly prevented from polluting individual requirement details.
+2. Complete-Turn Bounded Conversation History (`ai/conversation.py`):
+   - Trims complete conversational turns rather than arbitrary individual messages (`session.trim_history()`).
+   - Preserves Turn 0 (Initial User Goal) as the persistent anchor, followed by a sliding window of the most recent `max_turns - 1` turns.
+   - Keeps message and turn histories 100% consistent (`len(messages) == 2 * len(turns)`).
+   - Trimming never mutates or clears active proposals, confirmed specifications, open choices, or assumptions.
+   - `get_formatted_history()` bounds the dialogue text sent to the LLM, annotating compacted intermediate turns while displaying initial goals and active baselines.

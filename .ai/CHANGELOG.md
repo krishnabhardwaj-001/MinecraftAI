@@ -1,5 +1,112 @@
 # AI Change Log
 
+- Implemented Phase 2.1: Targeted Refinements for Conversational Engine & Specification Bridge:
+  1. Multi-Requirement Assumption Association (`ai/specification.py`, `ai/conversation.py`):
+     - Enhanced `AssumptionItem` with optional `target_requirement_index` and `target_subject` fields.
+     - Implemented multi-tier association in `SpecificationBridge.convert_to_understanding_result()`:
+       - Single requirement: preserves existing behavior, attaching assumptions to `reqs[0]["details"]`.
+       - Multi-requirement: prefers explicit index matching, uses semantic matching only when unambiguous (`len(matches) == 1`).
+       - Unmatched or ambiguous assumptions: preserved as global context in `understanding["assumptions"]` with `"scope": "global"` and strictly prevented from corrupting individual requirement details.
+  2. Complete-Turn Bounded Conversation History (`ai/conversation.py`):
+     - Added `max_turns` (default 10) and monotonic `total_turns` counter to `ConversationSession`.
+     - Implemented `trim_history()`: trims complete conversational turns rather than arbitrary messages, preserving Turn 0 (Initial User Goal) and recent active turns sliding window.
+     - Kept `session.messages` strictly synchronized with retained turns (`len(messages) == 2 * len(turns)`).
+     - Ensured `current_proposal` and `confirmed_specification` are never mutated or cleared by history pruning.
+     - Enhanced `get_formatted_history()` to output anchored initial goals and compacted baseline summaries when intermediate turns are trimmed.
+  3. Automated Verification (`test_phase2_1_refinements.py`):
+     - Added 8 dedicated in-memory unit tests covering single requirements, explicit matching, unambiguous semantic matching, ambiguous/unmatched global assumptions, complete-turn trimming, active proposal preservation, and post-trimming confirmation invalidation. All 8 tests pass cleanly. Full conversational test suite (41/41 tests) passes with zero regressions.
+
+- Implemented Phase 2: Conversational Engine & Local Web App Integration:
+  1. Conversational Understanding Engine Integration (`ai/conversation.py`, `ai/conversational_agent.py`, `ai/specification.py`):
+     - Added multi-turn session management (`ConversationSession`, `ConversationSessionManager`, `DEFAULT_CONVERSATION_MANAGER`) with in-memory TTL expiration.
+     - Implemented `ConversationalUnderstandingEngine` with whole-message comprehension, sensible default inference, technical rationale explanation, and structured proposals.
+     - Implemented `SpecificationBridge` with vanilla datapack capability validation (`validate_capabilities`) and translation into downstream-compatible understanding schemas (`convert_to_understanding_result`, `convert_session_to_specification`).
+     - Added strict proposal invalidation: any user message or requirement edit clears previous confirmations (`self.confirmed_specification = None`) and resets proposal status to `"proposed"`.
+     - Blocked confirmation if proposals are incomplete, if open choices exist, or if capabilities are unsupported.
+  2. Pipeline Stage 1 Specification Handoff (`pipeline/minecraft_pipeline.py`):
+     - Extended `MinecraftPipeline.run()` and `run_minecraft_pipeline()` with optional `understanding: Optional[Dict[str, Any]] = None` and `session: Optional[Any] = None`.
+     - Bypasses Stage 1 natural-language understanding when a pre-confirmed specification is supplied, routing directly to Stage 2 (RAG) and Stage 3 (Planning).
+     - Directly halts with status `"unsupported"` if capability validation rejects the request.
+     - Preserves 100% backward compatibility for single-shot direct execution and CLI callers.
+  3. Conversational Web REST Endpoints (`web/app.py`):
+     - Added `POST /api/conversation/session` (creates isolated session).
+     - Added `GET /api/conversation/session/{id}` (retrieves safe session state without internal paths or secrets).
+     - Added `POST /api/conversation/message` (processes natural-language turns, infers defaults, returns assumptions & open choices).
+     - Added `POST /api/conversation/confirm` (validates proposal, locks specification, acquires concurrency slot, and triggers pipeline generation).
+     - Added `DELETE /api/conversation/session/{id}` (resets/deletes active session).
+     - Integrated with rate limiter, timeout controls, and artifact retention cleanup.
+  4. Local Web Interface Conversational Mode (`web/templates/index.html`, `web/static/js/app.js`, `web/static/css/style.css`):
+     - Added mode switcher tabs ("Conversational" vs "Direct") with custom obsidian & emerald glassmorphism styling.
+     - Added real-time chat dialogue thread, active proposal card, trigger and target pills, inferred assumptions with technical rationale tooltips, and clickable choice chips to resolve ambiguity.
+     - Added "Confirm & Build Datapack" button that invokes `/api/conversation/confirm` and drives the authoritative 8-stage visual pipeline tracker, displaying the final Success Card with the verified ZIP download.
+  5. Automated Verification (`test_conversational_web_integration.py`):
+     - Created dedicated 14-test safe suite using mocks and in-memory test doubles without invoking real generation or modifying `generated/`.
+     - Tests session isolation, TTL cleanup, proposal invalidation on edits, open choice blocking, capability validation, and mock pipeline dispatch. All 14 tests pass cleanly in 6.85s.
+
+
+- Implemented General Planning, Lifecycle Reconciliation, and Semantic QA Simulation Architecture:
+  1. Lifecycle Reconciliation (`ai/lifecycle_reconciler.py`):
+     - Added `DEFAULT_LIFECYCLE_RECONCILER` to detect complementary predicates and explicit latch reset actions.
+     - Unifies related trigger and reset state machines into a single coherent state machine with clean `on_enter` execution.
+     - Disambiguates objective names across independent lifecycles to prevent cross-lifecycle state flapping.
+  2. Multi-Predicate Scoreboard Semantic Simulation (`qa/scoreboard_semantics.py`):
+     - Upgraded `ScoreboardSemanticSimulator` to track all environmental predicates in `tick.mcfunction` across multi-tick state transitions rather than only the first discovered predicate.
+     - Eliminates false-positive `STATE_EVENT_UNREACHABLE` findings on compound multi-predicate datapacks.
+  3. Deterministic Generation Boundary Integration (`generator/datapack_generator.py`):
+     - Integrated lifecycle reconciliation into `DatapackGenerator.generate()` before emitting state machine functions.
+  4. General Semantic QA Repair Loop (`qa/repair.py`):
+     - Added automated lifecycle reconciliation repair to `QARepairEngine` for `UNREACHABLE_LOGIC` and `STATE_MACHINE` findings.
+     - Added safe termination (`regenerate=False`) when no deterministic repair is applicable, preventing infinite repair loops.
+  5. Automated Verification (`test_general_planning_architecture.py`):
+     - Added 10 tests verifying lifecycle reconciliation, state isolation, multi-predicate simulation, conflicting mutation prevention, unreachable logic diagnosis, compound unseen lifecycles, rain-reward regression, conservative predicate relations, unrelated mechanism integrity, and safe termination. All 10 tests pass cleanly.
+
+- Implemented Local Website with Ollama Cloud Sign-In Authentication:
+  1. Zero API Key Local Cloud Inference (`ai/provider.py`):
+     - Support Ollama Cloud inference (`gpt-oss:120b-cloud`) via local Ollama daemon (`http://127.0.0.1:11434`) using native `ollama signin` authentication.
+     - When running locally, zero API key is required in `.env`, configuration, or web UI.
+     - Zero large model weights are stored locally; only a 384-byte cloud manifest is registered.
+     - Strictly prevents silent fallback to local models on error.
+  2. Diagnostic Guidance for Sign-In, Quota, and Missing Models (`run_pipeline.py`, `web/app.py`):
+     - Enhanced `is_ollama_unreachable_error` and `get_ollama_diagnostic_message` to classify specific failure conditions:
+       * 401/403/unauthorized -> instructs running `ollama signin` without needing an API key.
+       * 404/not found -> instructs running `ollama pull gpt-oss:120b-cloud` (downloads 384-byte manifest).
+       * 429/quota -> advises checking Ollama Cloud account allowance at https://ollama.com.
+       * offline daemon -> instructs starting `ollama serve` and signing in.
+  3. Beginner-Friendly Windows Setup and Launch Scripts (`setup.bat`, `start.bat`):
+     - `setup.bat`: checks Python 3.10+, provisions `.venv`, installs dependencies (`pip install -e .`), checks Ollama, pulls cloud model manifest, and creates local `.env` with no API key requested.
+     - `start.bat`: verifies prerequisites, checks port 8000 availability to avoid duplicate servers, starts `run_web.py --open-browser`, and automatically launches the default web browser when the server is ready.
+     - Updated `launch_web.bat` to forward to `start.bat`.
+  4. Localhost Security & Absolute Path Concealment:
+     - Web server binds strictly to `127.0.0.1:8000` by default.
+     - `web/app.py` conceals absolute host filesystem paths from browser responses.
+  5. Automated Verification (`test_ollama_cloud_local_auth.py`):
+     - Added dedicated test suite covering all 14 requirements: missing Ollama, unauthenticated users, cloud access, 404 missing model, 429 quota, fallback prevention, zero API key config, startup & browser open, port conflict check, localhost binding, artifact security, datapack structure, dual versions, and security validation. All 14 tests pass cleanly.
+
+
+- Implemented Zero-Setup Public Web Deployment, Job Queue & Security Hardening:
+  1. Zero-Setup Client Experience:
+     - End-to-end client flow is 100% zero-setup: open website -> enter request -> click Generate -> download verified ZIP.
+     - Clients do not install Python, Ollama, local models, or desktop extensions, and never configure API keys or provider credentials.
+     - Server pipeline executes entirely server-side with provider credentials (`LLM_PROVIDER`, `OLLAMA_HOST`, `OLLAMA_MODEL`, `OLLAMA_API_KEY`).
+  2. Production Server Path Concealment & Error Masking:
+     - In production mode (`ENVIRONMENT=production`), server filesystem paths (`datapack_path`, `zip_path`) are suppressed (`None`).
+     - In production mode, provider unreachable/failure exceptions return generic HTTP 503 `"Generation is temporarily unavailable. Please try again in a moment."` while logging actual diagnostics securely on the server.
+     - Removed server path cards from the web frontend inspector.
+  3. Public Web API & Asynchronous Job Architecture:
+     - Made pipeline execution non-blocking via `await asyncio.to_thread(run_minecraft_pipeline, ...)` guarded by timeout and semaphore concurrency limits.
+     - Added asynchronous job endpoints: `POST /api/jobs`, `GET /api/jobs/{job_id}`, and `GET /api/generate/{job_id}` alongside synchronous `POST /api/generate`.
+  4. Automatic Artifact Retention & Lifecycle Management:
+     - Added configurable artifact retention (`MC_ARTIFACT_RETENTION_SECONDS=3600`, default 1 hour).
+     - Automated `cleanup_expired_artifacts()` runs at startup and periodically, purging expired generation directories and ZIP archives.
+     - Migrated FastAPI startup lifecycle from deprecated `@app.on_event("startup")` to modern `lifespan` context manager, eliminating Starlette deprecation warnings under `-W error`.
+  5. Deployment Documentation & Architecture Guide:
+     - Authored `DEPLOYMENT.md` detailing hardware sizing (RAM, CPU, concurrent generations, throughput), Docker Compose, Caddy/Nginx reverse proxy with HTTPS, rate limiting, and artifact management.
+     - Updated `README.md` highlighting zero-setup client flow, job API endpoints, and production deployment instructions.
+  6. Automated Verification:
+     - Added dedicated deployment test suite `test_web_deployment.py` (8 tests) verifying zero-setup flow, ZIP root format, production path concealment, error masking, async job polling, and artifact cleanup.
+     - Full test suites pass with 0 failures, 0 errors, 0 warnings under `-W error`.
+     - Live secret scan passed with 0 live secrets found.
+
 - Implemented Ollama Cloud Provider Configuration & Integration Fixes:
   1. `ai/provider.py`:
      - Load `.env` before any SDK client is imported or instantiated.

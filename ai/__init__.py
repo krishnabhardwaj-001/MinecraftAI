@@ -37,6 +37,24 @@ from ai.version_registry import (
     get_version_registry,
     get_default_version,
 )
+from ai.conversation import (
+    ConversationMessage,
+    AssumptionItem,
+    ProposedBehavior,
+    ConversationTurn,
+    ConversationSession,
+    ConversationSessionManager,
+    DEFAULT_CONVERSATION_MANAGER,
+)
+from ai.conversational_agent import (
+    ConversationalUnderstandingEngine,
+    AgentTurnOutput,
+)
+from ai.specification import (
+    SpecificationBridge,
+    ValidationReport,
+    ConfirmedGameplaySpecification,
+)
 
 __all__ = [
     "PropertyModification",
@@ -66,4 +84,16 @@ __all__ = [
     "VersionContext",
     "get_version_registry",
     "get_default_version",
+    "ConversationMessage",
+    "AssumptionItem",
+    "ProposedBehavior",
+    "ConversationTurn",
+    "ConversationSession",
+    "ConversationSessionManager",
+    "DEFAULT_CONVERSATION_MANAGER",
+    "ConversationalUnderstandingEngine",
+    "AgentTurnOutput",
+    "SpecificationBridge",
+    "ValidationReport",
+    "ConfirmedGameplaySpecification",
 ]

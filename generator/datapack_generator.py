@@ -1,3 +1,4 @@
+import hashlib
 import json
 import re
 import shutil
@@ -5,6 +6,7 @@ import zipfile
 from pathlib import Path
 from typing import Any, Dict, List, Optional, Union
 
+from ai.lifecycle_reconciler import DEFAULT_LIFECYCLE_RECONCILER
 from ai.version_registry import VersionContext
 from generator.loot_table_generator import LootTableGenerator
 from generator.mechanisms import (
@@ -34,13 +36,28 @@ from generator.models import (
 )
 
 
-def slugify(text: str) -> str:
+def slugify(text: str, max_length: int = 60) -> str:
     """
     Convert text to a clean directory/file slug.
+
+    If the resulting slug exceeds max_length, it is deterministically truncated
+    to a readable prefix followed by an 8-character hex SHA-256 hash suffix.
     """
     cleaned = re.sub(r"[^a-zA-Z0-9]+", "_", text.strip().lower())
     cleaned = cleaned.strip("_")
-    return cleaned or "datapack"
+    if not cleaned:
+        return "datapack"
+
+    if len(cleaned) <= max_length:
+        return cleaned
+
+    # Deterministic truncation: readable prefix up to (max_length - 9) + '_' + 8-char hex sha256
+    hash_suffix = hashlib.sha256(text.strip().lower().encode("utf-8")).hexdigest()[:8]
+    prefix_len = max(1, max_length - len(hash_suffix) - 1)
+    prefix = cleaned[:prefix_len].rstrip("_")
+    if not prefix:
+        prefix = cleaned[:prefix_len]
+    return f"{prefix}_{hash_suffix}"
 
 
 class DatapackGenerator:
@@ -604,6 +621,29 @@ class DatapackGenerator:
                 "No valid modifications or mechanisms could be determined from the plan and context."
             )
 
+        # General Mechanism Consistency & Lifecycle Reconciliation
+        if len(sm_defs) > 1:
+            pred_info_map = {
+                getattr(p, "predicate_path", getattr(p, "path", "")): {
+                    "condition": getattr(p, "condition_type", ""),
+                    **(getattr(p, "condition_params", None) or {})
+                }
+                for p in pred_defs
+            }
+            raw_sms = [sm.model_dump() if hasattr(sm, "model_dump") else dict(sm) for sm in sm_defs]
+            reconciled_raw = DEFAULT_LIFECYCLE_RECONCILER.reconcile(raw_sms, pred_info_map)
+            sm_defs = [
+                MechanismSpecification(**m) if not isinstance(m, MechanismSpecification) else m
+                for m in reconciled_raw
+                if str(m.get("type", "")).strip().lower() in ("state_machine", "event_latch", "event_trigger")
+            ]
+            for m in reconciled_raw:
+                if str(m.get("type", "")).strip().lower() == "scoreboard_objective":
+                    obj_name = m.get("objective") or m.get("path")
+                    if obj_name and not any(s.objective == obj_name for s in sb_defs):
+                        sb_defs.append(ScoreboardObjectiveDefinition(objective=obj_name, criteria=m.get("criteria", "dummy")))
+
+
         # Resolve datapack name
         if not datapack_name:
             if understanding and understanding.get("understood_request"):
@@ -644,6 +684,8 @@ class DatapackGenerator:
                 datapack_name = f"{slugify(int_name)}_interaction_datapack"
             else:
                 datapack_name = "minecraft_datapack"
+
+            datapack_name = slugify(datapack_name)
 
 
         # Resolve description
@@ -823,10 +865,11 @@ class DatapackGenerator:
                             # Identical function content at same path: keep one
                             continue
 
-                        # Check if mergeable function (lifecycle functions or property modification functions)
+                        # Check if mergeable function (lifecycle functions, diagnostic functions, or property modification functions)
                         is_mergeable = (
                             res.relative_path.endswith("load.mcfunction")
                             or res.relative_path.endswith("tick.mcfunction")
+                            or res.relative_path.endswith("debug.mcfunction")
                             or "/function/modify_" in res.relative_path
                         )
                         if not is_mergeable:
@@ -889,18 +932,26 @@ class DatapackGenerator:
                                     filtered_new_lines.append(nl)
                                     continue
 
-                            # Diagnostic commands deduplication in lifecycle functions
+                            # Diagnostic commands deduplication in lifecycle and diagnostic functions
                             if nl_strip in existing_lines:
                                 if nl_strip.startswith("scoreboard objectives setdisplay ") or \
                                    nl_strip.startswith("scoreboard players set #load_ran mcai_debug ") or \
                                    nl_strip.startswith("scoreboard players set #tick_count mcai_debug ") or \
-                                   nl_strip.startswith("say [MinecraftAI] [LOAD OK]"):
+                                   nl_strip.startswith("say [MinecraftAI] [LOAD OK]") or \
+                                   res.relative_path.endswith("debug.mcfunction"):
                                     continue
 
                             filtered_new_lines.append(nl)
 
                         if filtered_new_lines:
-                            merged_content = existing_text.rstrip("\n") + "\n" + "\n".join(filtered_new_lines) + "\n"
+                            if res.relative_path.endswith("debug.mcfunction"):
+                                existing_lines_raw = existing_text.rstrip("\n").splitlines()
+                                if existing_lines_raw and existing_lines_raw[-1].strip() == "say ========================================":
+                                    merged_content = "\n".join(existing_lines_raw[:-1] + filtered_new_lines + [existing_lines_raw[-1]]) + "\n"
+                                else:
+                                    merged_content = existing_text.rstrip("\n") + "\n" + "\n".join(filtered_new_lines) + "\n"
+                            else:
+                                merged_content = existing_text.rstrip("\n") + "\n" + "\n".join(filtered_new_lines) + "\n"
                         else:
                             merged_content = existing_text
                         with open(target_file, "w", encoding="utf-8", newline="\n") as f:

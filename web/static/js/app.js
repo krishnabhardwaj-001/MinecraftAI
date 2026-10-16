@@ -127,13 +127,300 @@ document.addEventListener("DOMContentLoaded", () => {
     errorCard.classList.add("hidden");
   }
 
+  // Mode & Conversational Elements
+  const tabConversational = document.getElementById("tabConversational");
+  const tabDirect = document.getElementById("tabDirect");
+  const submitBtnText = document.getElementById("submitBtnText");
+  const conversationPanel = document.getElementById("conversationPanel");
+  const chatThread = document.getElementById("chatThread");
+  const proposalCard = document.getElementById("proposalCard");
+  const proposalStatusBadge = document.getElementById("proposalStatusBadge");
+  const proposalSummaryText = document.getElementById("proposalSummaryText");
+  const proposalTriggerText = document.getElementById("proposalTriggerText");
+  const proposalTargetText = document.getElementById("proposalTargetText");
+  const proposalAssumptionsSection = document.getElementById("proposalAssumptionsSection");
+  const proposalAssumptionsList = document.getElementById("proposalAssumptionsList");
+  const proposalChoicesSection = document.getElementById("proposalChoicesSection");
+  const proposalChoiceChips = document.getElementById("proposalChoiceChips");
+  const proposalUnsupportedBanner = document.getElementById("proposalUnsupportedBanner");
+  const proposalUnsupportedText = document.getElementById("proposalUnsupportedText");
+  const confirmProposalBtn = document.getElementById("confirmProposalBtn");
+  const resetSessionBtn = document.getElementById("resetSessionBtn");
+
+  let activeMode = "conversational";
+  let currentSessionId = null;
+
+  // Mode Switcher Handling
+  if (tabConversational && tabDirect) {
+    tabConversational.addEventListener("click", () => {
+      activeMode = "conversational";
+      tabConversational.classList.add("active");
+      tabDirect.classList.remove("active");
+      if (submitBtnText) submitBtnText.textContent = "Chat & Plan";
+      requestInput.placeholder = "Describe what you want, ask questions, or refine...";
+      if (currentSessionId && chatThread && chatThread.children.length > 0) {
+        conversationPanel.classList.remove("hidden");
+      }
+    });
+
+    tabDirect.addEventListener("click", () => {
+      activeMode = "direct";
+      tabDirect.classList.add("active");
+      tabConversational.classList.remove("active");
+      if (submitBtnText) submitBtnText.textContent = "Generate Datapack";
+      requestInput.placeholder = "e.g. When it starts raining, give every player one diamond.";
+      conversationPanel.classList.add("hidden");
+    });
+  }
+
+  // Session Management
+  async function ensureSession() {
+    if (currentSessionId) return currentSessionId;
+    try {
+      const selectedVer = versionSelect ? versionSelect.value : "1.21.11";
+      const res = await fetch("/api/conversation/session", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ minecraft_version: selectedVer })
+      });
+      if (res.ok) {
+        const d = await res.json();
+        currentSessionId = d.session_id;
+        return currentSessionId;
+      }
+    } catch (err) {
+      console.warn("Failed to create conversation session:", err);
+    }
+    return null;
+  }
+
+  if (resetSessionBtn) {
+    resetSessionBtn.addEventListener("click", async () => {
+      if (currentSessionId) {
+        try {
+          await fetch(`/api/conversation/session/${currentSessionId}`, { method: "DELETE" });
+        } catch (_) {}
+      }
+      currentSessionId = null;
+      if (chatThread) {
+        chatThread.innerHTML = "";
+        chatThread.classList.add("hidden");
+      }
+      if (proposalCard) proposalCard.classList.add("hidden");
+      if (conversationPanel) conversationPanel.classList.add("hidden");
+      requestInput.value = "";
+      requestInput.focus();
+    });
+  }
+
+  // Append Chat Message to UI
+  function appendChatMessage(role, text) {
+    if (!chatThread || !conversationPanel) return;
+    conversationPanel.classList.remove("hidden");
+    chatThread.classList.remove("hidden");
+
+    const bubble = document.createElement("div");
+    bubble.className = `chat-bubble ${role}`;
+
+    const author = document.createElement("div");
+    author.className = "chat-bubble-author";
+    author.textContent = role === "user" ? "You" : "MinecraftAI Assistant";
+
+    const body = document.createElement("div");
+    body.textContent = text;
+
+    bubble.appendChild(author);
+    bubble.appendChild(body);
+    chatThread.appendChild(bubble);
+    chatThread.scrollTop = chatThread.scrollHeight;
+  }
+
+  // Render Proposal Card
+  function renderProposal(proposal, canGenerate) {
+    if (!proposalCard) return;
+
+    if (proposalSummaryText) proposalSummaryText.textContent = proposal.summary;
+    if (proposalTriggerText) proposalTriggerText.textContent = proposal.trigger_condition || "Any gameplay event";
+    if (proposalTargetText) proposalTargetText.textContent = proposal.target_affected || "Players / world";
+
+    // Assumptions
+    if (proposalAssumptionsSection && proposalAssumptionsList) {
+      proposalAssumptionsList.innerHTML = "";
+      const assumptions = proposal.assumptions || [];
+      if (assumptions.length > 0) {
+        assumptions.forEach((a) => {
+          const item = document.createElement("div");
+          item.className = "assumption-item";
+
+          const desc = document.createElement("div");
+          desc.className = "assumption-desc";
+          desc.textContent = a.description || a.default_applied;
+
+          const rat = document.createElement("div");
+          rat.className = "assumption-rationale";
+          rat.textContent = `Rationale: ${a.rationale}`;
+
+          item.appendChild(desc);
+          item.appendChild(rat);
+          proposalAssumptionsList.appendChild(item);
+        });
+        proposalAssumptionsSection.classList.remove("hidden");
+      } else {
+        proposalAssumptionsSection.classList.add("hidden");
+      }
+    }
+
+    // Open Choices
+    if (proposalChoicesSection && proposalChoiceChips) {
+      proposalChoiceChips.innerHTML = "";
+      const choices = proposal.open_choices || [];
+      if (choices.length > 0) {
+        choices.forEach((choice) => {
+          const btn = document.createElement("button");
+          btn.type = "button";
+          btn.className = "choice-chip-btn";
+          btn.textContent = choice;
+          btn.addEventListener("click", async () => {
+            await sendChatMessage(choice);
+          });
+          proposalChoiceChips.appendChild(btn);
+        });
+        proposalChoicesSection.classList.remove("hidden");
+      } else {
+        proposalChoicesSection.classList.add("hidden");
+      }
+    }
+
+    // Unsupported Banner
+    if (proposalUnsupportedBanner && proposalUnsupportedText) {
+      if (proposal.status === "unsupported") {
+        proposalUnsupportedText.textContent = proposal.unsupported_reason || "Requested feature is outside Minecraft datapack capabilities.";
+        proposalUnsupportedBanner.classList.remove("hidden");
+      } else {
+        proposalUnsupportedBanner.classList.add("hidden");
+      }
+    }
+
+    // Status Badge
+    if (proposalStatusBadge) {
+      proposalStatusBadge.className = "proposal-status-badge";
+      if (proposal.status === "confirmed") {
+        proposalStatusBadge.classList.add("proposal-status-confirmed");
+        proposalStatusBadge.textContent = "Confirmed & Ready";
+      } else if (proposal.status === "unsupported") {
+        proposalStatusBadge.classList.add("proposal-status-unsupported");
+        proposalStatusBadge.textContent = "Unsupported Capability";
+      } else if (proposal.open_choices && proposal.open_choices.length > 0) {
+        proposalStatusBadge.classList.add("proposal-status-clarify");
+        proposalStatusBadge.textContent = "Needs Clarification";
+      } else {
+        proposalStatusBadge.classList.add("proposal-status-proposed");
+        proposalStatusBadge.textContent = "Proposal Ready";
+      }
+    }
+
+    // Confirm Button
+    if (confirmProposalBtn) {
+      confirmProposalBtn.disabled = !canGenerate;
+    }
+
+    proposalCard.classList.remove("hidden");
+    conversationPanel.classList.remove("hidden");
+  }
+
+  // Send Conversational Message
+  async function sendChatMessage(messageText) {
+    hideAllCards();
+    submitBtn.disabled = true;
+    submitBtn.classList.add("loading");
+    resultMeta.textContent = "Planning behavior...";
+
+    await ensureSession();
+    appendChatMessage("user", messageText);
+
+    try {
+      const res = await fetch("/api/conversation/message", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          session_id: currentSessionId,
+          message: messageText
+        })
+      });
+
+      const data = await res.json();
+      submitBtn.disabled = false;
+      submitBtn.classList.remove("loading");
+
+      if (!res.ok) {
+        showErrorState(data.detail || "Error communicating with conversational agent.");
+        return;
+      }
+
+      appendChatMessage("assistant", data.proposal.summary);
+      renderProposal(data.proposal, data.can_generate);
+      resultMeta.textContent = data.can_generate ? "Proposal ready for review & confirmation" : "Clarification required";
+    } catch (err) {
+      submitBtn.disabled = false;
+      submitBtn.classList.remove("loading");
+      showErrorState(`Conversational network error: ${err.message}`);
+    }
+  }
+
+  // Confirm Proposal and Trigger Generation
+  if (confirmProposalBtn) {
+    confirmProposalBtn.addEventListener("click", async () => {
+      if (!currentSessionId) return;
+
+      hideAllCards();
+      loadingState.classList.remove("hidden");
+      confirmProposalBtn.disabled = true;
+      submitBtn.disabled = true;
+      resultMeta.textContent = "Building confirmed datapack...";
+
+      startSimulatedProgress();
+
+      try {
+        const res = await fetch("/api/conversation/confirm", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ session_id: currentSessionId })
+        });
+
+        const data = await res.json();
+        clearInterval(stageTimer);
+        hideAllCards();
+        submitBtn.disabled = false;
+        confirmProposalBtn.disabled = false;
+
+        if (!res.ok) {
+          showErrorState(data.detail || "Server error occurred during datapack compilation.");
+          return;
+        }
+
+        handlePipelineSuccess(data);
+      } catch (err) {
+        clearInterval(stageTimer);
+        hideAllCards();
+        submitBtn.disabled = false;
+        confirmProposalBtn.disabled = false;
+        showErrorState(`Generation error: ${err.message}`);
+      }
+    });
+  }
+
   // Main Submit Handler
   form.addEventListener("submit", async (e) => {
     e.preventDefault();
     const query = requestInput.value.trim();
     if (!query) return;
 
-    await executePipeline(query);
+    if (activeMode === "conversational") {
+      requestInput.value = "";
+      await sendChatMessage(query);
+    } else {
+      await executePipeline(query);
+    }
   });
 
   // Clarification Refine Handler
@@ -146,7 +433,7 @@ document.addEventListener("DOMContentLoaded", () => {
     await executePipeline(original, additional, original);
   });
 
-  // Pipeline Execution Function
+  // Pipeline Execution Function (Direct One-Shot)
   async function executePipeline(requestText, clarificationAnswer = null, previousRequest = null) {
     hideAllCards();
     loadingState.classList.remove("hidden");
@@ -328,9 +615,9 @@ document.addEventListener("DOMContentLoaded", () => {
       fileTreeList.appendChild(li);
     });
 
-    // Paths (Safe display via textContent)
-    folderPathCode.textContent = data.datapack_path || "N/A";
-    zipPathCode.textContent = data.zip_path || "N/A";
+    // Paths (Safe display via textContent if present)
+    if (folderPathCode) folderPathCode.textContent = data.datapack_path || "N/A";
+    if (zipPathCode) zipPathCode.textContent = data.zip_path || "N/A";
 
     successCard.classList.remove("hidden");
     resultMeta.textContent = `Datapack ready for Minecraft ${currentVer}`;

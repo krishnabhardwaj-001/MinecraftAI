@@ -1,0 +1,14 @@
+{
+  "pack": {
+    "pack_format": 94,
+    "description": "Give every online player one diamond exactly when rain starts, using a global state‑machine that detects the transition to raining.",
+    "min_format": [
+      94,
+      0
+    ],
+    "max_format": [
+      94,
+      1
+    ]
+  }
+}

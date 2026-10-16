@@ -98,8 +98,14 @@ class SecurityConfig(BaseModel):
         description="Permitted CORS origins. Wildcard '*' with credentials is strictly disallowed."
     )
     is_development_mode: bool = Field(
-        default_factory=lambda: os.getenv("MINECRAFTAI_ENV", "development").lower() == "development",
+        default_factory=lambda: os.getenv("ENVIRONMENT", os.getenv("MINECRAFTAI_ENV", "development")).lower() in ("development", "dev"),
         description="Flag indicating development environment"
+    )
+
+    # Artifact Retention / Storage
+    artifact_retention_seconds: int = Field(
+        default=3600,  # 1 hour
+        description="Duration in seconds before temporary generated datapack archives and folders are eligible for cleanup"
     )
 
     # Observability & Logging
@@ -116,32 +122,67 @@ class SecurityConfig(BaseModel):
         description="Maximum characters of prompt text recorded in server logs"
     )
 
+    @property
+    def is_production_mode(self) -> bool:
+        return not self.is_development_mode
+
 
 def load_security_config() -> SecurityConfig:
     """
     Constructs SecurityConfig with environment variable overrides where configured.
+    Supports both MC_* and MINECRAFTAI_* prefix conventions.
     """
     config = SecurityConfig()
 
     # Environment variable overrides
-    if env_prompt_len := os.getenv("MINECRAFTAI_MAX_PROMPT_LENGTH"):
+    if env_prompt_len := os.getenv("MC_MAX_PROMPT_LENGTH") or os.getenv("MINECRAFTAI_MAX_PROMPT_LENGTH"):
         try:
             config.max_prompt_length = int(env_prompt_len)
         except ValueError:
             pass
 
-    if env_rate_limit := os.getenv("MINECRAFTAI_RATE_LIMIT_PER_MINUTE"):
+    if env_rate_limit := os.getenv("MC_RATE_LIMIT_PER_MINUTE") or os.getenv("MINECRAFTAI_RATE_LIMIT_PER_MINUTE"):
         try:
             config.rate_limit_requests_per_minute = int(env_rate_limit)
         except ValueError:
             pass
 
-    if env_cors := os.getenv("MINECRAFTAI_CORS_ORIGINS"):
-        origins = [o.strip() for o in env_cors.split(",") if o.strip()]
+    if env_burst := os.getenv("MC_BURST_ALLOWANCE") or os.getenv("MINECRAFTAI_BURST_ALLOWANCE"):
+        try:
+            config.rate_limit_burst = int(env_burst)
+        except ValueError:
+            pass
+
+    if env_concurrent := os.getenv("MC_MAX_CONCURRENT_GENERATIONS") or os.getenv("MINECRAFTAI_MAX_CONCURRENT_GENERATIONS"):
+        try:
+            config.max_concurrent_generations = int(env_concurrent)
+        except ValueError:
+            pass
+
+    if env_timeout := os.getenv("MC_GENERATION_TIMEOUT_SECONDS") or os.getenv("MINECRAFTAI_GENERATION_TIMEOUT_SECONDS"):
+        try:
+            config.generation_timeout_seconds = int(float(env_timeout))
+        except ValueError:
+            pass
+
+    if env_retention := os.getenv("MC_ARTIFACT_RETENTION_SECONDS") or os.getenv("MINECRAFTAI_ARTIFACT_RETENTION_SECONDS"):
+        try:
+            config.artifact_retention_seconds = int(env_retention)
+        except ValueError:
+            pass
+
+    # CORS configuration
+    cors_candidates = (
+        os.getenv("PUBLIC_ORIGIN")
+        or os.getenv("MC_ALLOWED_CORS_ORIGINS")
+        or os.getenv("MINECRAFTAI_CORS_ORIGINS")
+    )
+    if cors_candidates:
+        origins = [o.strip() for o in cors_candidates.split(",") if o.strip()]
         if origins:
             config.allowed_cors_origins = origins
 
-    if env_rate_enabled := os.getenv("MINECRAFTAI_RATE_LIMIT_ENABLED"):
+    if env_rate_enabled := os.getenv("MC_RATE_LIMIT_ENABLED") or os.getenv("MINECRAFTAI_RATE_LIMIT_ENABLED"):
         config.rate_limit_enabled = env_rate_enabled.lower() in ("true", "1", "yes")
 
     return config

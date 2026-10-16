@@ -20,6 +20,7 @@ class AIProvider:
 
     DEFAULT_CLOUD_HOST = "https://ollama.com"
     DEFAULT_CLOUD_MODEL = "gpt-oss:120b-cloud"
+    DEFAULT_LOCAL_HOST = "http://127.0.0.1:11434"
 
     def __init__(self, provider: Optional[str] = None):
         # Respect LLM_PROVIDER from environment if not explicitly passed
@@ -50,25 +51,37 @@ class AIProvider:
             )
             self.api_key = os.getenv("OLLAMA_API_KEY")
 
-            # Determine whether Cloud configuration is targeted
-            self.is_cloud = self._is_cloud_target(self.host, self.model)
+            # Determine whether Cloud model or direct remote cloud endpoint is targeted
+            self.is_cloud_model = self._is_cloud_model(self.model)
+            is_direct_remote = self._is_direct_cloud_endpoint(self.host)
 
-            if self.is_cloud:
-                target_host = self.host or self.DEFAULT_CLOUD_HOST
+            if is_direct_remote:
+                # Direct connection to remote https:// endpoint (bypassing local Ollama daemon)
+                target_host = self.host
                 if not self.api_key:
                     raise RuntimeError(
                         f"OLLAMA_API_KEY is required for Ollama Cloud (endpoint: {target_host}). "
                         "Please set OLLAMA_API_KEY in your environment or .env file."
                     )
-                # Send the API key using Ollama client's supported authentication header
                 headers = {"Authorization": f"Bearer {self.api_key}"}
                 self.client = OllamaClient(host=target_host, headers=headers)
                 self.host = target_host
+                self.is_cloud = True
+            elif self.api_key and not self.host:
+                # API key provided without host -> default to direct cloud host https://ollama.com
+                target_host = self.DEFAULT_CLOUD_HOST
+                headers = {"Authorization": f"Bearer {self.api_key}"}
+                self.client = OllamaClient(host=target_host, headers=headers)
+                self.host = target_host
+                self.is_cloud = True
             else:
-                # Explicit local Ollama development configuration
-                target_host = self.host
+                # Local Ollama daemon mode (supports both cloud models via 'ollama signin' and local models)
+                # No API key required! Local Ollama daemon handles authentication with Ollama Cloud.
+                target_host = self.host if self.host else self.DEFAULT_LOCAL_HOST
                 headers = {"Authorization": f"Bearer {self.api_key}"} if self.api_key else None
                 self.client = OllamaClient(host=target_host, headers=headers)
+                self.host = target_host
+                self.is_cloud = self.is_cloud_model or self._is_cloud_target(self.host, self.model)
 
         else:
             raise ValueError(
@@ -76,26 +89,33 @@ class AIProvider:
             )
 
     @classmethod
+    def _is_cloud_model(cls, model: Optional[str]) -> bool:
+        """Determines whether the specified model is an Ollama Cloud hosted model."""
+        if not model:
+            return False
+        m = model.strip().lower()
+        return m.endswith("-cloud") or m == cls.DEFAULT_CLOUD_MODEL
+
+    @classmethod
+    def _is_direct_cloud_endpoint(cls, host: Optional[str]) -> bool:
+        """Determines whether the host is an explicit remote HTTPS Ollama Cloud endpoint."""
+        if not host:
+            return False
+        h = host.strip().lower()
+        return h.startswith("https://") or "ollama.com" in h
+
+    @classmethod
     def _is_cloud_target(cls, host: Optional[str], model: Optional[str]) -> bool:
         """
-        Determines whether Ollama Cloud is targeted.
-        Cloud is targeted if:
-        1. An explicit cloud host is configured (e.g. 'https://ollama.com' or https:// URL), OR
-        2. A cloud model is configured (ending in '-cloud') without an explicit local host, OR
-        3. No host is configured (in which case production defaults to Ollama Cloud).
+        Determines whether Ollama Cloud is targeted (either direct or via local sign-in proxy).
         """
-        if host:
-            h = host.strip().lower()
-            if h.startswith("https://") or "ollama.com" in h:
-                return True
-            # Explicit local host specified (e.g. http://localhost:11434, http://127.0.0.1:11434)
-            return False
-
-        if model and model.strip().lower().endswith("-cloud"):
+        if cls._is_direct_cloud_endpoint(host):
             return True
 
-        # Default production target is Cloud
-        return True
+        if cls._is_cloud_model(model):
+            return True
+
+        return False
 
     def generate_structured(
         self,

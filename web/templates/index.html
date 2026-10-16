@@ -48,9 +48,25 @@
               <path d="M12 20h9"></path>
               <path d="M16.5 3.5a2.121 2.121 0 0 1 3 3L7 19l-4 1 1-4L16.5 3.5z"></path>
             </svg>
-            Describe Your Datapack
+            Describe what you want your Minecraft datapack to do.
           </h2>
-          <span class="panel-hint" id="panelHint">Natural language &bull; Generic &bull; Java 1.21.11 &amp; 1.21.1</span>
+          <span class="panel-hint" id="panelHint">Natural language &bull; Java 1.21.11 &amp; 1.21.1 &bull; Instant download</span>
+        </div>
+
+        <!-- Mode Selector Tabs -->
+        <div class="mode-tabs" role="tablist">
+          <button type="button" class="mode-tab active" id="tabConversational" role="tab" aria-selected="true">
+            <svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="width:16px;height:16px;">
+              <path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"></path>
+            </svg>
+            <span>Conversational (Clarify &amp; Review)</span>
+          </button>
+          <button type="button" class="mode-tab" id="tabDirect" role="tab" aria-selected="false">
+            <svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="width:16px;height:16px;">
+              <polygon points="13 2 3 14 12 14 11 22 21 10 12 10 13 2"></polygon>
+            </svg>
+            <span>Direct (One-Shot)</span>
+          </button>
         </div>
 
         <form id="generatorForm" class="generator-form">
@@ -60,7 +76,7 @@
               name="request"
               rows="4"
               class="request-textarea"
-              placeholder="e.g. Make every creeper drop diamonds, or make spiders drop iron ingots..."
+              placeholder="e.g. When it starts raining, give every player one diamond."
               required
             ></textarea>
           </div>
@@ -75,7 +91,7 @@
               </select>
             </div>
             <button type="submit" id="submitBtn" class="primary-btn">
-              <span class="btn-text">Generate Datapack</span>
+              <span class="btn-text" id="submitBtnText">Chat &amp; Plan</span>
               <svg class="btn-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
                 <path d="M5 12h14"></path>
                 <path d="m12 5 7 7-7 7"></path>
@@ -84,6 +100,71 @@
             </button>
           </div>
         </form>
+
+        <!-- Conversational Dialogue & Proposal Container -->
+        <div class="conversation-panel hidden" id="conversationPanel">
+          <!-- Chat Thread -->
+          <div class="chat-thread hidden" id="chatThread"></div>
+
+          <!-- Proposal Card -->
+          <div class="proposal-card hidden" id="proposalCard">
+            <div class="proposal-header">
+              <span class="proposal-title">
+                <svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="width:18px;height:18px;">
+                  <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"></path>
+                  <polyline points="14 2 14 8 20 8"></polyline>
+                  <line x1="16" y1="13" x2="8" y2="13"></line>
+                  <line x1="16" y1="17" x2="8" y2="17"></line>
+                  <polyline points="10 9 9 9 8 9"></polyline>
+                </svg>
+                Proposed Datapack Behavior
+              </span>
+              <span class="proposal-status-badge proposal-status-proposed" id="proposalStatusBadge">Proposal Ready</span>
+            </div>
+
+            <div class="proposal-summary" id="proposalSummaryText"></div>
+
+            <div class="proposal-meta-grid">
+              <div class="proposal-meta-item">
+                <span class="meta-label">Trigger Condition</span>
+                <span class="meta-value" id="proposalTriggerText">Any gameplay event</span>
+              </div>
+              <div class="proposal-meta-item">
+                <span class="meta-label">Target Affected</span>
+                <span class="meta-value" id="proposalTargetText">All Players</span>
+              </div>
+            </div>
+
+            <!-- Inferred Assumptions -->
+            <div class="assumptions-section hidden" id="proposalAssumptionsSection">
+              <span class="assumptions-title">Inferred Defaults &amp; Technical Rationale:</span>
+              <div class="assumption-list" id="proposalAssumptionsList"></div>
+            </div>
+
+            <!-- Focused Open Choices -->
+            <div class="choices-section hidden" id="proposalChoicesSection">
+              <span class="choices-title">Select a focused choice to resolve ambiguity:</span>
+              <div class="choice-chips-grid" id="proposalChoiceChips"></div>
+            </div>
+
+            <!-- Unsupported Capability Banner -->
+            <div class="unsupported-banner hidden" id="proposalUnsupportedBanner">
+              <strong>Unsupported by Vanilla Datapacks:</strong>
+              <p id="proposalUnsupportedText"></p>
+            </div>
+
+            <!-- Confirm & Action Bar -->
+            <div class="confirm-action-bar">
+              <button type="button" class="reset-session-btn" id="resetSessionBtn">Reset Conversation</button>
+              <button type="button" class="confirm-btn" id="confirmProposalBtn" disabled>
+                <span>Confirm &amp; Build Datapack</span>
+                <svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="width:16px;height:16px;">
+                  <polyline points="20 6 9 17 4 12"></polyline>
+                </svg>
+              </button>
+            </div>
+          </div>
+        </div>
 
         <!-- Example Prompts -->
         <div class="examples-container">
@@ -246,7 +327,7 @@
           <div class="card card-success hidden" id="successCard">
             <div class="card-header-badge">
               <span class="badge-icon">&#10003;</span>
-              <span class="badge-title">Datapack Validated & Ready</span>
+              <span class="badge-title">Your datapack is ready.</span>
             </div>
             <div class="card-content">
               <h3 class="datapack-title" id="datapackNameDisplay">custom_datapack</h3>
@@ -288,18 +369,6 @@
               <div class="file-list-section">
                 <h4 class="section-subtitle">Generated Files:</h4>
                 <ul class="file-tree" id="fileTreeList"></ul>
-              </div>
-
-              <!-- Local Paths -->
-              <div class="paths-section">
-                <div class="path-row">
-                  <span class="path-label">Folder:</span>
-                  <code class="path-code" id="folderPathCode"></code>
-                </div>
-                <div class="path-row">
-                  <span class="path-label">ZIP Archive:</span>
-                  <code class="path-code" id="zipPathCode"></code>
-                </div>
               </div>
             </div>
           </div>
@@ -356,7 +425,7 @@
           <!-- Technical Inspector Accordion -->
           <details class="tech-inspector" id="techInspector">
             <summary class="inspector-summary">
-              <span>View Technical Details (RAG Context &amp; Plan)</span>
+              <span>View Datapack Details (Knowledge &amp; Plan)</span>
               <span class="summary-arrow">&#9662;</span>
             </summary>
             <div class="inspector-content">
@@ -365,7 +434,7 @@
                 <pre class="code-block" id="ragContextPreview">{}</pre>
               </div>
               <div class="inspector-block">
-                <h5 class="inspector-heading">Execution Summary:</h5>
+                <h5 class="inspector-heading">Datapack Plan:</h5>
                 <pre class="code-block" id="executionSummaryPreview">No active run.</pre>
               </div>
             </div>

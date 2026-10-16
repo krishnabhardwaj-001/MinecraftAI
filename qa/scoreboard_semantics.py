@@ -20,13 +20,14 @@ Provides lightweight, deterministic semantic simulation for:
 """
 
 import copy
+import json
 import re
 from enum import Enum
 from pathlib import Path
 from typing import Any, Dict, List, Optional, Set, Tuple
 
+from ai.lifecycle_reconciler import are_predicates_complementary
 from ai.version_registry import VersionContext
-
 from qa.models import QACategory, QAFinding, QASeverity
 
 MIN_SCORE_32 = -2147483648
@@ -581,10 +582,26 @@ class ScoreboardSemanticSimulator:
         # Discover all .mcfunction files
         func_files: Dict[str, Tuple[Path, str]] = {}
         data_dir = datapack_dir / "data"
+        predicates_info: Dict[str, Dict[str, Any]] = {}
         if data_dir.exists():
             for p in data_dir.rglob("*.mcfunction"):
                 rel = p.relative_to(datapack_dir).as_posix()
                 func_files[rel] = (p, rel)
+
+            for p in data_dir.rglob("*.json"):
+                p_posix = p.as_posix().lower()
+                if "/predicate/" in p_posix or "\\predicate\\" in p_posix:
+                    try:
+                        p_data = json.loads(p.read_text(encoding="utf-8"))
+                        rel_parts = p.relative_to(data_dir).parts
+                        if len(rel_parts) >= 3:
+                            ns = rel_parts[0]
+                            pred_name = p.stem
+                            pred_id = f"{ns}:{pred_name}"
+                            predicates_info[pred_id] = p_data
+                            predicates_info[pred_name] = p_data
+                    except Exception:
+                        pass
 
         # Separate load vs tick vs other functions
         load_cmds: List[ParsedCommand] = []
@@ -705,7 +722,7 @@ class ScoreboardSemanticSimulator:
         )
 
         if state_machine_present and tick_cmds:
-            findings.extend(self._simulate_temporal_state_machine(load_cmds, tick_cmds, state))
+            findings.extend(self._simulate_temporal_state_machine(load_cmds, tick_cmds, state, predicates_info))
 
         # Deterministic sorting
         findings.sort(key=lambda f: (f.file or "", f.id, f.line_or_reference or ""))
@@ -715,62 +732,144 @@ class ScoreboardSemanticSimulator:
         self,
         load_cmds: List[ParsedCommand],
         tick_cmds: List[ParsedCommand],
-        initial_load_state: AbstractScoreboardState
+        initial_load_state: AbstractScoreboardState,
+        predicates_info: Optional[Dict[str, Dict[str, Any]]] = None
     ) -> List[QAFinding]:
         findings: List[QAFinding] = []
-        sim_state = initial_load_state.clone()
 
-        # Identify environmental predicates
-        environmental_preds: Set[str] = set()
+        # Identify all distinct environmental predicates in tick commands
+        environmental_preds: List[str] = []
         for cmd in tick_cmds:
             for cond in cmd.conditions:
                 if cond["type"] == "predicate":
-                    environmental_preds.add(cond["predicate"])
+                    p_name = cond["predicate"]
+                    if p_name not in environmental_preds:
+                        environmental_preds.append(p_name)
 
-        target_pred = list(environmental_preds)[0] if environmental_preds else "condition"
+        if not environmental_preds:
+            environmental_preds = ["condition"]
 
-        # Multi-tick simulation:
-        # Ticks 1..3: Inactive (predicate = False)
-        # Ticks 4..7: Active (predicate = True, tick 4 is rising edge)
-        # Ticks 8..10: Inactive (predicate = False, tick 8 is falling edge)
-        cmd_fires_per_tick: Dict[ParsedCommand, List[int]] = {cmd: [] for cmd in tick_cmds if cmd.is_action}
+        # Build simulation scenarios:
+        # 1. Single environmental drivers
+        scenarios: List[Tuple[str, Set[str]]] = [(p, {p}) for p in environmental_preds]
 
-        for tick in range(1, 11):
-            pred_active = (4 <= tick <= 7)
-            pred_dict = {target_pred: pred_active}
+        # 2. Compound drivers for commands requiring multiple simultaneous predicates
+        compound_drivers: Set[Tuple[str, ...]] = set()
+        for cmd in tick_cmds:
+            if not cmd.is_action:
+                continue
+            cmd_preds = [c["predicate"] for c in cmd.conditions if c.get("type") == "predicate" and not c.get("inverted", False)]
+            if len(cmd_preds) > 1:
+                is_contradictory = any(
+                    are_predicates_complementary(p1, p2, predicates_info)
+                    for i, p1 in enumerate(cmd_preds)
+                    for p2 in cmd_preds[i + 1:]
+                )
+                if not is_contradictory:
+                    compound_drivers.add(tuple(sorted(set(cmd_preds))))
 
-            for cmd in tick_cmds:
-                eval_res = self.evaluate_conditions(cmd, sim_state, pred_dict)
-                if eval_res == TriState.TRUE:
-                    if cmd in cmd_fires_per_tick:
-                        cmd_fires_per_tick[cmd].append(tick)
-                    # Execute state updates
-                    dummy_findings: List[QAFinding] = []
-                    self.execute_subcommand(cmd.subcommand_tokens, sim_state, cmd, dummy_findings)
+        for cd in compound_drivers:
+            scenarios.append(("+".join(cd), set(cd)))
+
+        # Track firing ticks per command per driver scenario: cmd -> {scenario_key: [fired_ticks]}
+        cmd_fires: Dict[ParsedCommand, Dict[str, List[int]]] = {cmd: {} for cmd in tick_cmds if cmd.is_action}
+        cmd_exercised: Dict[ParsedCommand, bool] = {cmd: False for cmd in tick_cmds if cmd.is_action}
+
+        # Multi-scenario temporal simulation: simulate each environmental driver scenario
+        for scenario_name, active_preds in scenarios:
+            sim_state = initial_load_state.clone()
+
+            for tick in range(1, 11):
+                pred_active = (4 <= tick <= 7)
+                pred_dict: Dict[str, bool] = {}
+                for p in active_preds:
+                    pred_dict[p] = pred_active
+
+                # Evaluate related/independent predicates
+                for other_pred in environmental_preds:
+                    if other_pred in active_preds:
+                        continue
+                    if any(are_predicates_complementary(p, other_pred, predicates_info) for p in active_preds):
+                        pred_dict[other_pred] = not pred_active
+                    else:
+                        pred_dict[other_pred] = False
+
+                for cmd in tick_cmds:
+                    eval_res = self.evaluate_conditions(cmd, sim_state, pred_dict)
+                    if eval_res != TriState.UNKNOWN and cmd.is_action:
+                        # Check if command's required predicate conditions match this scenario
+                        req_preds = [
+                            c.get("predicate", "")
+                            for c in cmd.conditions
+                            if c.get("type") == "predicate" and not c.get("inverted", False)
+                        ]
+                        if req_preds:
+                            if len(req_preds) > 1:
+                                if all(
+                                    any(
+                                        p == ap or p.split(":")[-1] == ap.split(":")[-1]
+                                        for ap in active_preds
+                                    )
+                                    for p in req_preds
+                                ):
+                                    cmd_exercised[cmd] = True
+                            else:
+                                if any(
+                                    req_preds[0] == ap or req_preds[0].split(":")[-1] == ap.split(":")[-1]
+                                    for ap in active_preds
+                                ):
+                                    cmd_exercised[cmd] = True
+
+                    if eval_res == TriState.TRUE:
+                        if cmd in cmd_fires:
+                            cmd_fires[cmd].setdefault(scenario_name, []).append(tick)
+                        # Execute state updates
+                        dummy_findings: List[QAFinding] = []
+                        self.execute_subcommand(cmd.subcommand_tokens, sim_state, cmd, dummy_findings)
 
         # 1. Rising edge & sustained active analysis
-        for cmd, fired_ticks in cmd_fires_per_tick.items():
+        for cmd in tick_cmds:
+            if not cmd.is_action:
+                continue
+
             has_enter_cond = any(c.get("type") == "score_range" and c.get("range") in ("0", "..0") for c in cmd.conditions)
             has_pred_cond = any(c.get("type") == "predicate" and not c.get("inverted", False) for c in cmd.conditions)
 
+            # Determine primary driving scenario for this command
+            cmd_preds = [c["predicate"] for c in cmd.conditions if c.get("type") == "predicate" and not c.get("inverted", False)]
+            if len(cmd_preds) > 1:
+                scenario_key = "+".join(sorted(set(cmd_preds)))
+                # If contradictory, compound scenario was intentionally not simulated.
+                # Mark as exercised so the unreachability is flagged.
+                if any(are_predicates_complementary(p1, p2, predicates_info) for i, p1 in enumerate(cmd_preds) for p2 in cmd_preds[i + 1:]):
+                    cmd_exercised[cmd] = True
+            elif cmd_preds:
+                scenario_key = cmd_preds[0]
+            else:
+                scenario_key = environmental_preds[0]
+
+            scenario_ticks = cmd_fires.get(cmd, {}).get(scenario_key, [])
+
             if has_enter_cond:
-                fired_rising = (4 in fired_ticks)
-                sustained_fires = [t for t in (5, 6, 7) if t in fired_ticks]
+                fired_rising = (4 in scenario_ticks)
+                sustained_fires = [t for t in (5, 6, 7) if t in scenario_ticks]
 
                 if not fired_rising and not sustained_fires:
-                    findings.append(
-                        QAFinding(
-                            id="STATE_EVENT_UNREACHABLE",
-                            severity=QASeverity.ERROR,
-                            category=QACategory.UNREACHABLE_LOGIC,
-                            file=cmd.file_path,
-                            line_or_reference=f"Line {cmd.line_number}: {cmd.raw_line}",
-                            problem="State machine on_enter action is unreachable and never fires.",
-                            explanation="During multi-tick simulation with active condition, the on-enter action condition was never satisfied.",
-                            expected_behavior="Action should fire exactly once on the rising edge transition when condition becomes active.",
-                            repair_required="Check initial state setup in load.mcfunction and condition ordering in tick.mcfunction."
+                    # Only flag unreachable if command's driving predicate was actually exercised
+                    if cmd_exercised.get(cmd, False):
+                        findings.append(
+                            QAFinding(
+                                id="STATE_EVENT_UNREACHABLE",
+                                severity=QASeverity.ERROR,
+                                category=QACategory.UNREACHABLE_LOGIC,
+                                file=cmd.file_path,
+                                line_or_reference=f"Line {cmd.line_number}: {cmd.raw_line}",
+                                problem="State machine on_enter action is unreachable and never fires.",
+                                explanation="During multi-tick simulation with active condition, the on-enter action condition was never satisfied.",
+                                expected_behavior="Action should fire exactly once on the rising edge transition when condition becomes active.",
+                                repair_required="Check initial state setup in load.mcfunction and condition ordering in tick.mcfunction."
+                            )
                         )
-                    )
                 elif sustained_fires:
                     findings.append(
                         QAFinding(
@@ -789,8 +888,8 @@ class ScoreboardSemanticSimulator:
                         )
                     )
             elif has_pred_cond and not has_enter_cond:
-                sustained_fires = [t for t in (5, 6, 7) if t in fired_ticks]
-                if 4 in fired_ticks and sustained_fires:
+                sustained_fires = [t for t in (5, 6, 7) if t in scenario_ticks]
+                if 4 in scenario_ticks and sustained_fires:
                     findings.append(
                         QAFinding(
                             id="STATE_EVENT_REPEATS",
@@ -798,12 +897,13 @@ class ScoreboardSemanticSimulator:
                             category=QACategory.STATE_MACHINE,
                             file=cmd.file_path,
                             line_or_reference=f"Line {cmd.line_number}: {cmd.raw_line}",
-                            problem="Event action repeats continuously every tick while condition remains active.",
-                            explanation="Action is conditioned on environmental predicate without an entry state latch, firing every game tick.",
+                            problem="Action executes repeatedly on every tick while predicate is true without state latching.",
+                            explanation="The command is guarded by a predicate but not a state scoreboard, executing every game tick.",
                             expected_behavior="Event action must trigger only once on transition (rising edge), guarded by state latching.",
-                            repair_required="Add state condition 'if score #global <obj> matches 0' and latch to 1."
+                            repair_required="Add state latch: 'execute if predicate <pred> run scoreboard players set #global <obj> 1'."
                         )
                     )
+
 
         # 2. Falling edge & latch reset analysis (Ticks 8..10)
         # Check if any state holder set to 1 was never reset to 0

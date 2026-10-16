@@ -16,7 +16,7 @@ When you submit a request to generate a datapack, the text of your prompt is pro
 
 ### B. Generated Datapacks & Temporary Artifacts
 Generated datapack directories and downloadable ZIP archives are stored temporarily in the application's designated `generated/` directory on the hosting server.
-* **Retention:** Generated files remain available for download temporarily and are subject to periodic cleanup.
+* **Retention:** Generated files remain available for download temporarily (retention period defaults to 1 hour, configurable via server configuration) before being automatically cleaned up.
 * **Access:** Datapack files are public to anyone with the exact generated ZIP filename. Do not include personal secrets, credentials, or confidential information in your prompts.
 
 ### C. Technical & Connection Data
@@ -38,8 +38,9 @@ To maintain strict privacy:
 
 ## 3. AI Model & Processing Architecture
 
-* **Local LLM Execution:** In default deployments, natural-language processing is performed locally via a self-hosted Ollama instance. Your prompts are transmitted solely to the local model runtime configured on the server, not to commercial external cloud APIs.
-* **Data Training:** MinecraftAI does not use your submitted prompts to train or fine-tune public foundation models.
+* **Server-Side AI Execution:** Natural-language understanding is executed server-side using the configured AI provider (such as Ollama Cloud or self-hosted Ollama). User requests are sent directly to the server backend; client browsers never communicate with the AI provider, require no local AI software, and never handle API keys or provider credentials.
+* **Third-Party AI Infrastructure:** When configured with cloud provider endpoints (such as Ollama Cloud), prompts are transmitted over encrypted HTTPS to that provider strictly to generate the requested datapack. Please refer to your hosting operator's provider privacy documentation for cloud data practices.
+* **Data Training:** MinecraftAI does not store, sell, or use your submitted prompts to train or fine-tune public foundation models.
 
 ---
 

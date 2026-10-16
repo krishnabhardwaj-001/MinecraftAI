@@ -3,6 +3,7 @@ import json
 import re
 from typing import Any, Dict, List, Optional, Set, Tuple
 
+from ai.lifecycle_reconciler import DEFAULT_LIFECYCLE_RECONCILER
 from ai.provider import AIProvider
 from ai.version_registry import VersionContext
 from generator.models import MechanismSpecification
@@ -123,18 +124,31 @@ class QARepairEngine:
                 )
                 self._repair_duplicate_modifier(mechanisms_list, dup_mod_id)
 
-        # Update corrected plan with modified mechanisms
-        if "implementation_plan" in corrected_plan:
-            if len(corrected_plan["implementation_plan"]) <= 1:
-                for ip in corrected_plan["implementation_plan"]:
-                    ip["mechanisms"] = mechanisms_list
+            # Case G: Unreachable logic or conflicting state machine findings
+            elif f.category in (QACategory.UNREACHABLE_LOGIC, QACategory.STATE_MACHINE) and any(k in f.id for k in ["STATE_EVENT", "STATE_LATCH", "UNREACHABLE"]):
+                reconciled = DEFAULT_LIFECYCLE_RECONCILER.reconcile(mechanisms_list)
+                if reconciled != mechanisms_list:
+                    mechanisms_list = reconciled
+                    diagnoses.append(
+                        f"State machine action issue in '{f.file}': {f.problem}. "
+                        f"Applied general lifecycle reconciliation to unify redundant or conflicting state machines."
+                    )
 
-        diagnosis_text = " ".join(diagnoses) or "General semantic adjustments to align implementation with user intent."
+        # Update corrected plan with modified mechanisms
+        if "implementation_plan" in corrected_plan and diagnoses:
+            ip_list = corrected_plan["implementation_plan"]
+            if ip_list:
+                ip_list[0]["mechanisms"] = mechanisms_list
+                for ip in ip_list[1:]:
+                    ip["mechanisms"] = []
+
+        can_regenerate = bool(diagnoses)
+        diagnosis_text = " ".join(diagnoses) or "No applicable deterministic repair strategy found for the reported findings."
         repair_plan = QARepairPlan(
             diagnosis=diagnosis_text,
-            summary="Corrected mechanism specifications to resolve execution context, state machine logic, or attribute modifier conflicts.",
-            mechanism_modifications=mechanisms_list,
-            regenerate=True
+            summary="Corrected mechanism specifications to resolve execution context, state machine logic, or attribute modifier conflicts." if can_regenerate else "Aborting QA repair loop: no deterministic repair available.",
+            mechanism_modifications=mechanisms_list if can_regenerate else [],
+            regenerate=can_regenerate
         )
 
         return repair_plan, corrected_plan

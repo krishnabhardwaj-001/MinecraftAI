@@ -1,6 +1,21 @@
 # MinecraftAI Tasks
 
 ## Current
+- [x] Phase 2.1: Targeted Refinements for Conversational Engine & Specification Bridge.
+  - [x] Explicit and unambiguous semantic assumption association in `ai/specification.py`.
+  - [x] Global context fallback for unmatched or ambiguous assumptions without polluting individual requirements.
+  - [x] Bounded conversation history in `ai/conversation.py` trimming complete turns, preserving initial goal anchor (Turn 0) and active sliding window.
+  - [x] Preservation of active proposal, confirmed specifications, and monotonic turn numbering during history trimming.
+  - [x] Dedicated unit test suite `test_phase2_1_refinements.py` (8/8 PASS; 41/41 full conversational suite PASS).
+- [x] Phase 2: Conversational Engine & Local Web App Integration.
+  - [x] Integrate `ConversationSession`, `ConversationSessionManager`, `ConversationalUnderstandingEngine`, and `SpecificationBridge` into the MinecraftAI core.
+  - [x] Implement Stage 1 specification handoff in `MinecraftPipeline.run()` accepting `understanding` and `session` while preserving 100% backward compatibility for single-shot execution.
+  - [x] Implement requirement edit invalidation: clearing stale confirmed specifications and resetting proposal status to `"proposed"`.
+  - [x] Enforce strict confirmation blockers: preventing confirmation when choices remain open or capabilities are unsupported.
+  - [x] Add conversational REST endpoints in `web/app.py`: `/api/conversation/session`, `/api/conversation/message`, `/api/conversation/confirm`, `/api/conversation/session/{id}`.
+  - [x] Add dual-mode UI in `web/templates/index.html` and `web/static/js/app.js`: Conversational Mode (chat thread, proposal review card, assumptions with technical rationale, choice chips) and Direct One-Shot Mode.
+  - [x] Add obsidian & emerald styling in `web/static/css/style.css`.
+  - [x] Create safe automated verification test suite (`test_conversational_web_integration.py`, 14 tests, all passing).
 - [x] Step 16: Support advanced scoreboard-based systems, objectives, and arithmetic operations.
   - [x] Step 16.1: Scoreboard domain knowledge registry, indexing, and RAG retrieval.
   - [x] Step 16.2: Structured data contracts and Pydantic models (ActionSpecification & MechanismSpecification).
@@ -150,6 +165,30 @@
   - [x] Update `.env.example`, `docker-compose.yml`, and `Dockerfile`.
   - [x] Diagnostic messages in `run_pipeline.py` distinguish Cloud vs Local and remove obsolete `ollama pull llama3.1:8b`.
   - [x] Focused tests in `test_provider_cloud.py` (7/7 PASS) and full regression suite (715/715 PASS with 0 warnings under `-W error`).
+- [x] Zero-Setup Public Web Deployment & Async Job Model:
+  - [x] Zero-setup client experience: browser user never needs Python, Ollama, local models, or API keys (`web/app.py`, `web/templates/index.html`, `web/static/js/app.js`).
+  - [x] Production path concealment: suppress server filesystem paths (`datapack_path=None`, `zip_path=None`) in production mode (`web/app.py`).
+  - [x] Mask provider errors as HTTP 503 `"Generation is temporarily unavailable. Please try again in a moment."` in production mode (`web/app.py`).
+  - [x] Asynchronous job endpoints: `POST /api/jobs`, `GET /api/jobs/{id}`, and `GET /api/generate/{id}` (`web/app.py`).
+  - [x] Automated artifact retention & cleanup: `cleanup_expired_artifacts()` and `MC_ARTIFACT_RETENTION_SECONDS=3600` (`web/app.py`, `security/config.py`).
+  - [x] FastAPI lifespan context manager migration eliminating deprecation warnings under `-W error` (`web/app.py`).
+  - [x] Dedicated deployment tests: `test_web_deployment.py` (8/8 PASS).
+  - [x] Production deployment documentation: `DEPLOYMENT.md` and `README.md`.
+- [x] Local Website with Ollama Cloud Sign-In Authentication:
+  - [x] Zero API key cloud inference via local Ollama daemon (`ai/provider.py`, `OLLAMA_HOST=http://127.0.0.1:11434`, `OLLAMA_MODEL=gpt-oss:120b-cloud`).
+  - [x] Diagnostic messages classify sign-in required, model not pulled, quota exceeded, and offline daemon (`run_pipeline.py`, `web/app.py`).
+  - [x] Zero local model weights downloaded (manifest is 384 bytes); zero silent fallback to local models.
+  - [x] Beginner-friendly Windows setup script (`setup.bat`) and launch script with port check and browser auto-open (`start.bat`, `run_web.py`).
+  - [x] Localhost security: default binding to `127.0.0.1:8000` and server path concealment (`web/app.py`).
+  - [x] Dedicated test suite `test_ollama_cloud_local_auth.py` (14/14 PASS).
+  - [x] Documentation updated in `README.md` with complete prerequisites, hardware usage, and troubleshooting.
+- [x] General Planning, Lifecycle Reconciliation, and Semantic QA Simulation Architecture:
+  - [x] Lifecycle Reconciliation (`ai/lifecycle_reconciler.py`, `DEFAULT_LIFECYCLE_RECONCILER`) to reconcile complementary trigger/reset state machines into a single coherent state machine.
+  - [x] State isolation: disambiguate duplicate objective names across independent lifecycles.
+  - [x] Multi-predicate simulation: evaluate all discovered environmental predicates in `ScoreboardSemanticSimulator` across multi-tick state transitions (`qa/scoreboard_semantics.py`).
+  - [x] Deterministic generator lifecycle reconciliation integration (`generator/datapack_generator.py`).
+  - [x] General QA repair engine reconciliation and safe non-looping termination on unrepairable findings (`qa/repair.py`).
+  - [x] Automated test suite `test_general_planning_architecture.py` (10/10 PASS).
 - [x] Keep AI context files synchronized after significant changes.
 
 
