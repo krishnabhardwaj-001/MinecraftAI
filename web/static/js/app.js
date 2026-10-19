@@ -145,6 +145,11 @@ document.addEventListener("DOMContentLoaded", () => {
     successCard.classList.add("hidden");
     clarificationCard.classList.add("hidden");
     errorCard.classList.add("hidden");
+    if (downloadBtn) {
+      downloadBtn.removeAttribute("href");
+      downloadBtn.removeAttribute("download");
+    }
+    if (zipNameTag) zipNameTag.textContent = "";
   }
 
   // Mode & Conversational Elements
@@ -617,15 +622,30 @@ document.addEventListener("DOMContentLoaded", () => {
       repairStatusBadge.className = "metric-value text-dim";
     }
 
+    // Validate download_url presence before rendering success card
+    if (!data.download_url) {
+      if (downloadBtn) {
+        downloadBtn.removeAttribute("href");
+        downloadBtn.removeAttribute("download");
+      }
+      if (zipNameTag) zipNameTag.textContent = "Unavailable";
+      successCard.classList.add("hidden");
+      showErrorState(
+        data.errors && data.errors.length > 0
+          ? data.errors
+          : ["Datapack ZIP archive is unavailable or failed security verification."]
+      );
+      resultMeta.textContent = "ZIP archive unavailable";
+      return;
+    }
+
     // Fill Success Card
     datapackNameDisplay.textContent = data.zip_filename ? data.zip_filename.replace(".zip", "") : "minecraft_datapack";
     datapackSummaryDisplay.textContent = data.plan_summary || data.original_request;
 
-    if (data.download_url) {
-      downloadBtn.href = data.download_url;
-      downloadBtn.setAttribute("download", data.zip_filename || "datapack.zip");
-      zipNameTag.textContent = data.zip_filename || "datapack.zip";
-    }
+    downloadBtn.href = data.download_url;
+    downloadBtn.setAttribute("download", data.zip_filename || "datapack.zip");
+    zipNameTag.textContent = data.zip_filename || "datapack.zip";
 
     // File Tree
     fileTreeList.innerHTML = "";
@@ -648,7 +668,35 @@ document.addEventListener("DOMContentLoaded", () => {
   // Show Error Card
   function showErrorState(errors, repairData) {
     errorList.innerHTML = "";
-    const errArray = Array.isArray(errors) ? errors : [errors];
+    const rawArray = Array.isArray(errors) ? errors : [errors];
+    const errArray = [];
+
+    rawArray.forEach((msg) => {
+      if (!msg) return;
+      if (typeof msg === "object") {
+        if (msg.loc && msg.msg) {
+          // FastAPI 422 validation error object
+          const field = Array.isArray(msg.loc)
+            ? msg.loc.filter((p) => p !== "body").join(".")
+            : String(msg.loc);
+          errArray.push(field ? `${field}: ${msg.msg}` : msg.msg);
+        } else if (msg.message) {
+          errArray.push(String(msg.message));
+        } else {
+          try {
+            errArray.push(JSON.stringify(msg));
+          } catch (_) {
+            errArray.push(String(msg));
+          }
+        }
+      } else {
+        errArray.push(String(msg));
+      }
+    });
+
+    if (errArray.length === 0) {
+      errArray.push("An unexpected error occurred.");
+    }
 
     errArray.forEach((msg) => {
       const li = document.createElement("li");

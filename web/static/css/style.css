@@ -1031,6 +1031,8 @@ body {
   font-size: 13px;
   color: var(--ruby-400);
   font-family: var(--font-mono);
+  white-space: pre-wrap;
+  word-break: break-word;
 }
 
 /* Technical Inspector */
