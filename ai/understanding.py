@@ -233,6 +233,10 @@ ambiguous detail would materially change the result.
 
 Do not ask unnecessary questions.
 
+If 'User Clarification History' is provided in the input, you MUST
+incorporate those answers into your requirements. NEVER ask a question
+whose answer has already been provided in the clarification history.
+
 A good clarification should:
 
 1. Explain what is ambiguous.
@@ -245,6 +249,20 @@ The clarification question must be generated dynamically
 according to the user's actual request.
 
 Do not use hard-coded clarification questions.
+
+============================================================
+PROPERTY MODIFICATIONS
+============================================================
+
+Only populate structured property fields ('property', 'operation',
+'value', 'value_kind') when the user specifically intends to modify
+an entity or player attribute/property (e.g. speed, max_health,
+attack_damage, jump_strength, scale).
+
+Do NOT mark broader gameplay mechanics, custom minigames, event
+triggers, or inter-player relational systems (such as shared health,
+death coordination, lucky blocks, custom events) as property modifications.
+Those belong to general requirements implemented via scoreboards and functions.
 
 ============================================================
 STATUS
@@ -267,7 +285,10 @@ Use:
 
 "unsupported"
 
-only when the request is outside the project's current scope.
+when the request requires capabilities that vanilla Minecraft datapacks
+cannot perform (such as modifying player health NBT directly, arbitrary
+dynamic health transfer between players, custom client-side keybindings/GUI,
+or client rendering mods). Provide the specific technical reason in clarification.reason.
 
 Use:
 
@@ -419,18 +440,30 @@ Understand the user's intent.
 
         return result
 
-    def understand(self, user_text: str) -> dict:
+    def understand(self, user_text: str, clarification_history: Optional[List[Dict[str, str]]] = None) -> dict:
 
         if not user_text or not user_text.strip():
             raise ValueError("Minecraft request cannot be empty.")
 
         user_text = user_text.strip()
 
+        prompt_content = user_text
+        if clarification_history:
+            history_blocks = ["\nUser Clarification History (answers already provided to previous questions):"]
+            for idx, item in enumerate(clarification_history, 1):
+                if isinstance(item, dict):
+                    q = item.get("question", "")
+                    a = item.get("answer", "")
+                    if q or a:
+                        history_blocks.append(f"{idx}. Question: {q}\n   Answer: {a}")
+            if len(history_blocks) > 1:
+                prompt_content = f"Original Request:\n{user_text}\n" + "\n".join(history_blocks)
+
         schema = MinecraftUnderstandingResult.model_json_schema()
 
         result = self.provider.generate_structured(
             self.system_prompt,
-            user_text,
+            prompt_content,
             schema
         )
 

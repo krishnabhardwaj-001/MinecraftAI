@@ -1,5 +1,12 @@
 # AI Change Log
 
+- Implemented B0 Remediation: Novel prompt clarification loop resolution and keyword fallback removal:
+  1. Removed keyword-based property fallback in `ai/planner.py` and `qa/reviewer.py`: `extract_property_modifications` no longer intercepts gameplay requests that contain words like "health" or "attack". Property-modification path is only selected when explicitly output by structured understanding.
+  2. Implemented generic clarification loop breaker in `pipeline/minecraft_pipeline.py`: hard limit of 2 rounds per request, deduplicating semantically repeated questions, returning honest `unsupported` status for fundamentally impossible mechanics or synthesizing best-effort default plans with recorded assumptions.
+  3. Structured clarification history tracking: passed `clarification_history: List[Dict[str, str]]` and `clarification_round: int` through web API (`web/app.py`), frontend (`web/static/js/app.js`), CLI (`run_pipeline.py`), and pipeline stages. Composed clarification prompts re-validate length and security.
+  4. Relational shared-health intent verification: `AutonomousQAReviewer.verify_intent()` explicitly rejects implementations attempting to fulfill relational inter-player mechanics using static attribute modifiers.
+  5. Proved resolution via `test_audit_b0_novel_prompts.py` (40/40 tests passing across 1.21.11 and 1.21.1) and confirmed regression suites pass cleanly (B8, B10, B15).
+
 - Implemented Full Independent Audit Remediation (B1–B21) across P0, P1, and P2 findings on branch `fix/full-audit`:
   1. B1: `run_web.py` host/port resolution from `HOST`/`PORT` env vars, dual-version banner ("1.21.11 / 1.21.1").
   2. B2: Pipeline provider error classification (`error_code`, `failed_stage`, `diagnostic`), web 503 diagnostics, POSIX path sanitization (`/mnt`, `/root`, `/opt`, `/srv`).

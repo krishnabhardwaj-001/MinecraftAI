@@ -143,9 +143,27 @@ class AutonomousQAReviewer:
             runtime_verification="not_available"
         )
 
-    # -------------------------------------------------------------------------
-    # Intent Verification
-    # -------------------------------------------------------------------------
+    def verify_intent(
+        self,
+        original_request: str,
+        understanding: Optional[Dict[str, Any]] = None,
+        plan: Optional[Dict[str, Any]] = None,
+        generated_files: Optional[Dict[str, str]] = None,
+        all_files_content: Optional[Dict[str, str]] = None,
+        findings: Optional[List[QAFinding]] = None
+    ) -> IntentVerificationResult:
+        """
+        Public entry point to verify implementation against user intent.
+        """
+        files = all_files_content if all_files_content is not None else (generated_files or {})
+        return self._verify_intent(
+            original_request=original_request,
+            understanding=understanding,
+            plan=plan,
+            all_files_content=files,
+            findings=findings or []
+        )
+
     def _verify_intent(
         self,
         original_request: str,
@@ -276,28 +294,37 @@ class AutonomousQAReviewer:
                     elif req.get("property"):
                         prop_name = str(req["property"]).strip().lower()
                         if not any(getattr(m, "property", None) == prop_name for m in requested_mods):
-                            try:
-                                from ai.numeric_interpreter import extract_property_modifications
-                                ems = extract_property_modifications(original_request)
-                                for em in ems:
-                                    if em.property and em.property.strip().lower() == prop_name:
-                                        requested_mods.append(em)
-                                        break
-                            except Exception:
-                                pass
+                            op = req.get("operation") or "set"
+                            val_raw = req.get("value")
+                            val_kind = req.get("value_kind") or "absolute"
+                            if val_raw is not None:
+                                try:
+                                    requested_mods.append(PropertyModification(
+                                        property=prop_name,
+                                        operation=op,
+                                        value=SemanticValue(value=float(val_raw), kind=val_kind, raw_text=str(val_raw))
+                                    ))
+                                except Exception:
+                                    pass
 
-        # 3. Fallback to NLP extraction if still empty
-        if not requested_mods:
-            req_text = (understanding.get("understood_request") if understanding and isinstance(understanding, dict) else "") or original_request
-            if req_text:
-                try:
-                    from ai.numeric_interpreter import extract_property_modifications
-                    extracted = extract_property_modifications(req_text)
-                    for em in extracted:
-                        if em.property and not any(getattr(m, "property", None) == em.property for m in requested_mods):
-                            requested_mods.append(em)
-                except Exception:
-                    pass
+        # Check 3b: Relational/shared mechanic intent verification
+        req_text_lower = (original_request or "").lower()
+        is_relational_sharing = any(k in req_text_lower for k in [
+            "share health", "shared health", "shared life", "share hp", "share damage",
+            "share the same health", "share the same hp", "share one health", "synchronize health", "synchronize hp"
+        ])
+        if is_relational_sharing:
+            plan_mechanisms = (plan.get("mechanisms", []) if plan and isinstance(plan, dict) else [])
+            has_scoreboard_mechanisms = (
+                "scoreboard" in combined_commands.lower()
+                or any(isinstance(m, dict) and m.get("type") in ("scoreboard_objective", "state_machine") for m in plan_mechanisms)
+            )
+            if not has_scoreboard_mechanisms or any("attribute" in cmd and "base set" in cmd for cmd in all_commands):
+                missing_aspects.append("Shared health synchronization across players is not implemented by a static property modification.")
+                reasoning_parts.append(
+                    "User requested a shared health pool across players, but the plan only applies static property modifications "
+                    "without inter-player health tracking or synchronization."
+                )
 
         # 4. Verify each requested property modification against structured plan and generated commands
         if requested_mods:

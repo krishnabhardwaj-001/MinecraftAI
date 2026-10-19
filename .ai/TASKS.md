@@ -1,7 +1,8 @@
 # MinecraftAI Tasks
 
 ## Current
-- [x] Full Independent Audit Remediation (B1–B21) on branch `fix/full-audit`:
+- [x] Full Independent Audit Remediation (B0–B21) on branch `fix/full-audit`:
+  - [x] B0: Novel prompt clarification loop breaker, keyword fallback removal in planner/QA, structured clarification history propagation in web/CLI, relational shared-health intent verification, and honest unsupported capability rejection.
   - [x] B1: `run_web.py` host/port resolution from `HOST`/`PORT` env vars, dual-version banner.
   - [x] B2: Pipeline provider error classification (`error_code`, `failed_stage`, `diagnostic`), web 503 diagnostics, POSIX path sanitization.
   - [x] B3: Unified configuration with `MC_*` primary names and legacy `MINECRAFTAI_*` aliases; aligned defaults (50 MB / 500 entries / 60s timeout / 100:1 compression).

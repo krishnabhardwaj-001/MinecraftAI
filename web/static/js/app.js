@@ -449,8 +449,11 @@ document.addEventListener("DOMContentLoaded", () => {
     }
   });
 
-  // Track accumulating refined request for multi-round clarification flows
-  let activeRefinedRequest = "";
+  // Track accumulating request and structured clarification history for multi-round clarification flows
+  let activeOriginalRequest = "";
+  let activeClarificationHistory = [];
+  let activeClarificationRound = 0;
+  let activeLastQuestion = "";
 
   // Clarification Refine Handler
   clarifyBtn.addEventListener("click", async () => {
@@ -458,7 +461,7 @@ document.addEventListener("DOMContentLoaded", () => {
     if (!additional) return;
 
     clarifyInput.value = "";
-    const base = activeRefinedRequest || requestInput.value.trim();
+    const base = activeOriginalRequest || requestInput.value.trim();
     await executePipeline(base, additional, base);
   });
 
@@ -474,11 +477,29 @@ document.addEventListener("DOMContentLoaded", () => {
 
     try {
       const selectedVersion = versionSelect ? versionSelect.value : "1.21.11";
-      const baseReq = previousRequest || activeRefinedRequest || requestText;
+      if (!clarificationAnswer) {
+        // Fresh submission - reset state
+        activeOriginalRequest = requestText;
+        activeClarificationHistory = [];
+        activeClarificationRound = 0;
+        activeLastQuestion = "";
+      } else {
+        activeClarificationRound += 1;
+        if (activeLastQuestion && !activeClarificationHistory.some(h => h.answer === clarificationAnswer)) {
+          activeClarificationHistory.push({
+            question: activeLastQuestion,
+            answer: clarificationAnswer
+          });
+        }
+      }
+
+      const baseReq = activeOriginalRequest || previousRequest || requestText;
 
       const payload = {
         request: baseReq,
-        minecraft_version: selectedVersion
+        minecraft_version: selectedVersion,
+        clarification_history: activeClarificationHistory,
+        clarification_round: activeClarificationRound
       };
 
       if (clarificationAnswer) {
@@ -539,15 +560,19 @@ document.addEventListener("DOMContentLoaded", () => {
     }
 
     if (data.status === "needs_clarification") {
-      // Track refined prompt returned by server so consecutive clarification rounds accumulate
-      activeRefinedRequest = data.refined_request || data.original_request || activeRefinedRequest;
+      activeOriginalRequest = data.original_request || activeOriginalRequest;
+      activeLastQuestion = data.clarification || "Please provide more details on ambiguous parameters.";
+      activeClarificationRound = data.clarification_round !== undefined ? data.clarification_round : activeClarificationRound;
+      if (data.clarification_history && Array.isArray(data.clarification_history)) {
+        activeClarificationHistory = data.clarification_history;
+      }
 
       if (!data.stages) {
         setStage(0, "skipped", "Needs Input");
         for (let i = 1; i < 8; i++) setStage(i, "skipped", "Paused");
       }
 
-      clarificationQuestion.textContent = data.clarification || "Please provide more details on ambiguous parameters.";
+      clarificationQuestion.textContent = activeLastQuestion;
 
       // Render dynamic structured clarification options
       if (clarificationOptionsChips && clarificationOptionsSection) {
@@ -571,7 +596,7 @@ document.addEventListener("DOMContentLoaded", () => {
             btn.textContent = opt;
             btn.addEventListener("click", async () => {
               clarifyInput.value = "";
-              const base = activeRefinedRequest || requestInput.value.trim();
+              const base = activeOriginalRequest || requestInput.value.trim();
               await executePipeline(base, opt, base);
             });
             clarificationOptionsChips.appendChild(btn);

@@ -34,6 +34,85 @@ def _log(stage: str, message: str, verbose: bool = True) -> None:
             print(f"[{stage}] {safe_message}")
 
 
+def _normalize_text_for_comparison(text: str) -> set:
+    """Extract normalized word tokens for comparison."""
+    import re
+    cleaned = re.sub(r"[^\w\s]", " ", text.lower())
+    return set(cleaned.split())
+
+
+def _is_question_already_answered(
+    new_question: str,
+    clarification_history: Optional[List[Dict[str, str]]]
+) -> bool:
+    """
+    Check if a proposed clarification question was already asked or answered.
+    Compares new clarification against earlier question/answer pairs.
+    """
+    if not clarification_history or not new_question:
+        return False
+
+    new_tokens = _normalize_text_for_comparison(new_question)
+    stop_words = {
+        "what", "which", "how", "by", "amount", "value", "set", "the", "a", "an",
+        "is", "should", "be", "or", "to", "for", "in", "of", "please", "specify",
+        "percentage", "multiplier", "parameter", "parameters"
+    }
+    meaningful_new_tokens = new_tokens - stop_words
+    if not meaningful_new_tokens:
+        meaningful_new_tokens = new_tokens
+
+    for entry in clarification_history:
+        prev_q = entry.get("question", "")
+        prev_a = entry.get("answer", "")
+
+        prev_q_tokens = _normalize_text_for_comparison(prev_q)
+        meaningful_prev_q = prev_q_tokens - stop_words or prev_q_tokens
+
+        intersection = meaningful_new_tokens.intersection(meaningful_prev_q)
+        union = meaningful_new_tokens.union(meaningful_prev_q)
+        similarity = len(intersection) / len(union) if union else 0.0
+        if similarity >= 0.50:
+            return True
+
+        prev_a_tokens = _normalize_text_for_comparison(prev_a)
+        if meaningful_new_tokens and len(meaningful_new_tokens.intersection(prev_a_tokens)) >= max(1, len(meaningful_new_tokens) // 2):
+            return True
+
+    return False
+
+
+def _is_fundamentally_unsupported_mechanic(text: str, understanding: Optional[Dict[str, Any]] = None) -> Optional[str]:
+    """
+    Detect mechanics fundamentally unsupported by vanilla Minecraft Java Edition datapacks:
+    - Dynamic player health synchronization / shared HP / shared damage pool across players
+      (player Health NBT is read-only in Java; /damage only accepts fixed float literals, not dynamic scoreboard scores; no arbitrary dynamic heal command)
+    - Dynamic player hunger synchronization / shared hunger
+      (player foodLevel NBT is read-only)
+    """
+    lower = (text or "").lower()
+
+    is_shared = any(w in lower for w in ("shared", "share", "shares", "same hp", "same health", "same hearts", "sync health", "pool", "share one"))
+    has_health = any(w in lower for w in ("health", "hp", "heart", "hearts", "damage", "heals", "healing", "life", "lives"))
+    has_players = any(p in lower for p in ("player", "players", "everyone", "all"))
+    if (is_shared and has_health) or (has_health and "share" in lower and has_players):
+        return (
+            "Dynamic player health synchronization (shared HP/hearts/damage across players) is fundamentally "
+            "unsupported by vanilla Minecraft Java Edition datapacks: player Health NBT is read-only, "
+            "the /damage command does not accept dynamic scoreboard variables, and there is no arbitrary dynamic healing command."
+        )
+
+    has_hunger = any(w in lower for w in ("hunger", "food", "saturation", "food level"))
+    if (is_shared and has_hunger) or (has_hunger and "share" in lower and has_players):
+        return (
+            "Dynamic player hunger synchronization (shared hunger/food level across players) is fundamentally "
+            "unsupported by vanilla Minecraft Java Edition datapacks: player foodLevel NBT is read-only."
+        )
+
+    return None
+
+
+
 class MinecraftPipeline:
     """
     Step 14: End-to-End Orchestrator for MinecraftAI with Autonomous QA & Auto-Repair.
@@ -112,22 +191,52 @@ class MinecraftPipeline:
         datapack_name: Optional[str] = None,
         create_zip: bool = True,
         understanding: Optional[Dict[str, Any]] = None,
-        session: Optional[Any] = None
+        session: Optional[Any] = None,
+        clarification_history: Optional[List[Dict[str, str]]] = None,
+        clarification_round: int = 0
     ) -> PipelineResult:
         """
         Executes the complete pipeline end-to-end.
         Accepts optional pre-confirmed understanding or conversation session from Phase 2.
         """
         request_clean = request.strip()
+        history_list = list(clarification_history or [])
+        pipeline_assumptions: List[str] = []
+
         if not request_clean:
             return PipelineResult(
                 status="failed",
                 failed_stage="understanding",
                 minecraft_version=self.version,
                 original_request=request,
+                clarification_history=history_list,
+                clarification_round=clarification_round,
                 errors=["Request string cannot be empty."],
                 execution_summary="Pipeline aborted: empty request."
             )
+
+        # Re-run prompt validation on composed history if present
+        if history_list:
+            full_context_parts = [request_clean]
+            for h in history_list:
+                a = h.get("answer", "")
+                if a:
+                    full_context_parts.append(f"Specifically: {a}.")
+            composed_request = " ".join(full_context_parts)
+            try:
+                from security.input_security import validate_prompt
+                validate_prompt(composed_request)
+            except Exception as e:
+                return PipelineResult(
+                    status="failed",
+                    failed_stage="understanding",
+                    minecraft_version=self.version,
+                    original_request=request_clean,
+                    clarification_history=history_list,
+                    clarification_round=clarification_round,
+                    errors=[f"Prompt validation failed on composed clarification: {e}"],
+                    execution_summary="Pipeline aborted: prompt validation failed."
+                )
 
         # -------------------------------------------------------------
         # STAGE 1: Natural Language Understanding / Specification Bridge
@@ -143,17 +252,36 @@ class MinecraftPipeline:
                     failed_stage="understanding",
                     minecraft_version=self.version,
                     original_request=request_clean,
+                    clarification_history=history_list,
+                    clarification_round=clarification_round,
                     errors=[err_msg],
                     execution_summary="Pipeline aborted: conversation session is unconfirmed or invalid."
                 )
             understanding = spec_dict
+
+        # Check for fundamentally unsupported capability upfront
+        unsupported_reason = _is_fundamentally_unsupported_mechanic(request_clean, understanding)
+        if unsupported_reason:
+            _log("1/8", f"Unsupported request rejected upfront: {unsupported_reason}", self.verbose)
+            return PipelineResult(
+                status="unsupported",
+                failed_stage="understanding",
+                minecraft_version=self.version,
+                original_request=request_clean,
+                understanding=understanding,
+                clarification_history=history_list,
+                clarification_round=clarification_round,
+                assumptions=pipeline_assumptions,
+                errors=[unsupported_reason],
+                execution_summary=f"Pipeline halted: {unsupported_reason}"
+            )
 
         if understanding is not None:
             _log("1/8", f"Using pre-confirmed understanding specification: '{request_clean}'", self.verbose)
         else:
             _log("1/8", f"Understanding request: '{request_clean}'", self.verbose)
             try:
-                understanding = self.understanding.understand(request_clean)
+                understanding = self.understanding.understand(request_clean, clarification_history=history_list)
             except Exception as e:
                 err_code, diag = classify_provider_error(e)
                 sanitized_err = sanitize_user_error_message(e)
@@ -165,12 +293,15 @@ class MinecraftPipeline:
                     diagnostic=diag,
                     minecraft_version=self.version,
                     original_request=request_clean,
+                    clarification_history=history_list,
+                    clarification_round=clarification_round,
+                    assumptions=pipeline_assumptions,
                     errors=[f"AI Understanding failed: {sanitized_err}"],
                     execution_summary="Pipeline error during natural-language understanding stage."
                 )
 
-        # Check for unsupported capability
-        status_und = understanding.get("status")
+        # Check for unsupported capability from understanding
+        status_und = understanding.get("status") if understanding else None
         if status_und == "unsupported":
             clarification_req = understanding.get("clarification")
             reason = "Unsupported capability"
@@ -183,8 +314,11 @@ class MinecraftPipeline:
                 minecraft_version=self.version,
                 original_request=request_clean,
                 understanding=understanding,
+                clarification_history=history_list,
+                clarification_round=clarification_round,
+                assumptions=pipeline_assumptions,
                 errors=[reason],
-                execution_summary="Pipeline halted: requested capability is not supported by vanilla Minecraft datapacks."
+                execution_summary=f"Pipeline halted: {reason}"
             )
 
         # Check for clarification or ambiguity
@@ -204,16 +338,47 @@ class MinecraftPipeline:
             else:
                 question = "Request is ambiguous or underspecified."
 
-            _log("1/8", f"Clarification requested: {question}", self.verbose)
-            return PipelineResult(
-                status="needs_clarification",
-                minecraft_version=self.version,
-                original_request=request_clean,
-                understanding=understanding,
-                clarification=question,
-                clarification_requirements=clarif_reqs,
-                execution_summary="Pipeline halted at understanding stage: request requires clarification."
-            )
+            loop_broken = (clarification_round >= 2) or _is_question_already_answered(question, history_list)
+            if loop_broken:
+                _log("1/8", f"Clarification loop breaker triggered (round={clarification_round}, question_repeated={_is_question_already_answered(question, history_list)})", self.verbose)
+                unsupported_reason = _is_fundamentally_unsupported_mechanic(request_clean, understanding)
+                if unsupported_reason:
+                    return PipelineResult(
+                        status="unsupported",
+                        failed_stage="understanding",
+                        minecraft_version=self.version,
+                        original_request=request_clean,
+                        understanding=understanding,
+                        clarification_history=history_list,
+                        clarification_round=clarification_round,
+                        errors=[unsupported_reason],
+                        execution_summary=f"Pipeline halted: {unsupported_reason}"
+                    )
+                assumption_note = f"Clarification limit reached or question already answered; assumed defaults for '{question}'"
+                pipeline_assumptions.append(assumption_note)
+                understanding["status"] = "understood"
+                understanding["clarification"] = None
+                understanding["assumptions"] = understanding.get("assumptions", []) + [assumption_note]
+                if not understanding.get("requirements"):
+                    understanding["requirements"] = [{
+                        "intent": "custom_gameplay",
+                        "subject": "player",
+                        "description": request_clean
+                    }]
+            else:
+                _log("1/8", f"Clarification requested: {question}", self.verbose)
+                return PipelineResult(
+                    status="needs_clarification",
+                    minecraft_version=self.version,
+                    original_request=request_clean,
+                    understanding=understanding,
+                    clarification=question,
+                    clarification_requirements=clarif_reqs,
+                    clarification_history=history_list,
+                    clarification_round=clarification_round,
+                    assumptions=pipeline_assumptions,
+                    execution_summary="Pipeline halted at understanding stage: request requires clarification."
+                )
 
         requirements = understanding.get("requirements", [])
         if not requirements:
@@ -225,6 +390,9 @@ class MinecraftPipeline:
                 minecraft_version=self.version,
                 original_request=request_clean,
                 understanding=understanding,
+                clarification_history=history_list,
+                clarification_round=clarification_round,
+                assumptions=pipeline_assumptions,
                 errors=[err_msg],
                 execution_summary="Pipeline halted: no requirements extracted."
             )
@@ -247,6 +415,9 @@ class MinecraftPipeline:
                 minecraft_version=self.version,
                 original_request=request_clean,
                 understanding=understanding,
+                clarification_history=history_list,
+                clarification_round=clarification_round,
+                assumptions=pipeline_assumptions,
                 errors=[f"Knowledge retrieval failed: {sanitized_err}"],
                 execution_summary="Pipeline error during knowledge retrieval stage."
             )
@@ -270,6 +441,9 @@ class MinecraftPipeline:
                 original_request=request_clean,
                 understanding=understanding,
                 context=context,
+                clarification_history=history_list,
+                clarification_round=clarification_round,
+                assumptions=pipeline_assumptions,
                 errors=[f"Planner failed: {sanitized_err}"],
                 execution_summary="Pipeline error during planning stage."
             )
@@ -285,18 +459,47 @@ class MinecraftPipeline:
             else:
                 clarif_text = "Planner requires clarification on ambiguous parameters."
 
-            _log("3/8", f"Clarification requested by planner: {clarif_text}", self.verbose)
-            return PipelineResult(
-                status="needs_clarification",
-                minecraft_version=self.version,
-                original_request=request_clean,
-                understanding=understanding,
-                context=context,
-                plan=plan,
-                clarification=clarif_text,
-                clarification_requirements=clarif_reqs,
-                execution_summary="Pipeline halted at planner stage: implementation requires clarification."
-            )
+            loop_broken = (clarification_round >= 2) or _is_question_already_answered(clarif_text, history_list)
+            if loop_broken:
+                _log("3/8", f"Planner clarification loop breaker triggered (round={clarification_round}, question_repeated={_is_question_already_answered(clarif_text, history_list)})", self.verbose)
+                unsupported_reason = _is_fundamentally_unsupported_mechanic(request_clean, understanding)
+                if unsupported_reason:
+                    return PipelineResult(
+                        status="unsupported",
+                        failed_stage="planning",
+                        minecraft_version=self.version,
+                        original_request=request_clean,
+                        understanding=understanding,
+                        context=context,
+                        plan=plan,
+                        clarification_history=history_list,
+                        clarification_round=clarification_round,
+                        assumptions=pipeline_assumptions,
+                        errors=[unsupported_reason],
+                        execution_summary=f"Pipeline halted: {unsupported_reason}"
+                    )
+                assumption_note = f"Clarification round limit reached for planner; assumed defaults for '{clarif_text}'"
+                pipeline_assumptions.append(assumption_note)
+                plan["status"] = "ready"
+                plan["clarifications"] = []
+                plan["clarification_requirements"] = []
+                plan["assumptions"] = plan.get("assumptions", []) + [assumption_note]
+            else:
+                _log("3/8", f"Clarification requested by planner: {clarif_text}", self.verbose)
+                return PipelineResult(
+                    status="needs_clarification",
+                    minecraft_version=self.version,
+                    original_request=request_clean,
+                    understanding=understanding,
+                    context=context,
+                    plan=plan,
+                    clarification=clarif_text,
+                    clarification_requirements=clarif_reqs,
+                    clarification_history=history_list,
+                    clarification_round=clarification_round,
+                    assumptions=pipeline_assumptions,
+                    execution_summary="Pipeline halted at planner stage: implementation requires clarification."
+                )
 
         # -------------------------------------------------------------
         # STAGE 4: Deterministic Datapack Generation
@@ -325,6 +528,9 @@ class MinecraftPipeline:
                 understanding=understanding,
                 context=context,
                 plan=plan,
+                clarification_history=history_list,
+                clarification_round=clarification_round,
+                assumptions=pipeline_assumptions,
                 errors=[f"Generator failed: {sanitized_err}"],
                 execution_summary="Pipeline error during deterministic datapack generation stage."
             )
@@ -375,6 +581,9 @@ class MinecraftPipeline:
                     plan=plan,
                     generation=gen_result,
                     validation=val_result,
+                    clarification_history=history_list,
+                    clarification_round=clarification_round,
+                    assumptions=pipeline_assumptions,
                     errors=[f"Repair loop encountered unexpected error: {sanitized_err}"],
                     execution_summary="Pipeline failed: structural repair loop encountered an unexpected exception."
                 )
@@ -395,6 +604,9 @@ class MinecraftPipeline:
                     generation=gen_result,
                     validation=val_result,
                     repair=repair_result,
+                    clarification_history=history_list,
+                    clarification_round=clarification_round,
+                    assumptions=pipeline_assumptions,
                     errors=err_msgs,
                     execution_summary="Pipeline failed: generated datapack could not be repaired into a valid state."
                 )
@@ -437,6 +649,9 @@ class MinecraftPipeline:
                 plan=plan,
                 generation=gen_result,
                 validation=val_result,
+                clarification_history=history_list,
+                clarification_round=clarification_round,
+                assumptions=pipeline_assumptions,
                 errors=[f"QA review failed: {sanitized_err}"],
                 execution_summary="Pipeline error during QA review stage."
             )
@@ -480,6 +695,9 @@ class MinecraftPipeline:
                     generation=gen_result,
                     validation=val_result,
                     qa_result=qa_result,
+                    clarification_history=history_list,
+                    clarification_round=clarification_round,
+                    assumptions=pipeline_assumptions,
                     errors=[f"QA diagnosis failed: {sanitized_err}"],
                     execution_summary="Pipeline error during QA diagnosis stage."
                 )
@@ -522,6 +740,9 @@ class MinecraftPipeline:
                     validation=val_result,
                     repair=repair_result,
                     qa_result=qa_result,
+                    clarification_history=history_list,
+                    clarification_round=clarification_round,
+                    assumptions=pipeline_assumptions,
                     errors=[f"Regeneration failed during QA repair: {sanitized_err}"],
                     execution_summary="Pipeline failed: regeneration failed during QA repair loop."
                 )
@@ -557,6 +778,9 @@ class MinecraftPipeline:
                 repair=repair_result,
                 qa_result=qa_result,
                 intent_verification=qa_result.intent_verification,
+                clarification_history=history_list,
+                clarification_round=clarification_round,
+                assumptions=pipeline_assumptions,
                 errors=[f"QA Failure: [{f.category.value}] {f.problem}" for f in qa_result.error_findings],
                 execution_summary="Pipeline failed: Autonomous QA could not verify datapack."
             )
@@ -584,6 +808,9 @@ class MinecraftPipeline:
                 repair=repair_result,
                 qa_result=qa_result,
                 intent_verification=intent_res,
+                clarification_history=history_list,
+                clarification_round=clarification_round,
+                assumptions=pipeline_assumptions,
                 errors=[f"Intent mismatch: {missing}" for missing in intent_res.missing_aspects],
                 execution_summary="Pipeline failed: Intent verification rejected implementation."
             )
@@ -612,6 +839,9 @@ class MinecraftPipeline:
                 repair=repair_result,
                 qa_result=qa_result,
                 intent_verification=intent_res,
+                clarification_history=history_list,
+                clarification_round=clarification_round,
+                assumptions=pipeline_assumptions,
                 errors=[f"Structural validation error: {e.message}" for e in struct_check.errors],
                 execution_summary="Pipeline failed: Datapack failed structural validation at READY gate."
             )
@@ -638,6 +868,9 @@ class MinecraftPipeline:
                 qa_result=qa_result,
                 intent_verification=intent_res,
                 runtime_result=runtime_res,
+                clarification_history=history_list,
+                clarification_round=clarification_round,
+                assumptions=pipeline_assumptions,
                 errors=[f"Runtime simulation error: {runtime_res.details}"],
                 execution_summary="Pipeline failed: Runtime simulation failed."
             )
@@ -661,6 +894,9 @@ class MinecraftPipeline:
                     qa_result=qa_result,
                     intent_verification=intent_res,
                     runtime_result=runtime_res,
+                    clarification_history=history_list,
+                    clarification_round=clarification_round,
+                    assumptions=pipeline_assumptions,
                     errors=[f"Final ZIP validation failed: {e.message}" for e in zip_check.errors],
                     execution_summary="Pipeline failed: final ZIP archive failed validation."
                 )
@@ -686,6 +922,9 @@ class MinecraftPipeline:
             runtime_result=runtime_res,
             final_datapack_path=final_gen_path,
             final_zip_path=final_zip_path,
+            clarification_history=history_list,
+            clarification_round=clarification_round,
+            assumptions=pipeline_assumptions,
             execution_summary="Complete end-to-end pipeline verified successfully. Datapack is READY."
         )
 
@@ -702,7 +941,9 @@ def run_minecraft_pipeline(
     verbose: bool = True,
     understanding: Optional[Dict[str, Any]] = None,
     session: Optional[Any] = None,
-    datapack_name: Optional[str] = None
+    datapack_name: Optional[str] = None,
+    clarification_history: Optional[List[Dict[str, str]]] = None,
+    clarification_round: int = 0
 ) -> PipelineResult:
     """
     Public convenience entry point for the complete MinecraftAI pipeline.
@@ -722,6 +963,8 @@ def run_minecraft_pipeline(
         datapack_name=datapack_name,
         create_zip=create_zip,
         understanding=understanding,
-        session=session
+        session=session,
+        clarification_history=clarification_history,
+        clarification_round=clarification_round
     )
 

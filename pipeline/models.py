@@ -107,6 +107,18 @@ class PipelineResult(BaseModel):
         default_factory=list,
         description="Structured clarification requirement items if clarification was required"
     )
+    clarification_history: List[Dict[str, str]] = Field(
+        default_factory=list,
+        description="History of previous clarification question/answer pairs"
+    )
+    clarification_round: int = Field(
+        default=0,
+        description="Current clarification round index (0-indexed, max 2 rounds)"
+    )
+    assumptions: List[str] = Field(
+        default_factory=list,
+        description="Assumptions made by best-effort planning after clarification"
+    )
     error_code: Optional[str] = Field(
         default=None,
         description="Structured error code (e.g. 'provider_unreachable', 'provider_auth', 'validation_failed')"
@@ -146,6 +158,10 @@ class PipelineResult(BaseModel):
             lines.append(f"Datapack ZIP: {self.final_zip_path}")
         if self.repair and self.repair.attempts:
             lines.append(f"Repairs: {len(self.repair.attempts)} attempt(s) ({self.repair.status})")
+        if self.assumptions:
+            lines.append("Assumptions:")
+            for a in self.assumptions:
+                lines.append(f"  - {a}")
         if self.errors:
             lines.append("Errors:")
             for err in self.errors:

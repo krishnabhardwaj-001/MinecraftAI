@@ -176,6 +176,9 @@ class GeneratePayload(BaseModel):
     minecraft_version: str = Field(default="1.21.11", description="Target Minecraft Java Edition version")
     clarification_answer: Optional[str] = Field(default=None, description="Optional answer to previous clarification inquiry")
     previous_request: Optional[str] = Field(default=None, description="Original request when answering clarification")
+    clarification_history: Optional[List[Dict[str, str]]] = Field(default=None, description="Structured question/answer history")
+    clarification_round: int = Field(default=0, description="Current clarification round index")
+
 
 
 class CreateSessionPayload(BaseModel):
@@ -345,6 +348,8 @@ class GenerationJob(BaseModel):
     stage_index: int = 0
     minecraft_version: str = "1.21.11"
     original_request: str = ""
+    clarification_history: List[Dict[str, str]] = Field(default_factory=list)
+    clarification_round: int = 0
     download_url: Optional[str] = None
     result: Optional[Dict[str, Any]] = None
     error: Optional[str] = None
@@ -359,7 +364,13 @@ class JobManager:
         self._max_jobs = max_jobs
         self._ttl_seconds = ttl_seconds
 
-    def create_job(self, request_text: str, minecraft_version: str) -> GenerationJob:
+    def create_job(
+        self,
+        request_text: str,
+        minecraft_version: str,
+        clarification_history: Optional[List[Dict[str, str]]] = None,
+        clarification_round: int = 0
+    ) -> GenerationJob:
         self.cleanup_expired()
         job_id = f"job_{uuid.uuid4().hex[:12]}"
         job = GenerationJob(
@@ -367,6 +378,8 @@ class JobManager:
             request_text=request_text,
             minecraft_version=minecraft_version,
             original_request=request_text,
+            clarification_history=list(clarification_history or []),
+            clarification_round=clarification_round
         )
         self._jobs[job_id] = job
         return job
@@ -765,6 +778,9 @@ def _format_pipeline_result(pipeline_result: Any) -> Dict[str, Any]:
         "refined_request": pipeline_result.original_request,
         "clarification": pipeline_result.clarification,
         "clarification_requirements": pipeline_result.clarification_requirements or [],
+        "clarification_history": getattr(pipeline_result, "clarification_history", []),
+        "clarification_round": getattr(pipeline_result, "clarification_round", 0),
+        "assumptions": getattr(pipeline_result, "assumptions", []),
         "execution_summary": sanitized_exec_summary,
         "datapack_path": datapack_path,
         "zip_path": zip_path_str,
@@ -785,7 +801,9 @@ async def _execute_pipeline_task(
     understanding: Optional[Dict[str, Any]] = None,
     session: Optional[Any] = None,
     datapack_name: Optional[str] = None,
-    output_dir: Optional[Path] = None
+    output_dir: Optional[Path] = None,
+    clarification_history: Optional[List[Dict[str, str]]] = None,
+    clarification_round: int = 0
 ) -> Any:
     """
     Executes the synchronous pipeline in a worker thread with timeout protection.
@@ -803,7 +821,9 @@ async def _execute_pipeline_task(
             understanding=understanding,
             session=session,
             datapack_name=datapack_name,
-            output_dir=output_dir
+            output_dir=output_dir,
+            clarification_history=clarification_history,
+            clarification_round=clarification_round
         ),
         timeout=timeout
     )
@@ -830,7 +850,13 @@ async def _run_background_job(job: GenerationJob, req_text: str, target_ver: str
         job.stage_index = 3
         job_output_dir = GENERATED_DIR / job.job_id
         job_output_dir.mkdir(parents=True, exist_ok=True)
-        pipeline_result = await _execute_pipeline_task(req_text, target_ver, output_dir=job_output_dir)
+        pipeline_result = await _execute_pipeline_task(
+            req_text,
+            target_ver,
+            output_dir=job_output_dir,
+            clarification_history=job.clarification_history,
+            clarification_round=job.clarification_round
+        )
         result_dict = _format_pipeline_result(pipeline_result)
         job.result = result_dict
         job.completed_at = time.time()
@@ -912,11 +938,39 @@ async def generate_datapack(payload: GeneratePayload, request: Request, async_mo
         req_text = validate_prompt(raw_req)
 
         # Handle clarification refinement if provided
+        clarif_history = list(payload.clarification_history or [])
+        clarif_round = payload.clarification_round
+
         if payload.clarification_answer:
             ans_clean = validate_clarification_answer(payload.clarification_answer)
             base_req = validate_prompt(payload.previous_request or req_text)
-            req_text = f"{base_req} Specifically: {ans_clean}."
-            req_text = validate_prompt(req_text)
+            clarif_round += 1
+
+            if payload.clarification_history is not None:
+                clarif_history = list(payload.clarification_history)
+                if not any(entry.get("answer") == ans_clean for entry in clarif_history):
+                    last_q = clarif_history[-1].get("question") if clarif_history else "Clarification required"
+                    clarif_history.append({"question": last_q, "answer": ans_clean})
+                root_req = base_req.split(" Specifically:")[0].strip()
+                full_parts = [root_req]
+                for h in clarif_history:
+                    a = h.get("answer", "")
+                    if a:
+                        full_parts.append(f"Specifically: {a}.")
+                composed_req = " ".join(full_parts)
+            else:
+                if f"Specifically: {ans_clean}" not in base_req:
+                    composed_req = f"{base_req} Specifically: {ans_clean}."
+                else:
+                    composed_req = base_req
+                clarif_history = []
+                parts = composed_req.split(" Specifically:")
+                for p in parts[1:]:
+                    ans_part = p.strip().rstrip(".")
+                    if ans_part:
+                        clarif_history.append({"question": "Clarification", "answer": ans_part})
+
+            req_text = validate_prompt(composed_req)
 
         registry = get_version_registry()
         target_ver = validate_version_string(
@@ -928,7 +982,12 @@ async def generate_datapack(payload: GeneratePayload, request: Request, async_mo
 
     # If client requested asynchronous job mode
     if async_mode:
-        job = DEFAULT_JOB_MANAGER.create_job(req_text, target_ver)
+        job = DEFAULT_JOB_MANAGER.create_job(
+            req_text,
+            target_ver,
+            clarification_history=clarif_history,
+            clarification_round=clarif_round
+        )
         asyncio.create_task(_run_background_job(job, req_text, target_ver))
         return {
             "job_id": job.job_id,
@@ -957,7 +1016,13 @@ async def generate_datapack(payload: GeneratePayload, request: Request, async_mo
     job_output_dir.mkdir(parents=True, exist_ok=True)
 
     try:
-        pipeline_result = await _execute_pipeline_task(req_text, target_ver, output_dir=job_output_dir)
+        pipeline_result = await _execute_pipeline_task(
+            req_text,
+            target_ver,
+            output_dir=job_output_dir,
+            clarification_history=clarif_history,
+            clarification_round=clarif_round
+        )
     except asyncio.TimeoutError:
         cfg = load_security_config()
         logger.warning("Pipeline execution timed out after %ds", cfg.generation_timeout_seconds)

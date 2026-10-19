@@ -108,15 +108,21 @@ def run_cli(
     print(f"Target: Minecraft Java Edition {selected_version} | Data Pack Version {version_meta.data_pack_version or version_meta.pack_format}")
     print("=" * 70)
 
+    clarification_history: List[Dict[str, str]] = []
+    clarification_round = 0
+    original_prompt = request
+
     while True:
         print()
         try:
             result = pipeline_fn(
-                request=request,
+                request=original_prompt,
                 minecraft_version=selected_version,
                 provider=os.getenv("LLM_PROVIDER", "ollama"),
                 create_zip=True,
-                verbose=True
+                verbose=True,
+                clarification_history=clarification_history,
+                clarification_round=clarification_round
             )
         except Exception as e:
             if is_ollama_unreachable_error(e):
@@ -196,16 +202,28 @@ def run_cli(
             else:
                 clarification = user_choice
 
+            # Add to structured history
+            clarification_history.append({
+                "question": result.clarification or "Clarification required",
+                "answer": clarification
+            })
+            clarification_round += 1
+
             # Generic prompt refinement matching web/app.js pattern
-            composed_request = f"{request} Specifically: {clarification}."
+            composed_request = f"{original_prompt} Specifically: {clarification}."
             try:
-                request = validate_prompt(composed_request)
+                validate_prompt(composed_request)
             except InputValidationError as e:
                 print(f"\n[-] Error: Clarified request validation failed: {e}")
                 return 1
-            print(f"\n[+] Refining request with clarification: '{request}'")
+            print(f"\n[+] Refining request with clarification: '{clarification}' (Round {clarification_round}/2)")
             continue
 
+        elif result.status == "unsupported":
+            print("\n[-] REQUEST UNSUPPORTED BY VANILLA MINECRAFT:")
+            for err in result.errors:
+                print(f"    - {err}")
+            return 1
         elif result.is_success:
             print(f"\n[+] SUCCESS: Validated Datapack Ready for Minecraft {selected_version}!")
             print(f"    Datapack Folder: {result.final_datapack_path}")
