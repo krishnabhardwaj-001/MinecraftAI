@@ -446,6 +446,7 @@ def _format_pipeline_result(pipeline_result: Any) -> Dict[str, Any]:
         "is_success": pipeline_result.is_success,
         "minecraft_version": pipeline_result.minecraft_version,
         "original_request": pipeline_result.original_request,
+        "refined_request": pipeline_result.original_request,
         "clarification": pipeline_result.clarification,
         "clarification_requirements": pipeline_result.clarification_requirements or [],
         "execution_summary": pipeline_result.execution_summary,
@@ -595,6 +596,7 @@ async def generate_datapack(payload: GeneratePayload, request: Request, async_mo
             ans_clean = validate_clarification_answer(payload.clarification_answer)
             base_req = validate_prompt(payload.previous_request or req_text)
             req_text = f"{base_req} Specifically: {ans_clean}."
+            req_text = validate_prompt(req_text)
 
         registry = get_version_registry()
         target_ver = validate_version_string(

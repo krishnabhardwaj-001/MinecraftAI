@@ -419,18 +419,22 @@ document.addEventListener("DOMContentLoaded", () => {
       requestInput.value = "";
       await sendChatMessage(query);
     } else {
+      activeRefinedRequest = query;
       await executePipeline(query);
     }
   });
 
+  // Track accumulating refined request for multi-round clarification flows
+  let activeRefinedRequest = "";
+
   // Clarification Refine Handler
   clarifyBtn.addEventListener("click", async () => {
-    const original = requestInput.value.trim();
     const additional = clarifyInput.value.trim();
     if (!additional) return;
 
     clarifyInput.value = "";
-    await executePipeline(original, additional, original);
+    const base = activeRefinedRequest || requestInput.value.trim();
+    await executePipeline(base, additional, base);
   });
 
   // Pipeline Execution Function (Direct One-Shot)
@@ -445,17 +449,16 @@ document.addEventListener("DOMContentLoaded", () => {
 
     try {
       const selectedVersion = versionSelect ? versionSelect.value : "1.21.11";
+      const baseReq = previousRequest || activeRefinedRequest || requestText;
 
       const payload = {
-        request: requestText,
+        request: baseReq,
         minecraft_version: selectedVersion
       };
 
       if (clarificationAnswer) {
         payload.clarification_answer = clarificationAnswer;
-      }
-      if (previousRequest) {
-        payload.previous_request = previousRequest;
+        payload.previous_request = baseReq;
       }
 
       const response = await fetch("/api/generate", {
@@ -499,6 +502,9 @@ document.addEventListener("DOMContentLoaded", () => {
     }
 
     if (data.status === "needs_clarification") {
+      // Track refined prompt returned by server so consecutive clarification rounds accumulate
+      activeRefinedRequest = data.refined_request || data.original_request || activeRefinedRequest;
+
       // Stage 1/3 indicated clarification needed
       setStage(0, "done", "Understood");
       setStage(1, "skipped", "Paused");
@@ -528,9 +534,9 @@ document.addEventListener("DOMContentLoaded", () => {
             btn.className = "chip-btn chip-option";
             btn.textContent = opt;
             btn.addEventListener("click", async () => {
-              const original = requestInput.value.trim();
               clarifyInput.value = "";
-              await executePipeline(original, opt, original);
+              const base = activeRefinedRequest || requestInput.value.trim();
+              await executePipeline(base, opt, base);
             });
             clarificationOptionsChips.appendChild(btn);
           });
