@@ -356,7 +356,7 @@ MinecraftAI features a dedicated security layer under `security/`:
   * Neutralizes POSIX (`../`), Windows (`..\`), UNC (`\\`), and URL-encoded traversal attempts
 * **Archive Security (`security/archive_security.py`)**:
   * Zip Slip vulnerability defense: inspects every ZIP entry before extraction
-  * Decompression bomb prevention: enforces maximum uncompressed size (`100 MB`) and expansion ratio (`100:1`)
+  * Decompression bomb prevention: enforces maximum uncompressed size (`50 MB`), file entry count (`500 entries`), and expansion ratio (`100:1`)
   * Structure verification: requires valid `pack.mcmeta` and `data/` namespace root
 * **Command Security (`security/command_security.py`)**:
   * Whitelists valid Minecraft Java command verbs (`scoreboard`, `execute`, `give`, `effect`, `tellraw`, etc.)
@@ -443,6 +443,8 @@ MC_MAX_PROMPT_LENGTH=2000
 MC_RATE_LIMIT_PER_MINUTE=30
 MC_BURST_ALLOWANCE=10
 MC_MAX_CONCURRENT_GENERATIONS=4
+MC_MAX_ZIP_SIZE_MB=50
+MC_MAX_ZIP_ENTRIES=500
 MC_GENERATION_TIMEOUT_SECONDS=60.0
 MC_ARTIFACT_RETENTION_SECONDS=3600
 ```

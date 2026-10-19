@@ -6,8 +6,12 @@ Defines security boundaries, thresholds, limits, and environment overrides.
 
 import os
 from pathlib import Path
-from typing import List, Set
+from typing import List, Optional, Set
+from dotenv import load_dotenv
 from pydantic import BaseModel, Field
+
+# Load environment variables early before defaults are read
+load_dotenv()
 
 
 class SecurityConfig(BaseModel):
@@ -47,8 +51,8 @@ class SecurityConfig(BaseModel):
         default=4,
         description="Maximum simultaneous datapack generation pipelines running"
     )
-    generation_timeout_seconds: int = Field(
-        default=180,
+    generation_timeout_seconds: float = Field(
+        default=60.0,
         description="Hard timeout for pipeline execution in seconds"
     )
 
@@ -67,11 +71,11 @@ class SecurityConfig(BaseModel):
 
     # Archive / ZIP Security
     max_zip_file_count: int = Field(
-        default=250,
+        default=500,
         description="Maximum number of files allowed within a generated or served ZIP archive"
     )
     max_zip_total_uncompressed_bytes: int = Field(
-        default=25 * 1024 * 1024,  # 25 MB
+        default=50 * 1024 * 1024,  # 50 MB
         description="Maximum total uncompressed size of archive contents"
     )
     max_zip_single_file_bytes: int = Field(
@@ -98,7 +102,7 @@ class SecurityConfig(BaseModel):
         description="Permitted CORS origins. Wildcard '*' with credentials is strictly disallowed."
     )
     is_development_mode: bool = Field(
-        default_factory=lambda: os.getenv("ENVIRONMENT", os.getenv("MINECRAFTAI_ENV", "development")).lower() in ("development", "dev"),
+        default=True,
         description="Flag indicating development environment"
     )
 
@@ -112,6 +116,10 @@ class SecurityConfig(BaseModel):
     mask_sensitive_logs: bool = Field(
         default=True,
         description="Sanitize IP addresses, tokens, and internal paths in log output"
+    )
+    mask_prompts_in_logs: bool = Field(
+        default=False,
+        description="Mask or disable full prompt logging in server logs"
     )
     log_prompts: bool = Field(
         default=True,
@@ -130,60 +138,107 @@ class SecurityConfig(BaseModel):
 def load_security_config() -> SecurityConfig:
     """
     Constructs SecurityConfig with environment variable overrides where configured.
-    Supports both MC_* and MINECRAFTAI_* prefix conventions.
+    Primary naming scheme: MC_* prefix (as documented in .env.example).
+    Backward-compatible aliases: MINECRAFTAI_* prefix and unprefixed legacy names.
     """
     config = SecurityConfig()
 
-    # Environment variable overrides
-    if env_prompt_len := os.getenv("MC_MAX_PROMPT_LENGTH") or os.getenv("MINECRAFTAI_MAX_PROMPT_LENGTH"):
+    def _get_env(*keys: str) -> Optional[str]:
+        for k in keys:
+            val = os.getenv(k)
+            if val is not None and val.strip() != "":
+                return val.strip()
+        return None
+
+    # Max Prompt Length
+    if val := _get_env("MC_MAX_PROMPT_LENGTH", "MINECRAFTAI_MAX_PROMPT_LENGTH"):
         try:
-            config.max_prompt_length = int(env_prompt_len)
+            parsed = int(val)
+            if parsed > 0:
+                config.max_prompt_length = parsed
         except ValueError:
             pass
 
-    if env_rate_limit := os.getenv("MC_RATE_LIMIT_PER_MINUTE") or os.getenv("MINECRAFTAI_RATE_LIMIT_PER_MINUTE"):
+    # Rate Limiting
+    if val := _get_env("MC_RATE_LIMIT_PER_MINUTE", "MINECRAFTAI_RATE_LIMIT_PER_MINUTE", "RATE_LIMIT_PER_MINUTE"):
         try:
-            config.rate_limit_requests_per_minute = int(env_rate_limit)
+            parsed = int(val)
+            if parsed > 0:
+                config.rate_limit_requests_per_minute = parsed
         except ValueError:
             pass
 
-    if env_burst := os.getenv("MC_BURST_ALLOWANCE") or os.getenv("MINECRAFTAI_BURST_ALLOWANCE"):
+    if val := _get_env("MC_BURST_ALLOWANCE", "MINECRAFTAI_BURST_ALLOWANCE"):
         try:
-            config.rate_limit_burst = int(env_burst)
+            parsed = int(val)
+            if parsed > 0:
+                config.rate_limit_burst = parsed
         except ValueError:
             pass
 
-    if env_concurrent := os.getenv("MC_MAX_CONCURRENT_GENERATIONS") or os.getenv("MINECRAFTAI_MAX_CONCURRENT_GENERATIONS"):
+    if val := _get_env("MC_RATE_LIMIT_ENABLED", "MINECRAFTAI_RATE_LIMIT_ENABLED", "RATE_LIMIT_ENABLED"):
+        config.rate_limit_enabled = val.lower() in ("true", "1", "yes")
+
+    # Concurrency and Generation Timeout
+    if val := _get_env("MC_MAX_CONCURRENT_GENERATIONS", "MINECRAFTAI_MAX_CONCURRENT_GENERATIONS", "MAX_CONCURRENT_GENERATIONS"):
         try:
-            config.max_concurrent_generations = int(env_concurrent)
+            parsed = int(val)
+            if parsed > 0:
+                config.max_concurrent_generations = parsed
         except ValueError:
             pass
 
-    if env_timeout := os.getenv("MC_GENERATION_TIMEOUT_SECONDS") or os.getenv("MINECRAFTAI_GENERATION_TIMEOUT_SECONDS"):
+    if val := _get_env("MC_GENERATION_TIMEOUT_SECONDS", "MINECRAFTAI_GENERATION_TIMEOUT_SECONDS"):
         try:
-            config.generation_timeout_seconds = int(float(env_timeout))
+            parsed = float(val)
+            if parsed > 0:
+                config.generation_timeout_seconds = parsed
         except ValueError:
             pass
 
-    if env_retention := os.getenv("MC_ARTIFACT_RETENTION_SECONDS") or os.getenv("MINECRAFTAI_ARTIFACT_RETENTION_SECONDS"):
+    # Archive / ZIP Security
+    if val := _get_env("MC_MAX_ZIP_SIZE_MB", "MINECRAFTAI_MAX_ZIP_SIZE_MB"):
         try:
-            config.artifact_retention_seconds = int(env_retention)
+            parsed_mb = float(val)
+            if parsed_mb > 0:
+                config.max_zip_total_uncompressed_bytes = int(parsed_mb * 1024 * 1024)
+        except ValueError:
+            pass
+
+    if val := _get_env("MC_MAX_ZIP_ENTRIES", "MINECRAFTAI_MAX_ZIP_ENTRIES", "MINECRAFTAI_MAX_ZIP_FILE_COUNT"):
+        try:
+            parsed = int(val)
+            if parsed > 0:
+                config.max_zip_file_count = parsed
+        except ValueError:
+            pass
+
+    if val := _get_env("MC_ARTIFACT_RETENTION_SECONDS", "MINECRAFTAI_ARTIFACT_RETENTION_SECONDS"):
+        try:
+            parsed = int(val)
+            if parsed >= 0:
+                config.artifact_retention_seconds = parsed
         except ValueError:
             pass
 
     # CORS configuration
-    cors_candidates = (
-        os.getenv("PUBLIC_ORIGIN")
-        or os.getenv("MC_ALLOWED_CORS_ORIGINS")
-        or os.getenv("MINECRAFTAI_CORS_ORIGINS")
-    )
-    if cors_candidates:
-        origins = [o.strip() for o in cors_candidates.split(",") if o.strip()]
+    if val := _get_env("MC_ALLOWED_CORS_ORIGINS", "PUBLIC_ORIGIN", "MINECRAFTAI_CORS_ORIGINS"):
+        origins = [o.strip() for o in val.split(",") if o.strip()]
         if origins:
             config.allowed_cors_origins = origins
 
-    if env_rate_enabled := os.getenv("MC_RATE_LIMIT_ENABLED") or os.getenv("MINECRAFTAI_RATE_LIMIT_ENABLED"):
-        config.rate_limit_enabled = env_rate_enabled.lower() in ("true", "1", "yes")
+    # Logging and Observability
+    if val := _get_env("MC_ANONYMIZE_LOGS", "MINECRAFTAI_ANONYMIZE_LOGS", "MINECRAFTAI_MASK_SENSITIVE_LOGS"):
+        config.mask_sensitive_logs = val.lower() in ("true", "1", "yes")
+
+    if val := _get_env("MC_MASK_PROMPTS_IN_LOGS", "MINECRAFTAI_MASK_PROMPTS_IN_LOGS"):
+        masked = val.lower() in ("true", "1", "yes")
+        config.mask_prompts_in_logs = masked
+        config.log_prompts = not masked
+
+    # Environment
+    if val := _get_env("ENVIRONMENT", "MINECRAFTAI_ENV", "ENV"):
+        config.is_development_mode = val.lower() in ("development", "dev")
 
     return config
 

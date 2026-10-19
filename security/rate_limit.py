@@ -91,13 +91,18 @@ class InMemoryRateLimiter:
                 self._active_generations -= 1
         self._concurrency_sem.release()
 
+    @property
+    def max_concurrent_generations(self) -> int:
+        return self.config.max_concurrent_generations
+
     def reset(self) -> None:
         """
-        Clears all recorded rate limit history (primarily for test resets).
+        Clears all recorded rate limit history and reinitializes concurrency semaphore.
         """
         with self._lock:
             self._requests.clear()
             self._active_generations = 0
+            self._concurrency_sem = threading.Semaphore(self.config.max_concurrent_generations)
 
 
 # Global singleton instance

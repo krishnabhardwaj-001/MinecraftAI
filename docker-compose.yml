@@ -19,7 +19,12 @@ services:
       - MC_RATE_LIMIT_PER_MINUTE=30
       - MC_BURST_ALLOWANCE=10
       - MC_MAX_CONCURRENT_GENERATIONS=4
+      - MC_MAX_ZIP_SIZE_MB=50
+      - MC_MAX_ZIP_ENTRIES=500
+      - MC_GENERATION_TIMEOUT_SECONDS=60.0
       - MC_ARTIFACT_RETENTION_SECONDS=3600
+      - MC_ANONYMIZE_LOGS=true
+      - MC_MASK_PROMPTS_IN_LOGS=false
       - PUBLIC_ORIGIN=${PUBLIC_ORIGIN:-}
     extra_hosts:
       - "host.docker.internal:host-gateway"

@@ -56,9 +56,9 @@ The `security/` package serves as the centralized defensive perimeter and securi
 ### C. Archive & ZIP Security (`archive_security.py`)
 * **Zip Slip Defense:** Every archive entry is inspected before reading or extracting. Entries with traversal sequences or root escapes are rejected.
 * **Zip Bomb Defense:** Enforces strict limits:
-  * Maximum 250 files per archive.
+  * Maximum 500 files per archive.
   * Maximum 5 MB per individual file.
-  * Maximum 25 MB total uncompressed bytes.
+  * Maximum 50 MB total uncompressed bytes.
   * Maximum 100:1 compression ratio limit.
 * **Extension Whitelisting:** Permits only `.json`, `.mcfunction`, `.mcmeta`, `.png`, and `.txt`. Executables (`.exe`, `.sh`, `.bat`, `.py`) are rejected.
 * **Datapack Structure Verification:** Enforces root-level `pack.mcmeta` and `data/` directory presence.
