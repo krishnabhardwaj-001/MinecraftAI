@@ -317,29 +317,47 @@ Remember:
 You are a planner, not a command hallucination engine.
 """
 
+    @classmethod
+    def _trim_knowledge(cls, knowledge: Dict[str, Any], max_items: int = 5) -> Dict[str, Any]:
+        """Trims retrieved knowledge dictionaries to top entries to avoid context overflow."""
+        if not isinstance(knowledge, dict):
+            return {}
+        trimmed = {}
+        for k, v in knowledge.items():
+            if isinstance(v, list):
+                trimmed[k] = v[:max_items]
+            elif isinstance(v, dict):
+                trimmed[k] = {
+                    sub_k: sub_v[:max_items] if isinstance(sub_v, list) else sub_v
+                    for sub_k, sub_v in list(v.items())[:max_items]
+                }
+            else:
+                trimmed[k] = v
+        return trimmed
+
     def _build_user_prompt(
         self,
         understanding: Dict[str, Any],
         context: Dict[str, Any]
     ) -> str:
-
+        knowledge_trimmed = self._trim_knowledge(context.get("knowledge", {}))
         return f"""
 Create an implementation plan for the following Minecraft request.
 
 MINECRAFT:
-{json.dumps(context.get("minecraft", {}), indent=2)}
+{json.dumps(context.get("minecraft", {}), separators=(',', ': '))}
 
 USER REQUEST:
 {context.get("user_request", "")}
 
 UNDERSTANDING:
-{json.dumps(understanding, indent=2)}
+{json.dumps(understanding, separators=(',', ': '))}
 
 REQUIREMENTS:
-{json.dumps(context.get("requirements", []), indent=2)}
+{json.dumps(context.get("requirements", []), separators=(',', ': '))}
 
 RETRIEVED MINECRAFT KNOWLEDGE:
-{json.dumps(context.get("knowledge", {}), indent=2)}
+{json.dumps(knowledge_trimmed, separators=(',', ': '))}
 
 Create one implementation_plan entry for each requirement.
 
@@ -1142,6 +1160,7 @@ Return only JSON matching the required schema.
         self,
         understanding: Dict[str, Any],
         property_modifications: Optional[List[PropertyModification]] = None,
+        context: Optional[Dict[str, Any]] = None,
     ) -> Dict[str, Any]:
 
         if not isinstance(understanding, dict):
@@ -1361,11 +1380,12 @@ Return only JSON matching the required schema.
             validated = PlannerResult.model_validate(result)
             return validated.model_dump()
 
-        context = retrieve_minecraft_context(
-            understanding,
-            version=self.version,
-            max_results=10
-        )
+        if context is None:
+            context = retrieve_minecraft_context(
+                understanding,
+                version=self.version,
+                max_results=10
+            )
 
         system_prompt = self._system_prompt()
 
@@ -1404,6 +1424,7 @@ def create_plan(
     property_modifications=None,
     property_registry=None,
     clarification_engine=None,
+    context: Optional[Dict[str, Any]] = None,
 ) -> Dict[str, Any]:
 
     planner = MinecraftPlanner(
@@ -1414,7 +1435,7 @@ def create_plan(
         clarification_engine=clarification_engine,
     )
 
-    return planner.plan(understanding, property_modifications=property_modifications)
+    return planner.plan(understanding, property_modifications=property_modifications, context=context)
 
 
 def validate_plan_mechanisms(plan: Dict[str, Any]) -> None:

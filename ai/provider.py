@@ -345,6 +345,22 @@ class AIProvider:
         user_prompt,
         schema
     ):
+        num_ctx = int(os.getenv("OLLAMA_NUM_CTX", "16384"))
+        num_predict = int(os.getenv("OLLAMA_NUM_PREDICT", "4096"))
+
+        total_prompt_chars = len(system_prompt) + len(user_prompt)
+        estimated_input_tokens = total_prompt_chars // 4
+        input_budget = max(1024, num_ctx - num_predict)
+
+        if estimated_input_tokens > input_budget:
+            import logging
+            logging.getLogger("minecraft_ai.provider").warning(
+                "Estimated prompt size (%d tokens) exceeds configured Ollama input budget (%d tokens). "
+                "Consider increasing OLLAMA_NUM_CTX or trimming prompt context.",
+                estimated_input_tokens,
+                input_budget
+            )
+
         response = self.client.chat(
             model=self.model,
 
@@ -363,12 +379,21 @@ class AIProvider:
 
             options={
                 "temperature": 0,
-                "num_predict": 4096,
-                "num_ctx": 8192
+                "num_predict": num_predict,
+                "num_ctx": num_ctx
             }
         )
 
-        content = response.message.content
+        done_reason = getattr(response, "done_reason", None)
+        if isinstance(response, dict):
+            done_reason = response.get("done_reason")
+        if done_reason == "length":
+            raise RuntimeError(
+                f"AI generation truncated: model reached output token limit (done_reason='length'). "
+                f"Consider increasing OLLAMA_NUM_PREDICT (currently {num_predict})."
+            )
+
+        content = getattr(response.message, "content", None) if hasattr(response, "message") else (response.get("message", {}).get("content") if isinstance(response, dict) else None)
         if not content or not content.strip():
             raise ValueError(f"AI provider '{self.provider}' returned empty response.")
 

@@ -252,7 +252,7 @@ class MinecraftPipeline:
         # -------------------------------------------------------------
         _log("3/8", "Creating implementation plan...", self.verbose)
         try:
-            plan = create_plan(understanding, provider=self.provider_name, version=self.version, ai_provider=self.ai)
+            plan = create_plan(understanding, provider=self.provider_name, version=self.version, ai_provider=self.ai, context=context)
         except Exception as e:
             err_code, diag = classify_provider_error(e)
             sanitized_err = sanitize_user_error_message(e)
