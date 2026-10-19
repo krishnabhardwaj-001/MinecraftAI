@@ -63,7 +63,7 @@ LEGAL_DIR = BASE_DIR / "security" / "legal"
 
 def cleanup_expired_artifacts(base_dir: Path = GENERATED_DIR, max_age_seconds: Optional[int] = None) -> int:
     """
-    Purges temporary generated datapack directories and archives older than retention threshold.
+    Purges temporary generated datapack directories, job subdirectories, and archives older than retention threshold.
     Guards server disk space from unbounded growth.
     """
     if not base_dir.exists():
@@ -75,15 +75,19 @@ def cleanup_expired_artifacts(base_dir: Path = GENERATED_DIR, max_age_seconds: O
 
     try:
         for entry in base_dir.iterdir():
-            # Never delete hidden files
+            # Never delete hidden files (.gitkeep, etc.)
             if entry.name.startswith("."):
                 continue
             try:
-                if entry.stat().st_mtime < cutoff:
-                    if entry.is_dir():
+                if entry.is_dir():
+                    # For directories, check latest mtime of contained files
+                    files = [f for f in entry.glob("**/*") if f.is_file()]
+                    latest_mtime = max([entry.stat().st_mtime] + [f.stat().st_mtime for f in files]) if files else entry.stat().st_mtime
+                    if latest_mtime < cutoff:
                         shutil.rmtree(entry, ignore_errors=True)
                         purged += 1
-                    elif entry.is_file():
+                elif entry.is_file():
+                    if entry.stat().st_mtime < cutoff:
                         entry.unlink(missing_ok=True)
                         purged += 1
             except OSError as e:
@@ -628,7 +632,15 @@ def _format_pipeline_result(pipeline_result: Any) -> Dict[str, Any]:
         try:
             validate_zip_archive(zip_path)
             zip_filename = zip_path.name
-            download_url = f"/api/download/{zip_filename}"
+            try:
+                rel = zip_path.relative_to(GENERATED_DIR)
+                if len(rel.parts) > 1:
+                    job_token = rel.parts[0]
+                    download_url = f"/api/download/{job_token}/{zip_filename}"
+                else:
+                    download_url = f"/api/download/{zip_filename}"
+            except ValueError:
+                download_url = f"/api/download/{zip_filename}"
         except ArchiveSecurityError as e:
             logger.error("Generated archive failed security verification: %s", str(e))
             zip_filename = None
@@ -674,8 +686,17 @@ def _format_pipeline_result(pipeline_result: Any) -> Dict[str, Any]:
         datapack_path = None
         zip_path_str = None
     else:
-        datapack_path = f"generated/{Path(pipeline_result.final_datapack_path).name}" if pipeline_result.final_datapack_path else None
-        zip_path_str = f"generated/{Path(pipeline_result.final_zip_path).name}" if pipeline_result.final_zip_path else None
+        try:
+            rel_dp = Path(pipeline_result.final_datapack_path).relative_to(GENERATED_DIR) if pipeline_result.final_datapack_path else None
+            datapack_path = f"generated/{rel_dp.as_posix()}" if rel_dp else None
+        except ValueError:
+            datapack_path = f"generated/{Path(pipeline_result.final_datapack_path).name}" if pipeline_result.final_datapack_path else None
+
+        try:
+            rel_z = Path(pipeline_result.final_zip_path).relative_to(GENERATED_DIR) if pipeline_result.final_zip_path else None
+            zip_path_str = f"generated/{rel_z.as_posix()}" if rel_z else None
+        except ValueError:
+            zip_path_str = f"generated/{Path(pipeline_result.final_zip_path).name}" if pipeline_result.final_zip_path else None
 
     sanitized_errors = [sanitize_user_error_message(err) for err in (pipeline_result.errors or [])]
     sanitized_exec_summary = sanitize_user_error_message(pipeline_result.execution_summary) if pipeline_result.execution_summary else "Execution complete."
@@ -711,7 +732,8 @@ async def _execute_pipeline_task(
     target_ver: str,
     understanding: Optional[Dict[str, Any]] = None,
     session: Optional[Any] = None,
-    datapack_name: Optional[str] = None
+    datapack_name: Optional[str] = None,
+    output_dir: Optional[Path] = None
 ) -> Any:
     """
     Executes the synchronous pipeline in a worker thread with timeout protection.
@@ -728,7 +750,8 @@ async def _execute_pipeline_task(
             verbose=False,
             understanding=understanding,
             session=session,
-            datapack_name=datapack_name
+            datapack_name=datapack_name,
+            output_dir=output_dir
         ),
         timeout=timeout
     )
@@ -753,7 +776,9 @@ async def _run_background_job(job: GenerationJob, req_text: str, target_ver: str
     try:
         job.progress_stage = "Generating and validating datapack"
         job.stage_index = 3
-        pipeline_result = await _execute_pipeline_task(req_text, target_ver)
+        job_output_dir = GENERATED_DIR / job.job_id
+        job_output_dir.mkdir(parents=True, exist_ok=True)
+        pipeline_result = await _execute_pipeline_task(req_text, target_ver, output_dir=job_output_dir)
         result_dict = _format_pipeline_result(pipeline_result)
         job.result = result_dict
         job.completed_at = time.time()
@@ -875,8 +900,12 @@ async def generate_datapack(payload: GeneratePayload, request: Request, async_mo
         sanitize_prompt_for_logging(req_text)
     )
 
+    job_id = f"job_{uuid.uuid4().hex[:12]}"
+    job_output_dir = GENERATED_DIR / job_id
+    job_output_dir.mkdir(parents=True, exist_ok=True)
+
     try:
-        pipeline_result = await _execute_pipeline_task(req_text, target_ver)
+        pipeline_result = await _execute_pipeline_task(req_text, target_ver, output_dir=job_output_dir)
     except asyncio.TimeoutError:
         cfg = load_security_config()
         logger.warning("Pipeline execution timed out after %ds", cfg.generation_timeout_seconds)
@@ -965,28 +994,59 @@ async def get_generate_status(job_id: str):
     return await get_job_status(job_id)
 
 
+@app.get("/api/download/{token}/{filename}")
 @app.get("/api/download/{filename}")
-async def download_datapack(filename: str):
+async def download_datapack(filename: str, token: Optional[str] = None):
     """
     Secure download endpoint for generated datapack ZIP archives.
-    Guards against path traversal, validates filename format, and inspects archive contents.
+    Accepts unguessable job directory tokens: /api/download/{token}/{filename}
+    Guards against path traversal, validates token/filename format, enforces TTL expiration,
+    and inspects archive contents before serving.
     """
-    # 1. Filename validation
-    try:
-        clean_filename = validate_zip_download_filename(filename)
-    except PathSecurityError as e:
-        raise HTTPException(status_code=400, detail=str(e))
-
-    # 2. Path sandboxing
-    try:
-        target_path = resolve_safe_path(clean_filename, GENERATED_DIR)
-    except PathSecurityError as e:
-        raise HTTPException(status_code=403, detail=str(e))
+    if token is not None:
+        try:
+            if not re.match(r"^[a-zA-Z0-9_\-]+$", token):
+                raise PathSecurityError("Invalid download token format")
+            clean_filename = validate_zip_download_filename(filename)
+            job_dir = resolve_safe_path(token, GENERATED_DIR)
+            target_path = resolve_safe_path(clean_filename, job_dir)
+            target_entry = job_dir
+        except PathSecurityError as e:
+            raise HTTPException(status_code=400, detail=str(e))
+    else:
+        try:
+            target_entry = resolve_safe_path(filename, GENERATED_DIR)
+            if target_entry.is_dir():
+                zips = list(target_entry.glob("*.zip"))
+                if not zips:
+                    raise HTTPException(status_code=404, detail="Datapack archive not found or expired.")
+                target_path = zips[0]
+                clean_filename = target_path.name
+            else:
+                clean_filename = validate_zip_download_filename(filename)
+                target_path = resolve_safe_path(clean_filename, GENERATED_DIR)
+        except PathSecurityError as e:
+            raise HTTPException(status_code=400, detail=str(e))
 
     if not target_path.exists() or not target_path.is_file():
         raise HTTPException(status_code=404, detail="Datapack archive not found or expired.")
 
-    # 3. Archive security inspection before serving
+    # Enforce TTL expiration
+    max_age = DEFAULT_SECURITY_CONFIG.artifact_retention_seconds
+    cutoff = time.time() - max_age
+    try:
+        if target_path.stat().st_mtime < cutoff:
+            if target_entry.is_dir():
+                shutil.rmtree(target_entry, ignore_errors=True)
+            else:
+                target_path.unlink(missing_ok=True)
+            raise HTTPException(status_code=404, detail="Datapack archive not found or expired.")
+    except HTTPException:
+        raise
+    except OSError:
+        raise HTTPException(status_code=404, detail="Datapack archive not found or expired.")
+
+    # Archive security inspection before serving
     try:
         validate_zip_archive(target_path)
     except ArchiveSecurityError as e:
@@ -1192,12 +1252,15 @@ async def confirm_and_generate(payload: ConfirmProposalPayload, request: Request
             try:
                 job.progress_stage = "Generating and validating datapack"
                 job.stage_index = 3
+                job_output_dir = GENERATED_DIR / job.job_id
+                job_output_dir.mkdir(parents=True, exist_ok=True)
                 pipeline_res = await _execute_pipeline_task(
                     req_text=req_text,
                     target_ver=target_ver,
                     understanding=spec_dict,
                     session=session,
-                    datapack_name=payload.datapack_name
+                    datapack_name=payload.datapack_name,
+                    output_dir=job_output_dir
                 )
                 res_dict = _format_pipeline_result(pipeline_res)
                 job.result = res_dict
@@ -1237,13 +1300,17 @@ async def confirm_and_generate(payload: ConfirmProposalPayload, request: Request
         )
 
     logger.info("Initiating conversational pipeline generation for session %s (ver %s)", session.session_id, target_ver)
+    job_id = f"job_{uuid.uuid4().hex[:12]}"
+    job_output_dir = GENERATED_DIR / job_id
+    job_output_dir.mkdir(parents=True, exist_ok=True)
     try:
         pipeline_result = await _execute_pipeline_task(
             req_text=req_text,
             target_ver=target_ver,
             understanding=spec_dict,
             session=session,
-            datapack_name=payload.datapack_name
+            datapack_name=payload.datapack_name,
+            output_dir=job_output_dir
         )
     except asyncio.TimeoutError:
         logger.warning("Pipeline execution timed out for session %s", session.session_id)
