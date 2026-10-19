@@ -91,7 +91,7 @@ class TestStep22aPackaging(unittest.TestCase):
 
         self.assertTrue(callable(getattr(run_web, "main", None)))
         self.assertEqual(app.title, "MinecraftAI Web Interface")
-        self.assertEqual(app.version, "1.21.11")
+        self.assertEqual(app.version, "1.0.0")
 
         # Verify key routes are present
         routes = [r.path for r in app.routes]

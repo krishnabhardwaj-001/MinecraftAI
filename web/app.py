@@ -36,6 +36,7 @@ from ai.specification import SpecificationBridge
 from security import (
     DEFAULT_SECURITY_CONFIG,
     DEFAULT_RATE_LIMITER,
+    SecurityConfig,
     SecurityHeadersMiddleware,
     InputValidationError,
     PathSecurityError,
@@ -107,10 +108,28 @@ async def lifespan(app_instance: FastAPI):
     yield
 
 
+def get_client_ip(request: Request, config: Optional[SecurityConfig] = None) -> str:
+    """
+    Resolves client IP address. If trust_forwarded_for is enabled in SecurityConfig,
+    inspects the X-Forwarded-For header to determine the originating client IP.
+    Otherwise uses the direct socket address to prevent IP spoofing.
+    """
+    cfg = config or load_security_config()
+    if cfg.trust_forwarded_for:
+        forwarded = request.headers.get("x-forwarded-for")
+        if forwarded:
+            first_ip = forwarded.split(",")[0].strip()
+            if first_ip:
+                return first_ip
+    if request.client and request.client.host:
+        return request.client.host
+    return "127.0.0.1"
+
+
 app = FastAPI(
     title="MinecraftAI Web Interface",
-    description="Production web interface and backend for natural-language Minecraft Java datapack generation",
-    version="1.21.11",
+    description="Production web interface and backend for natural-language Minecraft Java datapack generation (1.21.11 / 1.21.1)",
+    version="1.0.0",
     lifespan=lifespan
 )
 
@@ -735,10 +754,10 @@ def _format_pipeline_result(pipeline_result: Any) -> Dict[str, Any]:
     sanitized_exec_summary = sanitize_user_error_message(pipeline_result.execution_summary) if pipeline_result.execution_summary else "Execution complete."
 
     return {
-        "status": pipeline_result.status,
-        "error_code": pipeline_result.error_code,
-        "failed_stage": pipeline_result.failed_stage,
-        "diagnostic": pipeline_result.diagnostic,
+        "status": getattr(pipeline_result, "status", "error"),
+        "error_code": getattr(pipeline_result, "error_code", None),
+        "failed_stage": getattr(pipeline_result, "failed_stage", None),
+        "diagnostic": getattr(pipeline_result, "diagnostic", None),
         "stages": _compute_pipeline_stages(pipeline_result),
         "is_success": pipeline_result.is_success,
         "minecraft_version": pipeline_result.minecraft_version,
@@ -875,7 +894,7 @@ async def generate_datapack(payload: GeneratePayload, request: Request, async_mo
     Guarded by input validation, rate limiting, and concurrency throttling.
     Supports synchronous completion by default and asynchronous job submission via ?async_mode=true.
     """
-    client_ip = request.client.host if request.client else "127.0.0.1"
+    client_ip = get_client_ip(request)
 
     # 1. Rate Limiting Check
     allowed, retry_after = DEFAULT_RATE_LIMITER.check_rate_limit(client_ip)
@@ -1102,7 +1121,7 @@ async def create_conversation_session(payload: CreateSessionPayload, request: Re
     """
     Initializes a new isolated multi-turn conversational session.
     """
-    client_ip = request.client.host if request.client else "127.0.0.1"
+    client_ip = get_client_ip(request)
     allowed, retry_after = DEFAULT_RATE_LIMITER.check_rate_limit(client_ip)
     if not allowed:
         raise HTTPException(
@@ -1158,7 +1177,7 @@ async def send_conversation_message(payload: ConversationMessagePayload, request
     Processes a natural-language turn or choice selection within an active conversation session.
     Returns the evolving behavioral proposal, plain-English assumptions, and open choices.
     """
-    client_ip = request.client.host if request.client else "127.0.0.1"
+    client_ip = get_client_ip(request)
     allowed, retry_after = DEFAULT_RATE_LIMITER.check_rate_limit(client_ip)
     if not allowed:
         raise HTTPException(
@@ -1221,7 +1240,7 @@ async def confirm_and_generate(payload: ConfirmProposalPayload, request: Request
     Explicitly confirms the active proposal and triggers the 8-stage generation pipeline.
     Rejects confirmation if no proposal is pending, if proposal is incomplete, or if choices remain open.
     """
-    client_ip = request.client.host if request.client else "127.0.0.1"
+    client_ip = get_client_ip(request)
     allowed, retry_after = DEFAULT_RATE_LIMITER.check_rate_limit(client_ip)
     if not allowed:
         raise HTTPException(

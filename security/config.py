@@ -45,6 +45,10 @@ class SecurityConfig(BaseModel):
         default=True,
         description="Enable/disable rate limiting"
     )
+    trust_forwarded_for: bool = Field(
+        default=False,
+        description="Opt-in trust of X-Forwarded-For header for reverse proxy deployments"
+    )
 
     # Concurrency and Generation Timeout
     max_concurrent_generations: int = Field(
@@ -239,6 +243,10 @@ def load_security_config() -> SecurityConfig:
     # Environment
     if val := _get_env("ENVIRONMENT", "MINECRAFTAI_ENV", "ENV"):
         config.is_development_mode = val.lower() in ("development", "dev")
+
+    # Reverse proxy settings
+    if val := _get_env("MC_TRUST_FORWARDED_FOR", "TRUST_FORWARDED_FOR", "MINECRAFTAI_TRUST_FORWARDED_FOR"):
+        config.trust_forwarded_for = val.lower() in ("true", "1", "yes")
 
     return config
 

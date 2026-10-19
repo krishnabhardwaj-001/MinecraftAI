@@ -5,14 +5,14 @@ build-backend = "setuptools.build_meta"
 [project]
 name = "minecraft-ai"
 version = "1.0.0"
-description = "Deterministic AI Datapack Maker for Minecraft Java Edition 1.21.11"
+description = "Deterministic AI Datapack Maker for Minecraft Java Edition (1.21.11 / 1.21.1)"
 readme = "README.md"
 requires-python = ">=3.10"
 license = {text = "MIT"}
 authors = [
     {name = "Krishna Bhardwaj"}
 ]
-keywords = ["minecraft", "datapack", "ai", "generator", "1.21.11"]
+keywords = ["minecraft", "datapack", "ai", "generator", "1.21.11", "1.21.1"]
 classifiers = [
     "Programming Language :: Python :: 3",
     "Programming Language :: Python :: 3.10",

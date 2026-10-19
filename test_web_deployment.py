@@ -18,7 +18,7 @@ import shutil
 import time
 import zipfile
 from pathlib import Path
-from unittest.mock import patch
+from unittest.mock import MagicMock, patch
 
 import pytest
 from fastapi.testclient import TestClient
@@ -105,19 +105,43 @@ class TestProductionSecurityAndConcealment:
 
     def test_production_mode_conceals_server_paths(self, client):
         """In production mode, datapack_path and zip_path must be None."""
+        mock_res = MagicMock(
+            status="ready",
+            is_success=True,
+            minecraft_version="1.21.11",
+            original_request="Make every skeleton drop iron ingots.",
+            final_datapack_path="D:\\Projects\\MinecraftAI\\generated\\make_every_skeleton_drop_iron_ingots",
+            final_zip_path="D:\\Projects\\MinecraftAI\\generated\\make_every_skeleton_drop_iron_ingots.zip",
+            datapack_name="make_every_skeleton_drop_iron_ingots",
+            errors=[],
+            stages={"1": "done", "2": "done", "3": "done", "4": "done", "5": "done", "6": "done", "7": "done", "8": "done"},
+            clarification=None,
+            clarification_requirements=[],
+            execution_summary="Generated",
+            generation=MagicMock(files_generated=["pack.mcmeta"]),
+            context=MagicMock(commands_retrieved=[], entities_retrieved=[], items_retrieved=[]),
+            validation=MagicMock(is_valid=True, total_errors=0, total_warnings=0, errors=[], warnings=[], checks_performed=[]),
+            repair=None,
+            plan={"summary": "Drop iron ingots"},
+            error_code=None,
+            failed_stage=None,
+            diagnostic=None
+        )
         with patch.object(DEFAULT_SECURITY_CONFIG, "is_development_mode", False):
-            response = client.post(
-                "/api/generate",
-                json={
-                    "request": "Make every skeleton drop iron ingots.",
-                    "minecraft_version": "1.21.11"
-                }
-            )
-            assert response.status_code == 200
-            data = response.json()
-            assert data["datapack_path"] is None
-            assert data["zip_path"] is None
-            assert data["download_url"] is not None
+            with patch("web.app.run_minecraft_pipeline", return_value=mock_res), \
+                 patch("web.app.validate_zip_archive"):
+                response = client.post(
+                    "/api/generate",
+                    json={
+                        "request": "Make every skeleton drop iron ingots.",
+                        "minecraft_version": "1.21.11"
+                    }
+                )
+                assert response.status_code == 200
+                data = response.json()
+                assert data["datapack_path"] is None
+                assert data["zip_path"] is None
+                assert data["download_url"] is not None
 
     def test_production_mode_provider_failure_sanitization(self, client):
         """When AI provider fails in production, return safe 503 without stack traces."""

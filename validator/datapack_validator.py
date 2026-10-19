@@ -4,8 +4,11 @@ import re
 import shutil
 import tempfile
 import zipfile
+import logging
 from pathlib import Path
 from typing import Any, Dict, List, Optional, Set, Tuple, Union
+
+logger = logging.getLogger("minecraft_ai.validator")
 
 from generator.models import (
     OBJECTIVE_NAME_REGEX,
@@ -123,8 +126,8 @@ class DatapackValidator:
                 return {item["id"].lower() for item in data if "id" in item}
             elif isinstance(data, dict):
                 return {k.lower() for k in data.keys()}
-        except Exception:
-            pass
+        except Exception as e:
+            logger.debug("Failed loading items from %s: %s", items_path, e)
 
         return set()
 
@@ -152,8 +155,8 @@ class DatapackValidator:
                 return {item["id"].lower() for item in data if "id" in item}
             elif isinstance(data, dict):
                 return {k.lower() for k in data.keys()}
-        except Exception:
-            pass
+        except Exception as e:
+            logger.debug("Failed loading entities from %s: %s", entities_path, e)
 
         return set()
 
@@ -180,8 +183,8 @@ class DatapackValidator:
                         attributes.add(k.lower())
                     if attributes:
                         break
-                except Exception:
-                    pass
+                except Exception as e:
+                    logger.debug("Failed reading registry file %s: %s", reg_p, e)
 
         # Complete set of 1.21.11 attributes as guaranteed baseline ONLY for 1.21.11 when reports missing
         if self.version == "1.21.11" and not attributes:

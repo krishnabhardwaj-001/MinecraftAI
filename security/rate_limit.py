@@ -49,11 +49,18 @@ class InMemoryRateLimiter:
         burst_window_seconds = 5.0
 
         with self._lock:
+            self._call_count = getattr(self, "_call_count", 0) + 1
+            if self._call_count % 100 == 0:
+                self._evict_idle_keys_locked(now, max_idle_seconds=window_seconds * 5)
+
             history = self._requests[client_ip]
 
             # Prune timestamps older than 60 seconds
             history = [t for t in history if now - t < window_seconds]
-            self._requests[client_ip] = history
+            if not history:
+                self._requests.pop(client_ip, None)
+            else:
+                self._requests[client_ip] = history
 
             # Check minute limit
             if len(history) >= self.config.rate_limit_requests_per_minute:
@@ -70,7 +77,27 @@ class InMemoryRateLimiter:
 
             # Record this request
             history.append(now)
+            self._requests[client_ip] = history
             return True, None
+
+    def _evict_idle_keys_locked(self, now: float, max_idle_seconds: float = 300.0) -> int:
+        """Internal helper to evict keys whose requests are completely outside retention window."""
+        evicted = 0
+        for ip in list(self._requests.keys()):
+            history = self._requests[ip]
+            if not history or (now - history[-1] >= max_idle_seconds):
+                del self._requests[ip]
+                evicted += 1
+        return evicted
+
+    def evict_idle_keys(self, max_idle_seconds: float = 300.0) -> int:
+        """
+        Public method to prune idle IP addresses from memory.
+        Returns the number of keys evicted.
+        """
+        now = time.time()
+        with self._lock:
+            return self._evict_idle_keys_locked(now, max_idle_seconds)
 
     def acquire_generation_slot(self, timeout_s: float = 2.0) -> bool:
         """

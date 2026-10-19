@@ -3,8 +3,11 @@ import json
 import re
 import shutil
 import zipfile
+import logging
 from pathlib import Path
 from typing import Any, Dict, List, Optional, Union
+
+logger = logging.getLogger("minecraft_ai.generator")
 
 from ai.lifecycle_reconciler import DEFAULT_LIFECYCLE_RECONCILER
 from ai.version_registry import VersionContext
@@ -195,8 +198,8 @@ class DatapackGenerator:
                         if d_name in ["count", "amount", "quantity"]:
                             try:
                                 count = int(d_val)
-                            except (ValueError, TypeError):
-                                pass
+                            except (ValueError, TypeError) as e:
+                                logger.debug("Could not parse count %s as integer: %s", d_val, e)
                         # Also check if item wasn't retrieved but is in details
                         if not item_id and d_name in ["item", "reward"]:
                             item_id = str(d_val)
@@ -999,8 +1002,8 @@ class DatapackGenerator:
                     clean_tag_dict["replace"] = True
 
                 tag_file.write_text(json.dumps(clean_tag_dict, indent=2, ensure_ascii=False) + "\n", encoding="utf-8")
-            except Exception:
-                pass
+            except Exception as e:
+                logger.debug("Failed sanitizing tag file %s: %s", tag_file, e)
 
         # 3. Create deterministic ZIP archive if requested
         zip_path: Optional[Path] = None

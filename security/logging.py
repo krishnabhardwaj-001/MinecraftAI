@@ -18,6 +18,7 @@ SENSITIVE_PATTERNS = [
     (re.compile(r"(password\s*[:=]\s*)['\"]?([^\s'\"]+)['\"]?", re.IGNORECASE), r"\1[MASKED_PASSWORD]"),
     (re.compile(r"(Bearer\s+)[a-zA-Z0-9_\-\.]{10,}", re.IGNORECASE), r"\1[MASKED_BEARER]"),
     (re.compile(r"([a-zA-Z]:\\[^\s'\"]+)", re.IGNORECASE), r"[REDACTED_PATH]"),
+    (re.compile(r"(?:/|\\)(?:home|usr|var|tmp|etc|app|mnt|root|opt|srv)(?:/|\\)[^\s,;:'\"]+", re.IGNORECASE), r"[REDACTED_PATH]"),
 ]
 
 

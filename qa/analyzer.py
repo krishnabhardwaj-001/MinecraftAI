@@ -1,7 +1,10 @@
 import json
 import re
+import logging
 from pathlib import Path
 from typing import Any, Dict, List, Optional, Set, Tuple
+
+logger = logging.getLogger("minecraft_ai.qa.analyzer")
 
 from ai.version_registry import VersionContext
 from qa.models import QACategory, QAFinding, QASeverity
@@ -133,8 +136,8 @@ class StaticSemanticAnalyzer:
                                 "values": tag_data.get("values", []),
                                 "path": p
                             }
-                        except Exception:
-                            pass
+                        except Exception as e:
+                            logger.debug("Failed reading tag file %s: %s", p, e)
 
         # Parse functions for scoreboard objective declarations and usages
         for fn_id, fn_path in res["functions"].items():
@@ -155,8 +158,8 @@ class StaticSemanticAnalyzer:
                         m_set = re.search(r"\bscoreboard\s+players\s+(?:set|add|remove|get|reset)\s+\S+\s+([a-zA-Z0-9_\-\.]+)", line_clean)
                         if m_set:
                             res["objectives_used"].add(m_set.group(1))
-            except Exception:
-                pass
+            except Exception as e:
+                logger.debug("Failed parsing function file %s: %s", fn_path, e)
 
         return res
 
@@ -243,8 +246,8 @@ class StaticSemanticAnalyzer:
                         if f"predicate {short_name}" in content:
                             referenced = True
                             break
-                except Exception:
-                    pass
+                except Exception as e:
+                    logger.debug("Failed checking function %s for predicate reference: %s", fn_path, e)
 
             if not referenced:
                 rel_path = str(pred_path.relative_to(root)).replace("\\", "/")
@@ -746,9 +749,9 @@ class StaticSemanticAnalyzer:
                                         repair_required="Set scale base value to at least 0.01."
                                     )
                                 )
-                        except ValueError:
-                            pass
-            except Exception:
-                pass
+                        except ValueError as e:
+                            logger.debug("Could not parse scale value in line '%s': %s", line, e)
+            except Exception as e:
+                logger.debug("Failed analyzing commands in function %s: %s", fn_path, e)
 
         return findings
