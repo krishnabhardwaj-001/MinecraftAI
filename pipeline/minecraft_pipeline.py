@@ -520,6 +520,7 @@ class MinecraftPipeline:
                     plan=plan,
                     generation=gen_result,
                     validation=val_result,
+                    repair=repair_result,
                     qa_result=qa_result,
                     errors=[f"Regeneration failed during QA repair: {sanitized_err}"],
                     execution_summary="Pipeline failed: regeneration failed during QA repair loop."
@@ -580,6 +581,7 @@ class MinecraftPipeline:
                 plan=plan,
                 generation=gen_result,
                 validation=val_result,
+                repair=repair_result,
                 qa_result=qa_result,
                 intent_verification=intent_res,
                 errors=[f"Intent mismatch: {missing}" for missing in intent_res.missing_aspects],
@@ -592,7 +594,29 @@ class MinecraftPipeline:
         # -------------------------------------------------------------
         _log("8/8", "Final verification & READY gate...", self.verbose)
 
-        # Execute runtime simulation
+        # 1. Structural validity is a hard requirement for READY regardless of create_zip
+        struct_check = self.validator.validate(Path(final_gen_path))
+        if not struct_check.is_valid:
+            _log("8/8", f"VERIFICATION FAILED: Structural validation failed: {len(struct_check.errors)} error(s).", self.verbose)
+            return PipelineResult(
+                status="verification_failed",
+                failed_stage="final_verification",
+                verification_status="structural_validation_failed",
+                minecraft_version=self.version,
+                original_request=request_clean,
+                understanding=understanding,
+                context=context,
+                plan=plan,
+                generation=gen_result,
+                validation=struct_check,
+                repair=repair_result,
+                qa_result=qa_result,
+                intent_verification=intent_res,
+                errors=[f"Structural validation error: {e.message}" for e in struct_check.errors],
+                execution_summary="Pipeline failed: Datapack failed structural validation at READY gate."
+            )
+
+        # 2. Execute runtime simulation
         runtime_res = self.runtime_runner.run(
             datapack_dir=Path(final_gen_path),
             mode=RuntimeTestMode.STATIC_SIMULATION
@@ -609,7 +633,8 @@ class MinecraftPipeline:
                 context=context,
                 plan=plan,
                 generation=gen_result,
-                validation=val_result,
+                validation=struct_check,
+                repair=repair_result,
                 qa_result=qa_result,
                 intent_verification=intent_res,
                 runtime_result=runtime_res,
@@ -617,7 +642,7 @@ class MinecraftPipeline:
                 execution_summary="Pipeline failed: Runtime simulation failed."
             )
 
-        # Validate final ZIP explicitly if zip creation was enabled
+        # 3. Validate final ZIP explicitly if zip creation was enabled
         if create_zip and final_zip_path:
             zip_check = self.validator.validate(final_zip_path)
             if not zip_check.is_valid:
@@ -632,6 +657,7 @@ class MinecraftPipeline:
                     plan=plan,
                     generation=gen_result,
                     validation=zip_check,
+                    repair=repair_result,
                     qa_result=qa_result,
                     intent_verification=intent_res,
                     runtime_result=runtime_res,
