@@ -534,24 +534,29 @@ def _format_pipeline_result(pipeline_result: Any) -> Dict[str, Any]:
         repair_summary = {
             "is_success": pipeline_result.repair.is_success,
             "total_attempts": pipeline_result.repair.total_attempts,
-            "message": pipeline_result.repair.message,
+            "message": sanitize_user_error_message(pipeline_result.repair.message) if pipeline_result.repair.message else None,
             "attempts": [
                 {
                     "attempt_number": att.attempt_number,
                     "validation_status": att.validation_status,
-                    "reasoning": att.repair_reasoning,
-                    "errors": att.errors
+                    "reasoning": sanitize_user_error_message(att.repair_reasoning) if att.repair_reasoning else None,
+                    "errors": [sanitize_user_error_message(e) for e in (att.errors or [])]
                 }
                 for att in pipeline_result.repair.attempts
             ]
         }
 
-    # Hide internal server paths in production mode, and avoid exposing absolute machine paths
+    # Hide internal server paths in production mode, and always ensure relative paths in dev mode
     is_prod = DEFAULT_SECURITY_CONFIG.is_production_mode
-    datapack_path = None if is_prod else (f"generated/{Path(pipeline_result.final_datapack_path).name}" if pipeline_result.final_datapack_path else None)
-    zip_path_str = None if is_prod else (f"generated/{Path(pipeline_result.final_zip_path).name}" if pipeline_result.final_zip_path else None)
+    if is_prod:
+        datapack_path = None
+        zip_path_str = None
+    else:
+        datapack_path = f"generated/{Path(pipeline_result.final_datapack_path).name}" if pipeline_result.final_datapack_path else None
+        zip_path_str = f"generated/{Path(pipeline_result.final_zip_path).name}" if pipeline_result.final_zip_path else None
 
     sanitized_errors = [sanitize_user_error_message(err) for err in (pipeline_result.errors or [])]
+    sanitized_exec_summary = sanitize_user_error_message(pipeline_result.execution_summary) if pipeline_result.execution_summary else "Execution complete."
 
     return {
         "status": pipeline_result.status,
@@ -565,7 +570,7 @@ def _format_pipeline_result(pipeline_result: Any) -> Dict[str, Any]:
         "refined_request": pipeline_result.original_request,
         "clarification": pipeline_result.clarification,
         "clarification_requirements": pipeline_result.clarification_requirements or [],
-        "execution_summary": pipeline_result.execution_summary,
+        "execution_summary": sanitized_exec_summary,
         "datapack_path": datapack_path,
         "zip_path": zip_path_str,
         "zip_filename": zip_filename,
