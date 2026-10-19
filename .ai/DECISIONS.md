@@ -715,3 +715,32 @@ To address assumption pinning and unbounded history growth in conversational sta
    - Keeps message and turn histories 100% consistent (`len(messages) == 2 * len(turns)`).
    - Trimming never mutates or clears active proposals, confirmed specifications, open choices, or assumptions.
    - `get_formatted_history()` bounds the dialogue text sent to the LLM, annotating compacted intermediate turns while displaying initial goals and active baselines.
+
+## D058 — Unified Configuration & Environment Variable Hierarchy (B3)
+To ensure deterministic, unambiguous configuration across container, local, and production environments:
+1. `MC_*` is the canonical primary environment prefix (e.g. `MC_HOST`, `MC_PORT`, `MC_MAX_PAYLOAD_SIZE`, `MC_GENERATION_TIMEOUT_SECONDS`, `MC_MAX_ENTRIES`, `MC_MAX_UNCOMPRESSED_SIZE`, `MC_MAX_COMPRESSION_RATIO`).
+2. Legacy `MINECRAFTAI_*` variables are supported as backward-compatible aliases.
+3. Aligned defaults: 50 MB max uncompressed archive size, 500 max entries, 60s generation timeout, 100:1 max compression ratio, matching production documentation.
+
+## D059 — Request Isolation, Ephemeral Job Directories, and Token-Secured Artifacts (B13, B11)
+To prevent cross-request file collisions, concurrency races, and server filesystem leakage:
+1. Every generation request is assigned an isolated sub-directory under `generated/` (`job_<hex_token>/`).
+2. Downloads use unguessable, cryptographically secure 32-character tokens (`/api/download/{token}`) resolving exclusively within the job boundary, replacing guessable raw filenames.
+3. Filesystem paths (`datapack_path`, `zip_path`) are suppressed as `None` in production mode and formatted as relative paths in development mode, preventing server directory disclosure.
+
+## D060 — Dynamic Command Verb Whitelisting & JSON Component Masking (B14)
+To enforce command security deterministically without breaking Minecraft syntax:
+1. Command security is directly integrated into `DatapackValidator`.
+2. Authorized verbs are discovered dynamically from `knowledge/commands/java/{version}/` (85+ gameplay verbs), filtering out dangerous server administration and debugging verbs (`ban`, `op`, `stop`, `whitelist`, `kick`, `deop`, `pardon`, `jfr`, `perf`).
+3. Rich JSON text components in commands (`tellraw`, `title`, `item replace`) are masked with placeholders before shell metacharacter checking, allowing valid JSON characters (`"`, `{`, `}`) while strictly blocking shell injection operators (`;`, `&`, `|`, `` ` ``).
+
+## D061 — Generic Load-Time State Machine Latch Derivation (B17)
+To ensure temporal event state machines fire correctly on rising edges without hardcoded latch values:
+1. Initial latch state is derived generically at load time (`load.mcfunction`) from the predicate condition expression: inverted predicates (`inverted`) and unless conditions initialize the latch to 1, while normal predicates initialize to 0.
+2. In the AI Planner, Rule 25 teaches the LLM this exact latch derivation rule, preventing state-machine transition flapping or missed on-enter triggers across all Minecraft versions.
+
+## D062 — Test Hermeticity, Lazy Provider Initialization, and Pipeline Diagnostics (B2, B5, B16)
+To guarantee that CI and offline testing remain 100% reliable without external network dependencies:
+1. `AutonomousQAReviewer`, `QARepairEngine`, and `AIRepairLoop` lazily instantiate `AIProvider` only when repair or AI review is genuinely invoked. Offline structural validation and static analysis never initialize network clients.
+2. Provider errors in the pipeline are classified into `ProviderErrorCode` (`AUTHENTICATION_REQUIRED`, `UNREACHABLE`, `RATE_LIMITED`, `UNKNOWN`), returning structured diagnostic messages and HTTP 503 instead of raw unhandled tracebacks.
+3. Stage 8 READY gate strictly enforces structural validation regardless of whether `create_zip` is True or False, and failure results always preserve `repair` diagnostic information.

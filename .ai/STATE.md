@@ -322,15 +322,40 @@
      - Standalone conversational suites (`test_conversation_state.py`, `test_conversational_understanding.py`, `test_specification_bridge.py`) pass: 19/19 tests pass in 4.78s.
      - Total 33/33 conversational integration tests pass with 0 failures and 0 warnings.
 
+- Full Independent Audit Remediation (B1–B21) operational across all P0, P1, and P2 findings on branch `fix/full-audit`:
+  1. B1 (run_web env vars & banner): `run_web.py` host/port resolution from `HOST`/`PORT` env vars, dual-version banner ("1.21.11 / 1.21.1").
+  2. B2 (Pipeline error classification): `PipelineResult` includes `error_code`, `failed_stage`, `diagnostic`. Web returns 503 with diagnostic; POSIX paths sanitized.
+  3. B3 (Config unification): `MC_*` primary names with legacy `MINECRAFTAI_*` aliases. Aligned defaults (50 MB / 500 entries / 60s timeout / 100:1 compression).
+  4. B4 (Non-blocking generation & concurrency): `asyncio.to_thread` for pipeline generation, `generation_timeout_seconds` returning 504 with slot release, request payload limit middleware returning 413.
+  5. B5 (CI pytest & lazy providers): CI workflow runs `python -m pytest -W error`. Lazy `AIProvider` instantiation in QA/Repair. Live tests marked `@pytest.mark.live`.
+  6. B6 (OpenAI schema strictness): Sets `strict: False` for Pydantic schemas with `extra="allow"`. Default model updated to `gpt-4o`.
+  7. B7 (Ollama context budget): Configurable `OLLAMA_NUM_CTX` and `OLLAMA_NUM_PREDICT`. Length truncation detection, knowledge trimming, planner context reuse.
+  8. B8 (Clarification answer accumulation): Multi-round answer accumulation in web and CLI, length revalidation on composed prompt.
+  9. B9 (Authentic pipeline stages): `_compute_pipeline_stages()` returns authentic 8 stages. Web UI renders true progress.
+  10. B10 (Frontend error rendering): Formats 422 array objects, clears stale download links on null `download_url`, preserves multi-line 503 diagnostics.
+  11. B11 (Server path disclosure): `datapack_path` and `zip_path` return relative paths in development and `None` in production.
+  12. B12 (Authentic health diagnostics): `/api/health` probes provider configuration, version registry/knowledge, directory writability, Java info, and cached reachability.
+  13. B13 (Collision-safe jobs & tokens): Per-request job directories (`job_<token>`), secure download tokens, TTL cleanup.
+  14. B14 (Command security in validator): Dynamic verb whitelist from `knowledge/commands/java/`, admin command filtering, JSON component masking.
+  15. B15 (CLI argument parsing): `argparse` replaces hand-parsing, `--help` works without calling pipeline, `validate_prompt` rejects oversized/invalid inputs.
+  16. B16 (READY gate structural validation): Hard requirement for structural validity regardless of `create_zip`. `repair` info preserved in failure returns.
+  17. B17 (Generic state latch derivation): Load-time latch derived from predicate condition in state machine generator and planner rules.
+  18. B18 (Repository hygiene & .dockerignore): Added `.dockerignore`, generic `generated/*` gitignore, `scripts/download_server_jars.py`, untracked duplicate server jar.
+  19. B19 (Dockerfile hardening): Multi-stage build (`builder` + `runner`), fixed unquoted redirection, `ARG INSTALL_JRE=false`, non-root user.
+  20. B20 (Legal markdown renderer): `<ol>`/`</ol>` tags, XSS escaping, `# ` as `<h1>`, `javascript:` link scheme sanitization.
+  21. B21 (Security operations & dual-version metadata): Extended POSIX path redaction (`/mnt`, `/root`, `/opt`, `/srv`), idle key eviction in rate limiter, trusted proxy `X-Forwarded-For`, exception debug logging, aligned launcher scripts.
+  - Automated Verification: Full test suite passes 877/877 tests with 0 failures, 0 errors, 0 warnings under `-W error`. Dedicated audit test suite passes 78/78 tests. Evaluation benchmark passes 78/78 cases (100.0%). Headless real-Minecraft live server tests pass for both 1.21.11 and 1.21.1.
+
 ## Known issues / gaps
-1. In live end-to-end pipeline execution with local Ollama LLMs (`test_pipeline.py`), stochastic variation in generative responses on ambiguous prompts can occasionally produce interactive clarification requests. The deterministic pipeline, benchmark, and generator suites are 100% deterministic and immune to LLM temperature variations.
+1. Docker daemon is not installed on the local Windows development host; Docker container execution was validated via static Dockerfile analysis tests (`test_audit_b19_dockerfile.py`), `.dockerignore` tests (`test_audit_b18_dockerignore_hygiene.py`), and non-root multi-stage specification inspection.
+2. In live end-to-end pipeline execution with local Ollama LLMs (`test_pipeline.py`), stochastic variation in generative responses on ambiguous prompts can occasionally produce interactive clarification requests. The deterministic pipeline, benchmark, and generator suites are 100% deterministic and immune to LLM temperature variations.
 
 ## Current priority
-Phase 2 Conversational Engine & Local Web App Integration is complete, fully tested with safe in-memory test doubles, and verified. The local web interface seamlessly supports both Conversational mode and Direct mode, bound strictly to 127.0.0.1.
+Full Independent Audit (B1–B21) is 100% complete, committed atomically (21 commits), and verified on branch `fix/full-audit`. Ready for final review.
 
 ## Next logical work
-1. Manual end-to-end user verification of the local web interface (`start.bat` or `python run_web.py --open-browser`).
-2. Optional headless real-Minecraft server verification using manual terminal commands if generation/regeneration is desired by the user.
+1. Create PR from `fix/full-audit` into `main`.
+2. Perform optional manual in-game verification in a live Minecraft client.
 
 ## Agent handoff rule
 Before changing code, verify this state against the actual repository and Git history. After significant changes, update this file and the other relevant `.ai/` files.

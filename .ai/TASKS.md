@@ -1,6 +1,29 @@
 # MinecraftAI Tasks
 
 ## Current
+- [x] Full Independent Audit Remediation (B1–B21) on branch `fix/full-audit`:
+  - [x] B1: `run_web.py` host/port resolution from `HOST`/`PORT` env vars, dual-version banner.
+  - [x] B2: Pipeline provider error classification (`error_code`, `failed_stage`, `diagnostic`), web 503 diagnostics, POSIX path sanitization.
+  - [x] B3: Unified configuration with `MC_*` primary names and legacy `MINECRAFTAI_*` aliases; aligned defaults (50 MB / 500 entries / 60s timeout / 100:1 compression).
+  - [x] B4: Non-blocking generation via `asyncio.to_thread`, request timeout returning 504 with slot release, request payload limit middleware returning 413.
+  - [x] B5: CI runs `python -m pytest -W error`, lazy `AIProvider` instantiation in QA/Repair, `@pytest.mark.live` on live LLM tests.
+  - [x] B6: OpenAI provider schema strictness (`strict: False` for `extra="allow"`), default model updated to `gpt-4o`.
+  - [x] B7: Configurable `OLLAMA_NUM_CTX` and `OLLAMA_NUM_PREDICT`, length truncation detection, knowledge trimming, planner context reuse.
+  - [x] B8: Multi-round clarification answer accumulation in web/CLI, composed prompt length revalidation.
+  - [x] B9: Authentic pipeline stages (`_compute_pipeline_stages`), web UI renders true 8-stage progress.
+  - [x] B10: Frontend error rendering (formats 422 array objects, clears stale download links on null, preserves multi-line diagnostics).
+  - [x] B11: Server path disclosure prevented; relative paths in dev, `None` in production.
+  - [x] B12: Authentic health diagnostics in `/api/health` (provider configuration, version registry/knowledge, directory writability, Java info, cached probe).
+  - [x] B13: Per-request job directories (`job_<token>`), secure download tokens, TTL cleanup.
+  - [x] B14: Dynamic command verb security in `DatapackValidator`, administrative command filtering, JSON component masking.
+  - [x] B15: CLI argument parsing with `argparse`, `--help` flag, `validate_prompt` input validation.
+  - [x] B16: READY gate structural validation enforcement regardless of `create_zip`, `repair` info preserved in failure returns.
+  - [x] B17: Generic load-time state latch derivation from predicate condition in state machine generator and planner rules.
+  - [x] B18: Repository hygiene: `.dockerignore`, generic `generated/*` gitignore, `scripts/download_server_jars.py`, untracked duplicate server jar.
+  - [x] B19: Multi-stage Dockerfile (`builder` + `runner`), unquoted redirection fix, `ARG INSTALL_JRE=false`, non-root user.
+  - [x] B20: Legal markdown renderer: `<ol>`/`</ol>` tags, XSS escaping, `# ` as `<h1>`, `javascript:` link scheme sanitization.
+  - [x] B21: Security operations & dual-version metadata: extended POSIX path redaction, idle key eviction in rate limiter, trusted proxy `X-Forwarded-For`, exception debug logging, launcher script alignment.
+  - [x] Verification: 877/877 pytest suite passes under `-W error`, 78/78 dedicated audit tests pass, 78/78 benchmark cases pass (100.0%), headless 1.21.11 and 1.21.1 servers pass.
 - [x] Phase 2.1: Targeted Refinements for Conversational Engine & Specification Bridge.
   - [x] Explicit and unambiguous semantic assumption association in `ai/specification.py`.
   - [x] Global context fallback for unmatched or ambiguous assumptions without polluting individual requirements.
