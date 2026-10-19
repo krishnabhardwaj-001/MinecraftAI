@@ -1,14 +1,34 @@
 # ==============================================================================
 # MinecraftAI Production Container
-# Multi-stage/lean Python 3.11 image with non-root security context
+# Multi-stage Python 3.11 image with non-root security context
 # ==============================================================================
 
-FROM python:3.11-slim AS base
+# Stage 1: Build stage for installing wheels and dependencies
+FROM python:3.11-slim AS builder
 
-# Install curl for container health check
+WORKDIR /build
+
+RUN pip install --no-cache-dir --upgrade pip setuptools wheel
+
+# Install production dependencies via pyproject.toml
+COPY pyproject.toml ./
+RUN pip install --no-cache-dir --prefix=/install .
+
+# Stage 2: Final runtime container
+FROM python:3.11-slim AS runner
+
+ARG INSTALL_JRE=false
+
+# Install curl for container health check and optional JRE 21 for headless server tests
 RUN apt-get update && \
     apt-get install -y --no-install-recommends curl && \
+    if [ "$INSTALL_JRE" = "true" ]; then \
+        apt-get install -y --no-install-recommends openjdk-21-jre-headless; \
+    fi && \
     rm -rf /var/lib/apt/lists/*
+
+# Copy installed dependencies from builder stage
+COPY --from=builder /install /usr/local
 
 # Create dedicated non-root application user and group
 RUN groupadd -g 10001 appgroup && \
@@ -16,24 +36,7 @@ RUN groupadd -g 10001 appgroup && \
 
 WORKDIR /app
 
-# Install Python build dependencies
-RUN pip install --no-cache-dir --upgrade pip setuptools wheel
-
-# Copy package definitions first for optimal layer caching
-COPY pyproject.toml ./
-
-# Install project and production dependencies
-RUN pip install --no-cache-dir \
-    pydantic>=2.0.0 \
-    python-dotenv>=1.0.0 \
-    ollama>=0.2.0 \
-    openai>=1.0.0 \
-    fastapi>=0.100.0 \
-    uvicorn>=0.20.0 \
-    jinja2>=3.1.0 \
-    httpx>=0.24.0
-
-# Copy application source code
+# Copy application source code (filtered by .dockerignore)
 COPY . /app
 
 # Ensure non-root ownership of workspace and output directories
