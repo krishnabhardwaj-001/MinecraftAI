@@ -117,6 +117,9 @@ class StateMachineMechanismGenerator(BaseMechanismGenerator):
         ]
         if scope == "global":
             load_lines.append(f"scoreboard players set #global {obj_name} 0")
+            load_lines.append(
+                f"execute if predicate {cond_pred} run scoreboard players set #global {obj_name} 1"
+            )
 
         # Diagnostic tracking & reload announcement
         load_lines.append("scoreboard objectives add mcai_debug dummy")
