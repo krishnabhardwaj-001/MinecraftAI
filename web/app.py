@@ -418,8 +418,13 @@ def _format_pipeline_result(pipeline_result: Any) -> Dict[str, Any]:
     datapack_path = None if is_prod else (f"generated/{Path(pipeline_result.final_datapack_path).name}" if pipeline_result.final_datapack_path else None)
     zip_path_str = None if is_prod else (f"generated/{Path(pipeline_result.final_zip_path).name}" if pipeline_result.final_zip_path else None)
 
+    sanitized_errors = [sanitize_user_error_message(err) for err in (pipeline_result.errors or [])]
+
     return {
         "status": pipeline_result.status,
+        "error_code": pipeline_result.error_code,
+        "failed_stage": pipeline_result.failed_stage,
+        "diagnostic": pipeline_result.diagnostic,
         "is_success": pipeline_result.is_success,
         "minecraft_version": pipeline_result.minecraft_version,
         "original_request": pipeline_result.original_request,
@@ -430,7 +435,7 @@ def _format_pipeline_result(pipeline_result: Any) -> Dict[str, Any]:
         "zip_path": zip_path_str,
         "zip_filename": zip_filename,
         "download_url": download_url,
-        "errors": pipeline_result.errors,
+        "errors": sanitized_errors,
         "files_generated": pipeline_result.generation.files_generated if pipeline_result.generation else [],
         "context_summary": context_summary,
         "validation": validation_summary,
@@ -498,7 +503,19 @@ async def _run_background_job(job: GenerationJob, req_text: str, target_ver: str
         elif not pipeline_result.is_success:
             job.status = JobStatus.FAILED
             job.progress_stage = "Pipeline halted with errors"
-            job.error = pipeline_result.errors[0] if pipeline_result.errors else "Pipeline failed"
+            if pipeline_result.error_code in ("provider_unreachable", "provider_auth"):
+                job.error = (
+                    "Generation is temporarily unavailable. Please try again in a moment."
+                    if DEFAULT_SECURITY_CONFIG.is_production_mode
+                    else (pipeline_result.diagnostic or get_ollama_diagnostic_message())
+                )
+            else:
+                raw_err = pipeline_result.errors[0] if pipeline_result.errors else "Pipeline failed"
+                job.error = (
+                    "Generation encountered an unexpected error. Please try again in a moment."
+                    if DEFAULT_SECURITY_CONFIG.is_production_mode
+                    else sanitize_user_error_message(raw_err)
+                )
         else:
             job.status = JobStatus.SUCCESS
             job.progress_stage = "Datapack ZIP ready"
@@ -627,6 +644,18 @@ async def generate_datapack(payload: GeneratePayload, request: Request, async_mo
 
     # Trigger periodic artifact cleanup
     cleanup_expired_artifacts()
+
+    if pipeline_result.status == "error" and pipeline_result.error_code in ("provider_unreachable", "provider_auth"):
+        diag = pipeline_result.diagnostic or get_ollama_diagnostic_message()
+        if DEFAULT_SECURITY_CONFIG.is_production_mode:
+            raise HTTPException(
+                status_code=503,
+                detail="Generation is temporarily unavailable. Please try again in a moment."
+            )
+        raise HTTPException(
+            status_code=503,
+            detail=diag
+        )
 
     # 5. Extract download URL and formatted response
     return _format_pipeline_result(pipeline_result)
@@ -981,6 +1010,19 @@ async def confirm_and_generate(payload: ConfirmProposalPayload, request: Request
         DEFAULT_RATE_LIMITER.release_generation_slot()
 
     cleanup_expired_artifacts()
+
+    if pipeline_result.status == "error" and pipeline_result.error_code in ("provider_unreachable", "provider_auth"):
+        diag = pipeline_result.diagnostic or get_ollama_diagnostic_message()
+        if DEFAULT_SECURITY_CONFIG.is_production_mode:
+            raise HTTPException(
+                status_code=503,
+                detail="Generation is temporarily unavailable. Please try again in a moment."
+            )
+        raise HTTPException(
+            status_code=503,
+            detail=diag
+        )
+
     return _format_pipeline_result(pipeline_result)
 
 

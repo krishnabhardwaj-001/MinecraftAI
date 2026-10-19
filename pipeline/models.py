@@ -107,6 +107,18 @@ class PipelineResult(BaseModel):
         default_factory=list,
         description="Structured clarification requirement items if clarification was required"
     )
+    error_code: Optional[str] = Field(
+        default=None,
+        description="Structured error code (e.g. 'provider_unreachable', 'provider_auth', 'validation_failed')"
+    )
+    failed_stage: Optional[str] = Field(
+        default=None,
+        description="Identifier of the pipeline stage that failed (e.g. 'understanding', 'planning', 'generation', etc.)"
+    )
+    diagnostic: Optional[str] = Field(
+        default=None,
+        description="Actionable diagnostic message for troubleshooting"
+    )
     errors: List[str] = Field(
         default_factory=list,
         description="List of error messages if the pipeline failed or encountered exceptions"

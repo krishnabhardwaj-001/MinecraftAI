@@ -1,6 +1,6 @@
 import os
 import json
-from typing import Any, Dict, Optional
+from typing import Any, Dict, Optional, Tuple
 
 # Load .env before any SDK client is imported or initialized
 from dotenv import load_dotenv
@@ -9,6 +9,205 @@ load_dotenv()
 from ollama import Client as OllamaClient
 from openai import OpenAI
 from pydantic import BaseModel
+
+
+def is_ollama_unreachable_error(exc: Optional[BaseException]) -> bool:
+    """
+    Determines whether an exception indicates that the Ollama service
+    is offline, unreachable, not running, failed to connect, or returned
+    an Ollama provider error (such as sign-in required or missing model).
+    """
+    if exc is None:
+        return False
+
+    exc_name = type(exc).__name__
+    if exc_name in (
+        "ConnectError",
+        "ConnectTimeout",
+        "ConnectionRefusedError",
+        "RequestError",
+        "ReadTimeout",
+        "ResponseError",
+    ):
+        return True
+
+    try:
+        import httpx
+        if isinstance(exc, (httpx.ConnectError, httpx.ConnectTimeout)):
+            return True
+    except ImportError:
+        pass
+
+    try:
+        import ollama
+        if hasattr(ollama, "RequestError") and isinstance(exc, ollama.RequestError):
+            return True
+        if hasattr(ollama, "ResponseError") and isinstance(exc, ollama.ResponseError):
+            return True
+    except ImportError:
+        pass
+
+    if isinstance(exc, (ConnectionRefusedError, ConnectionError)):
+        return True
+
+    msg = str(exc).lower()
+    connection_indicators = [
+        "connection refused",
+        "connecterror",
+        "failed to connect",
+        "11434",
+        "winerror 10061",
+        "all connection attempts failed",
+        "target machine actively refused",
+        "is ollama running",
+        "no such host",
+    ]
+    if any(ind in msg for ind in connection_indicators):
+        return True
+
+    ollama_indicators = [
+        "ollama signin",
+        "sign in to ollama",
+        "ollama unauthorized",
+        "ollama error",
+        "ollama cloud",
+        "ollama_api_key is required",
+    ]
+    if any(ind in msg for ind in ollama_indicators):
+        return True
+
+    if "ollama" in msg and any(k in msg for k in ("unauthorized", "model not found", "quota", "allowance", "signin", "sign in")):
+        return True
+
+    if getattr(exc, "__cause__", None) and is_ollama_unreachable_error(exc.__cause__):
+        return True
+    if getattr(exc, "__context__", None) and is_ollama_unreachable_error(exc.__context__):
+        return True
+
+    return False
+
+
+def get_ollama_diagnostic_message(
+    endpoint: Optional[str] = None,
+    exc: Optional[BaseException] = None
+) -> str:
+    """
+    Returns an actionable diagnostic message explaining that Ollama is unreachable,
+    displaying the endpoint, explaining how to start Ollama or sign in to Ollama Cloud,
+    and noting external provider alternatives.
+    """
+    raw_endpoint = endpoint or os.getenv("OLLAMA_HOST")
+    resolved_endpoint = raw_endpoint or "http://localhost:11434"
+    is_cloud = (
+        raw_endpoint is not None
+        and (raw_endpoint.startswith("https://") or "ollama.com" in raw_endpoint.lower())
+    )
+
+    err_str = str(exc).lower() if exc else ""
+    status_code = getattr(exc, "status_code", None)
+
+    # 1. Authentication / Sign-in required
+    if status_code in (401, 403) or any(k in err_str for k in ("unauthorized", "sign in", "signin", "authenticate", "ollama_api_key is required")):
+        if is_cloud:
+            return (
+                f"The AI provider (Ollama Cloud) authentication failed at {resolved_endpoint}.\n\n"
+                "To resolve this issue:\n"
+                "  1. Ensure your OLLAMA_API_KEY environment variable is configured with a valid key.\n"
+                "  2. Verify your network connection to Ollama Cloud (https://ollama.com).\n"
+                "  3. Alternatively, configure local Ollama for development by setting OLLAMA_HOST=http://localhost:11434."
+            )
+        return (
+            f"Ollama Cloud authentication required at {resolved_endpoint}.\n\n"
+            "To resolve this issue:\n"
+            "  1. Sign in with your Ollama account in your terminal:\n"
+            "       ollama signin\n"
+            "  2. Follow the prompt to complete sign-in in your browser.\n"
+            "  3. Once signed in, restart the server or retry your request.\n\n"
+            "Note: You do not need to paste an API key into MinecraftAI."
+        )
+
+    # 2. Cloud model not found / not pulled
+    if status_code == 404 or "not found" in err_str:
+        target_model = os.getenv("OLLAMA_MODEL", "gpt-oss:120b-cloud")
+        return (
+            f"Cloud model '{target_model}' not found in your Ollama library at {resolved_endpoint}.\n\n"
+            "To resolve this issue:\n"
+            f"  1. Register the cloud model pointer by running:\n"
+            f"       ollama pull {target_model}\n"
+            "     (This only downloads a lightweight ~384-byte cloud manifest; no model weights are stored locally.)\n"
+            "  2. Ensure you are signed in:\n"
+            "       ollama signin\n"
+            "  3. Retry your request."
+        )
+
+    # 3. Cloud quota / usage limit exceeded
+    if status_code == 429 or any(k in err_str for k in ("rate limit", "quota", "allowance", "exceeded")):
+        return (
+            f"Ollama Cloud usage limit or rate limit exceeded at {resolved_endpoint}.\n\n"
+            "To resolve this issue:\n"
+            "  1. Check your account status and usage allowance at https://ollama.com.\n"
+            "  2. Please wait before submitting additional generation requests."
+        )
+
+    if is_cloud:
+        return (
+            f"The AI provider (Ollama Cloud) is unreachable or authentication failed at {resolved_endpoint}.\n\n"
+            "To resolve this issue:\n"
+            "  1. Verify your network connection to Ollama Cloud (https://ollama.com).\n"
+            "  2. Ensure your OLLAMA_API_KEY environment variable is configured with a valid key.\n"
+            "  3. Check that your configured model (OLLAMA_MODEL) is available in your Ollama Cloud account.\n"
+            "  4. Alternatively, configure local Ollama for development by setting OLLAMA_HOST=http://localhost:11434."
+        )
+
+    return (
+        f"The AI provider (Ollama) is unreachable or not running at {resolved_endpoint}.\n\n"
+        "To resolve this issue:\n"
+        "  1. Ensure Ollama is installed (https://ollama.com).\n"
+        "  2. Start the Ollama service by running:\n"
+        "       ollama serve\n"
+        "     or launch the Ollama desktop application.\n"
+        "  3. Ensure you are signed in to Ollama Cloud ('ollama signin') and the model is registered ('ollama pull gpt-oss:120b-cloud').\n"
+        "  4. Alternatively, configure an external AI provider if supported "
+        "(such as setting the OPENAI_API_KEY environment variable for OpenAI, "
+        "or setting OLLAMA_HOST=https://ollama.com and OLLAMA_API_KEY for Ollama Cloud)."
+    )
+
+
+def classify_provider_error(exc: Optional[BaseException]) -> Tuple[Optional[str], Optional[str]]:
+    """
+    Classifies an exception into a standard error code ('provider_unreachable', 'provider_auth', etc.)
+    and returns a user-actionable diagnostic message.
+    """
+    if exc is None:
+        return None, None
+
+    msg = str(exc).lower()
+
+    # Check for authentication / authorization issues first
+    auth_indicators = [
+        "ollama_api_key is required",
+        "unauthorized",
+        "401",
+        "bad api key",
+        "invalid api key",
+        "authentication",
+        "api key is required",
+        "bearer",
+    ]
+    if any(ind in msg for ind in auth_indicators) or type(exc).__name__ in ("AuthenticationError",):
+        diag = get_ollama_diagnostic_message(exc=exc)
+        return "provider_auth", diag
+
+    # Check for unreachable / connection issues
+    if is_ollama_unreachable_error(exc):
+        diag = get_ollama_diagnostic_message(exc=exc)
+        return "provider_unreachable", diag
+
+    # Check for OpenAI connection errors
+    if type(exc).__name__ in ("APIConnectionError", "ConnectError"):
+        return "provider_unreachable", "AI provider service is unreachable. Please verify your connection."
+
+    return None, None
 
 
 class AIProvider:

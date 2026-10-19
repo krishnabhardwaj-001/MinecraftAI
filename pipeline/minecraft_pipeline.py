@@ -5,7 +5,12 @@ from typing import Any, Dict, List, Optional
 
 from ai.context import retrieve_minecraft_context
 from ai.planner import create_plan
-from ai.provider import AIProvider
+from ai.provider import (
+    AIProvider,
+    classify_provider_error,
+    get_ollama_diagnostic_message,
+    is_ollama_unreachable_error,
+)
 from ai.understanding import MinecraftUnderstanding
 from generator.datapack_generator import DatapackGenerator
 from pipeline.models import PipelineResult, PipelineStage
@@ -17,6 +22,7 @@ from repair.repair_loop import AIRepairLoop
 from validator.datapack_validator import DatapackValidator
 from ai.version_registry import VersionContext
 from ai.specification import SpecificationBridge
+from security.error_sanitizer import sanitize_user_error_message
 
 
 def _log(stage: str, message: str, verbose: bool = True) -> None:
@@ -147,13 +153,17 @@ class MinecraftPipeline:
             try:
                 understanding = self.understanding.understand(request_clean)
             except Exception as e:
-                err_msg = f"AI Understanding failed: {e}"
-                _log("1/8", f"ERROR: {err_msg}", self.verbose)
+                err_code, diag = classify_provider_error(e)
+                sanitized_err = sanitize_user_error_message(e)
+                _log("1/8", f"ERROR: AI Understanding failed: {sanitized_err}", self.verbose)
                 return PipelineResult(
                     status="error",
+                    error_code=err_code,
+                    failed_stage="understanding",
+                    diagnostic=diag,
                     minecraft_version=self.version,
                     original_request=request_clean,
-                    errors=[err_msg],
+                    errors=[f"AI Understanding failed: {sanitized_err}"],
                     execution_summary="Pipeline error during natural-language understanding stage."
                 )
 
@@ -222,14 +232,18 @@ class MinecraftPipeline:
         try:
             context = retrieve_minecraft_context(understanding, version=self.version)
         except Exception as e:
-            err_msg = f"Knowledge retrieval failed: {e}"
-            _log("2/8", f"ERROR: {err_msg}", self.verbose)
+            err_code, diag = classify_provider_error(e)
+            sanitized_err = sanitize_user_error_message(e)
+            _log("2/8", f"ERROR: Knowledge retrieval failed: {sanitized_err}", self.verbose)
             return PipelineResult(
                 status="error",
+                error_code=err_code,
+                failed_stage="retrieval",
+                diagnostic=diag,
                 minecraft_version=self.version,
                 original_request=request_clean,
                 understanding=understanding,
-                errors=[err_msg],
+                errors=[f"Knowledge retrieval failed: {sanitized_err}"],
                 execution_summary="Pipeline error during knowledge retrieval stage."
             )
 
@@ -240,15 +254,19 @@ class MinecraftPipeline:
         try:
             plan = create_plan(understanding, provider=self.provider_name, version=self.version, ai_provider=self.ai)
         except Exception as e:
-            err_msg = f"Planner failed: {e}"
-            _log("3/8", f"ERROR: {err_msg}", self.verbose)
+            err_code, diag = classify_provider_error(e)
+            sanitized_err = sanitize_user_error_message(e)
+            _log("3/8", f"ERROR: Planner failed: {sanitized_err}", self.verbose)
             return PipelineResult(
                 status="error",
+                error_code=err_code,
+                failed_stage="planning",
+                diagnostic=diag,
                 minecraft_version=self.version,
                 original_request=request_clean,
                 understanding=understanding,
                 context=context,
-                errors=[err_msg],
+                errors=[f"Planner failed: {sanitized_err}"],
                 execution_summary="Pipeline error during planning stage."
             )
 
@@ -290,16 +308,20 @@ class MinecraftPipeline:
                 clean=True
             )
         except Exception as e:
-            err_msg = f"Generator failed: {e}"
-            _log("4/8", f"ERROR: {err_msg}", self.verbose)
+            err_code, diag = classify_provider_error(e)
+            sanitized_err = sanitize_user_error_message(e)
+            _log("4/8", f"ERROR: Generator failed: {sanitized_err}", self.verbose)
             return PipelineResult(
                 status="error",
+                error_code=err_code,
+                failed_stage="generation",
+                diagnostic=diag,
                 minecraft_version=self.version,
                 original_request=request_clean,
                 understanding=understanding,
                 context=context,
                 plan=plan,
-                errors=[err_msg],
+                errors=[f"Generator failed: {sanitized_err}"],
                 execution_summary="Pipeline error during deterministic datapack generation stage."
             )
 
@@ -334,10 +356,14 @@ class MinecraftPipeline:
                     datapack_name=datapack_name or gen_result.datapack_name
                 )
             except Exception as e:
-                err_msg = f"Repair loop encountered unexpected error: {e}"
-                _log("5/8", f"ERROR: {err_msg}", self.verbose)
+                err_code, diag = classify_provider_error(e)
+                sanitized_err = sanitize_user_error_message(e)
+                _log("5/8", f"ERROR: Repair loop encountered unexpected error: {sanitized_err}", self.verbose)
                 return PipelineResult(
-                    status="failed",
+                    status="error" if err_code else "failed",
+                    error_code=err_code,
+                    failed_stage="repair",
+                    diagnostic=diag,
                     minecraft_version=self.version,
                     original_request=request_clean,
                     understanding=understanding,
@@ -345,7 +371,7 @@ class MinecraftPipeline:
                     plan=plan,
                     generation=gen_result,
                     validation=val_result,
-                    errors=[err_msg],
+                    errors=[f"Repair loop encountered unexpected error: {sanitized_err}"],
                     execution_summary="Pipeline failed: structural repair loop encountered an unexpected exception."
                 )
 
@@ -381,14 +407,34 @@ class MinecraftPipeline:
         # STAGE 6: Autonomous QA Review & Bounded QA Repair Loop
         # -------------------------------------------------------------
         _log("6/8", "Autonomous QA review over complete datapack...", self.verbose)
-        qa_result = self.qa_reviewer.review(
-            datapack_dir=Path(final_gen_path),
-            original_request=request_clean,
-            understanding=understanding,
-            plan=plan,
-            context=context,
-            val_result=val_result
-        )
+        try:
+            qa_result = self.qa_reviewer.review(
+                datapack_dir=Path(final_gen_path),
+                original_request=request_clean,
+                understanding=understanding,
+                plan=plan,
+                context=context,
+                val_result=val_result
+            )
+        except Exception as e:
+            err_code, diag = classify_provider_error(e)
+            sanitized_err = sanitize_user_error_message(e)
+            _log("6/8", f"ERROR: QA review failed: {sanitized_err}", self.verbose)
+            return PipelineResult(
+                status="error" if err_code else "qa_failed",
+                error_code=err_code,
+                failed_stage="qa_review",
+                diagnostic=diag,
+                minecraft_version=self.version,
+                original_request=request_clean,
+                understanding=understanding,
+                context=context,
+                plan=plan,
+                generation=gen_result,
+                validation=val_result,
+                errors=[f"QA review failed: {sanitized_err}"],
+                execution_summary="Pipeline error during QA review stage."
+            )
 
         qa_attempt_history: List[Dict[str, Any]] = []
         qa_attempt = 0
@@ -404,13 +450,34 @@ class MinecraftPipeline:
                 "error_finding_ids": [f.id for f in err_findings]
             })
 
-            qa_repair_plan, repaired_plan = self.qa_repair_engine.diagnose_and_repair(
-                qa_result=qa_result,
-                plan=plan,
-                understanding=understanding,
-                context=context,
-                previous_attempts=qa_attempt_history
-            )
+            try:
+                qa_repair_plan, repaired_plan = self.qa_repair_engine.diagnose_and_repair(
+                    qa_result=qa_result,
+                    plan=plan,
+                    understanding=understanding,
+                    context=context,
+                    previous_attempts=qa_attempt_history
+                )
+            except Exception as e:
+                err_code, diag = classify_provider_error(e)
+                sanitized_err = sanitize_user_error_message(e)
+                _log("6/8", f"ERROR: QA diagnosis failed: {sanitized_err}", self.verbose)
+                return PipelineResult(
+                    status="error" if err_code else "verification_failed",
+                    error_code=err_code,
+                    failed_stage="qa_repair",
+                    diagnostic=diag,
+                    minecraft_version=self.version,
+                    original_request=request_clean,
+                    understanding=understanding,
+                    context=context,
+                    plan=plan,
+                    generation=gen_result,
+                    validation=val_result,
+                    qa_result=qa_result,
+                    errors=[f"QA diagnosis failed: {sanitized_err}"],
+                    execution_summary="Pipeline error during QA diagnosis stage."
+                )
 
             if not qa_repair_plan.regenerate:
                 _log("6/8", f"QA repair loop halted: {qa_repair_plan.diagnosis}", self.verbose)
@@ -433,10 +500,14 @@ class MinecraftPipeline:
                 final_gen_path = str(gen_result.datapack_path)
                 final_zip_path = str(gen_result.zip_path) if gen_result.zip_path else None
             except Exception as e:
-                err_msg = f"Regeneration failed during QA repair: {e}"
-                _log("6/8", f"ERROR: {err_msg}", self.verbose)
+                err_code, diag = classify_provider_error(e)
+                sanitized_err = sanitize_user_error_message(e)
+                _log("6/8", f"ERROR: Regeneration failed during QA repair: {sanitized_err}", self.verbose)
                 return PipelineResult(
-                    status="verification_failed",
+                    status="error" if err_code else "verification_failed",
+                    error_code=err_code,
+                    failed_stage="qa_repair",
+                    diagnostic=diag,
                     minecraft_version=self.version,
                     original_request=request_clean,
                     understanding=understanding,
@@ -445,7 +516,7 @@ class MinecraftPipeline:
                     generation=gen_result,
                     validation=val_result,
                     qa_result=qa_result,
-                    errors=[err_msg],
+                    errors=[f"Regeneration failed during QA repair: {sanitized_err}"],
                     execution_summary="Pipeline failed: regeneration failed during QA repair loop."
                 )
 
