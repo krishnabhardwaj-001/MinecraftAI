@@ -177,84 +177,117 @@ def _markdown_to_html(md_text: str) -> str:
     """
     Lightweight, safe markdown-to-HTML converter for rendering legal documents
     without adding external heavyweight markdown dependencies.
+    Escapes raw HTML, sanitizes link schemes, and correctly handles lists and headings.
     """
+    import html
     lines = md_text.splitlines()
     html_lines = []
-    in_list = False
+    list_type = None  # None, "ul", or "ol"
     in_blockquote = False
 
-    for line in lines:
-        trimmed = line.strip()
-
-        # Close list if not a list item
-        if in_list and not trimmed.startswith(("* ", "- ", "1. ", "2. ", "3. ", "4. ", "5. ")):
+    def close_list():
+        nonlocal list_type
+        if list_type == "ul":
             html_lines.append("</ul>")
-            in_list = False
+        elif list_type == "ol":
+            html_lines.append("</ol>")
+        list_type = None
 
-        # Close blockquote if empty
-        if in_blockquote and not trimmed.startswith(">"):
+    def close_blockquote():
+        nonlocal in_blockquote
+        if in_blockquote:
             html_lines.append("</blockquote>")
             in_blockquote = False
 
-        if not trimmed:
+    def sanitize_url(raw_url: str) -> str:
+        clean_url = raw_url.strip()
+        lowered = clean_url.lower()
+        if lowered.startswith(("http://", "https://", "mailto:")) or clean_url.startswith(("/", "#")):
+            return html.escape(clean_url, quote=True)
+        return "#"
+
+    def format_inline(text: str) -> str:
+        t = re.sub(r"\*\*([^*]+)\*\*", r"<strong>\1</strong>", text)
+        t = re.sub(r"\*([^*]+)\*", r"<em>\1</em>", t)
+        t = re.sub(r"`([^`]+)`", r"<code>\1</code>", t)
+
+        def replace_link(match):
+            label = match.group(1)
+            raw_target = match.group(2)
+            safe_target = sanitize_url(raw_target)
+            return f'<a href="{safe_target}">{label}</a>'
+
+        t = re.sub(r"\[([^\]]+)\]\(([^)]+)\)", replace_link, t)
+        return t
+
+    for line in lines:
+        raw_trimmed = line.strip()
+        ul_match = raw_trimmed.startswith(("* ", "- "))
+        ol_match = bool(re.match(r"^\d+\.\s+", raw_trimmed))
+
+        if not (ul_match or ol_match) and list_type:
+            close_list()
+
+        if in_blockquote and not raw_trimmed.startswith(">"):
+            close_blockquote()
+
+        if not raw_trimmed:
             continue
 
-        # Horizontal rule
-        if trimmed in ("---", "***", "___"):
+        if raw_trimmed in ("---", "***", "___"):
+            close_list()
+            close_blockquote()
             html_lines.append("<hr>")
             continue
 
-        # Headings
-        if trimmed.startswith("# "):
-            html_lines.append(f"<h2>{trimmed[2:]}</h2>")
-        elif trimmed.startswith("## "):
-            html_lines.append(f"<h2>{trimmed[3:]}</h2>")
-        elif trimmed.startswith("### "):
-            html_lines.append(f"<h3>{trimmed[4:]}</h3>")
-        elif trimmed.startswith("#### "):
-            html_lines.append(f"<h4>{trimmed[5:]}</h4>")
+        if raw_trimmed.startswith("#### "):
+            close_list()
+            close_blockquote()
+            html_lines.append(f"<h4>{format_inline(html.escape(raw_trimmed[5:]))}</h4>")
+        elif raw_trimmed.startswith("### "):
+            close_list()
+            close_blockquote()
+            html_lines.append(f"<h3>{format_inline(html.escape(raw_trimmed[4:]))}</h3>")
+        elif raw_trimmed.startswith("## "):
+            close_list()
+            close_blockquote()
+            html_lines.append(f"<h2>{format_inline(html.escape(raw_trimmed[3:]))}</h2>")
+        elif raw_trimmed.startswith("# "):
+            close_list()
+            close_blockquote()
+            html_lines.append(f"<h1>{format_inline(html.escape(raw_trimmed[2:]))}</h1>")
 
-        # Blockquote
-        elif trimmed.startswith(">"):
-            b_text = trimmed[1:].strip()
+        elif raw_trimmed.startswith(">"):
+            close_list()
+            b_text = raw_trimmed[1:].strip()
             if not in_blockquote:
                 html_lines.append("<blockquote>")
                 in_blockquote = True
-            html_lines.append(f"<p>{b_text}</p>")
+            html_lines.append(f"<p>{format_inline(html.escape(b_text))}</p>")
 
-        # Unordered list
-        elif trimmed.startswith(("* ", "- ")):
-            if not in_list:
+        elif ul_match:
+            if list_type != "ul":
+                close_list()
                 html_lines.append("<ul>")
-                in_list = True
-            item_text = trimmed[2:]
-            html_lines.append(f"<li>{item_text}</li>")
+                list_type = "ul"
+            item_text = raw_trimmed[2:]
+            html_lines.append(f"<li>{format_inline(html.escape(item_text))}</li>")
 
-        # Ordered list
-        elif re.match(r"^\d+\.\s+", trimmed):
-            if not in_list:
+        elif ol_match:
+            if list_type != "ol":
+                close_list()
                 html_lines.append("<ol>")
-                in_list = True
-            item_text = re.sub(r"^\d+\.\s+", "", trimmed)
-            html_lines.append(f"<li>{item_text}</li>")
+                list_type = "ol"
+            item_text = re.sub(r"^\d+\.\s+", "", raw_trimmed)
+            html_lines.append(f"<li>{format_inline(html.escape(item_text))}</li>")
 
-        # Regular paragraph
         else:
-            html_lines.append(f"<p>{trimmed}</p>")
+            html_lines.append(f"<p>{format_inline(html.escape(raw_trimmed))}</p>")
 
-    if in_list:
-        html_lines.append("</ul>")
-    if in_blockquote:
-        html_lines.append("</blockquote>")
+    close_list()
+    close_blockquote()
 
-    result = "\n".join(html_lines)
-    # Inline formatting: bold, italic, code
-    result = re.sub(r"\*\*([^*]+)\*\*", r"<strong>\1</strong>", result)
-    result = re.sub(r"\*([^*]+)\*", r"<em>\1</em>", result)
-    result = re.sub(r"`([^`]+)`", r"<code>\1</code>", result)
-    result = re.sub(r"\[([^\]]+)\]\(([^)]+)\)", r'<a href="\2">\1</a>', result)
-
-    return result
+    return "\n".join(html_lines)
 
 
 @app.get("/", response_class=HTMLResponse)
