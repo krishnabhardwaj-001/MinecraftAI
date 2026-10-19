@@ -40,14 +40,36 @@ def _wait_and_open_browser(host: str, port: int, delay_s: float = 0.5, timeout_s
     webbrowser.open(url)
 
 
-def main():
-    parser = argparse.ArgumentParser(
-        description="MinecraftAI Web Interface Server (Java 1.21.11 / Pack 94.1)"
-    )
-    default_host = os.getenv("HOST", "127.0.0.1")
-    default_port = int(os.getenv("PORT", "8000"))
-    env_open_browser = os.getenv("OPEN_BROWSER", "false").lower() in ("true", "1", "yes")
+from typing import Dict, List, Optional
 
+
+def resolve_server_config(
+    args: Optional[List[str]] = None,
+    env: Optional[Dict[str, str]] = None
+) -> argparse.Namespace:
+    """
+    Resolves host, port, and browser options from CLI arguments and environment variables.
+    CLI arguments have the highest precedence, followed by HOST and PORT env vars,
+    falling back to 127.0.0.1:8000.
+    """
+    if env is None:
+        env = dict(os.environ)
+
+    raw_host = env.get("HOST", "").strip()
+    default_host = raw_host if raw_host else "127.0.0.1"
+
+    raw_port = env.get("PORT", "").strip()
+    try:
+        default_port = int(raw_port) if raw_port else 8000
+    except ValueError:
+        default_port = 8000
+
+    raw_open_browser = env.get("OPEN_BROWSER", "false").strip().lower()
+    default_open_browser = raw_open_browser in ("true", "1", "yes")
+
+    parser = argparse.ArgumentParser(
+        description="MinecraftAI Web Interface Server (Java 1.21.11 / 1.21.1)"
+    )
     parser.add_argument(
         "--host",
         type=str,
@@ -63,11 +85,15 @@ def main():
     parser.add_argument(
         "--open-browser",
         action="store_true",
-        default=env_open_browser,
+        default=default_open_browser,
         help="Automatically open the default web browser once the server is ready."
     )
 
-    args = parser.parse_args()
+    return parser.parse_args(args)
+
+
+def main(argv: Optional[List[str]] = None):
+    args = resolve_server_config(args=argv)
 
     # Verify port availability to prevent duplicate server instances
     if not check_port_available(args.host, args.port):
@@ -78,7 +104,7 @@ def main():
 
     print("=" * 70)
     print("MinecraftAI Web Interface Server")
-    print("Target: Minecraft Java Edition 1.21.11 | Data Pack Version 94.1")
+    print("Supported: Minecraft Java Edition 1.21.11 & 1.21.1")
     print(f"Starting server at: http://{args.host}:{args.port}")
     if args.open_browser:
         print("Browser will open automatically once the server is listening.")
