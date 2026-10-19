@@ -38,6 +38,7 @@ from security import (
     InputValidationError,
     PathSecurityError,
     ArchiveSecurityError,
+    load_security_config,
     validate_prompt,
     validate_version_string,
     validate_clarification_answer,
@@ -109,6 +110,23 @@ app = FastAPI(
 
 # Apply Security Headers Middleware
 app.add_middleware(SecurityHeadersMiddleware)
+
+
+@app.middleware("http")
+async def enforce_payload_size_limit(request: Request, call_next):
+    """Enforces max_payload_bytes on incoming HTTP requests."""
+    max_bytes = load_security_config().max_payload_bytes
+    content_length = request.headers.get("content-length")
+    if content_length:
+        try:
+            if int(content_length) > max_bytes:
+                return JSONResponse(
+                    status_code=413,
+                    content={"detail": f"Request payload exceeds maximum allowed size of {max_bytes} bytes."}
+                )
+        except ValueError:
+            pass
+    return await call_next(request)
 
 # CORS middleware with explicit allowed origins
 cors_origins = DEFAULT_SECURITY_CONFIG.allowed_cors_origins
@@ -455,7 +473,7 @@ async def _execute_pipeline_task(
     Executes the synchronous pipeline in a worker thread with timeout protection.
     Prevents event-loop starvation and runaway generations.
     """
-    timeout = float(DEFAULT_SECURITY_CONFIG.generation_timeout_seconds)
+    timeout = float(load_security_config().generation_timeout_seconds)
     return await asyncio.wait_for(
         asyncio.to_thread(
             run_minecraft_pipeline,
@@ -615,7 +633,8 @@ async def generate_datapack(payload: GeneratePayload, request: Request, async_mo
     try:
         pipeline_result = await _execute_pipeline_task(req_text, target_ver)
     except asyncio.TimeoutError:
-        logger.warning("Pipeline execution timed out after %ds", DEFAULT_SECURITY_CONFIG.generation_timeout_seconds)
+        cfg = load_security_config()
+        logger.warning("Pipeline execution timed out after %ds", cfg.generation_timeout_seconds)
         raise HTTPException(
             status_code=504,
             detail="Generation timed out. Please simplify your request or try again in a few moments."
