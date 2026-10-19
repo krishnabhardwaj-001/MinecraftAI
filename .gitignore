@@ -8,10 +8,8 @@ __pycache__/
 *.log
 *.log.gz
 scratch/
-generated/.cache/
-generated/test_*/
-generated/when_it_becomes_night_give_every_player_a_night_vision_effect_only_give_it_once_when_night_starts/
-generated/when_it_is_raining_give_me_a_diamond_specifically_only_once_when_the_rain_starts/data/rain_diamond/
+generated/*
+!generated/.gitkeep
 
 # Local Minecraft runtime artifacts
 server.properties
@@ -22,6 +20,11 @@ whitelist.json
 ops.json
 world/
 session.lock
+
+# Duplicate/redundant server binaries kept locally
+source/1.21.11/libraries/
+source/1.21.11/versions/
+source/1.21.1/server.jar
 
 # Python packaging build artifacts
 *.egg-info/

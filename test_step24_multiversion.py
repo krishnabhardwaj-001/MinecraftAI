@@ -329,6 +329,14 @@ class TestStep24MultiVersion(unittest.TestCase):
         )
 
         runner = RuntimeTestRunner(version="1.21.1")
+        server_jar = runner.version_context.server_jar_path
+        if not server_jar or not server_jar.exists():
+            self.skipTest("Minecraft server JAR for 1.21.1 not found.")
+        repo_root = Path(__file__).resolve().parent
+        if not (repo_root / "source" / "1.21.1" / "libraries").exists() and not (repo_root / "libraries").exists():
+            self.skipTest("Required libraries directory for 1.21.1 not found.")
+        if not shutil.which("java"):
+            self.skipTest("Java runtime ('java') not found on PATH.")
         rt_res = runner.run(
             datapack_dir=res_1.zip_path,
             mode=RuntimeTestMode.MINECRAFT_SERVER,

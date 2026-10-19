@@ -132,7 +132,8 @@ class TestStep23Versioning(unittest.TestCase):
         self.assertEqual(ctx.modifier_id_format, "string")
         self.assertEqual(ctx.recipe_result_format, "id_count")
         self.assertEqual(ctx.data_pack_version, "48.0")
-        self.assertIsNotNone(ctx.server_jar_path)
+        if ctx.server_jar_path is None or not Path(ctx.server_jar_path).exists():
+            self.skipTest("1.21.1 server JAR not found on disk.")
         self.assertTrue(str(ctx.server_jar_path).replace("\\", "/").endswith("versions/1.21.1/server-1.21.1.jar"))
         self.assertTrue(Path(ctx.server_jar_path).exists())
 

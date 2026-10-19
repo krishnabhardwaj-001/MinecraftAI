@@ -368,6 +368,8 @@ class RuntimeTestRunner:
             )
 
         unbundled_jar = project_root / "source" / self.version / "versions" / self.version / f"server-{self.version}.jar"
+        if not unbundled_jar.exists():
+            unbundled_jar = project_root / "versions" / self.version / f"server-{self.version}.jar"
         if unbundled_jar.exists() and str(unbundled_jar) not in jars:
             jars.append(str(unbundled_jar))
 

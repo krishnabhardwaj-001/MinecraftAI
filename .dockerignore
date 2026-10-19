@@ -1,0 +1,34 @@
+# Version control & tooling
+.git
+.gitignore
+.dockerignore
+.github
+.ai
+
+# Python bytecode & cache
+__pycache__/
+*.py[cod]
+*.egg-info/
+build/
+dist/
+.pytest_cache/
+
+# Virtual environments & secrets
+.venv/
+venv/
+.env
+
+# Local logs & scratch
+*.log
+*.log.gz
+scratch/
+
+# Runtime test files & temporary outputs
+generated/*
+!generated/.gitkeep
+
+# Large server binaries & duplicates (not needed in web/API container)
+versions/
+source/
+libraries/
+*.jar
