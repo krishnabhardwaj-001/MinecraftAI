@@ -23,6 +23,11 @@ from generator.models import (
 )
 from validator.models import ValidationCheck, ValidationIssue, ValidationResult
 from ai.version_registry import VersionContext
+from security.command_security import (
+    validate_minecraft_command,
+    load_allowed_command_verbs,
+    CommandSecurityError,
+)
 
 MIN_SCORE_32 = -2147483648
 MAX_SCORE_32 = 2147483647
@@ -85,45 +90,10 @@ class DatapackValidator:
 
     def _load_valid_commands(self) -> Set[str]:
         """
-        Loads all valid Minecraft command root names for 1.21.11 from knowledge assets.
+        Loads all valid Minecraft command root names for the target version from knowledge assets.
         """
-        commands_path = (
-            self.base_dir
-            / "knowledge"
-            / "commands"
-            / "java"
-            / self.version
-            / "commands.jsonl"
-        )
-        commands: Set[str] = set()
-        if commands_path.exists():
-            try:
-                with open(commands_path, "r", encoding="utf-8") as f:
-                    for line in f:
-                        line = line.strip()
-                        if line:
-                            entry = json.loads(line)
-                            cmd = entry.get("command")
-                            if cmd:
-                                commands.add(cmd.lower())
-            except Exception:
-                pass
+        return load_allowed_command_verbs(self.version)
 
-        if not commands:
-            commands = {
-                "advancement", "attribute", "ban", "ban-ip", "banlist", "bossbar",
-                "clear", "clone", "damage", "data", "datapack", "debug", "defaultgamemode",
-                "deop", "difficulty", "effect", "enchant", "execute", "experience", "fill",
-                "fillbiome", "forceload", "function", "gamemode", "gamerule", "give",
-                "help", "item", "jfr", "kick", "kill", "list", "locate", "loot", "me",
-                "msg", "op", "pardon", "pardon-ip", "particle", "perf", "place", "playsound",
-                "publish", "recipe", "reload", "return", "ride", "say", "schedule", "scoreboard",
-                "seed", "setblock", "setidletimeout", "setworldspawn", "spawnpoint", "spectate",
-                "spreadplayers", "stop", "stopsound", "summon", "tag", "team", "teammsg",
-                "teleport", "tell", "tellraw", "tick", "time", "title", "tm", "tp", "trigger",
-                "w", "weather", "whitelist", "worldborder", "xp"
-            }
-        return commands
 
     def _load_valid_items(self) -> Set[str]:
         """
@@ -1982,6 +1952,20 @@ class DatapackValidator:
             )
 
             for line_idx, line in parsed_lines:
+                # 0. Command security check (prevents shell injection, unauthorized verbs)
+                try:
+                    validate_minecraft_command(line, allowed_verbs=self.valid_commands, version=self.version)
+                except CommandSecurityError as e:
+                    errors.append(
+                        ValidationIssue(
+                            level="error",
+                            code="COMMAND_SECURITY_ERROR",
+                            message=f"Command security violation at line {line_idx}: {e}",
+                            file=rel_path
+                        )
+                    )
+                    func_errors += 1
+
                 # 1. Leading slash check
                 if line.startswith("/"):
                     errors.append(
