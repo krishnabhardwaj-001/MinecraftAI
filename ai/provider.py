@@ -239,7 +239,7 @@ class AIProvider:
 
             self.model = os.getenv(
                 "OPENAI_MODEL",
-                "gpt-5.6"
+                "gpt-4o"
             )
 
         elif self.provider == "ollama":
@@ -390,24 +390,41 @@ class AIProvider:
         user_prompt,
         schema
     ):
-        response = self.client.responses.create(
-            model=self.model,
-
-            instructions=system_prompt,
-
-            input=user_prompt,
-
-            text={
-                "format": {
-                    "type": "json_schema",
-                    "name": "minecraft_request",
-                    "strict": True,
-                    "schema": schema
+        if hasattr(self.client, "responses"):
+            response = self.client.responses.create(
+                model=self.model,
+                instructions=system_prompt,
+                input=user_prompt,
+                text={
+                    "format": {
+                        "type": "json_schema",
+                        "name": "minecraft_request",
+                        "strict": False,
+                        "schema": schema
+                    }
                 }
-            }
-        )
-
-        return json.loads(response.output_text)
+            )
+            raw_text = getattr(response, "output_text", None)
+            if raw_text is None and hasattr(response, "output"):
+                raw_text = str(response.output)
+            return json.loads(raw_text)
+        else:
+            response = self.client.chat.completions.create(
+                model=self.model,
+                messages=[
+                    {"role": "system", "content": system_prompt},
+                    {"role": "user", "content": user_prompt}
+                ],
+                response_format={
+                    "type": "json_schema",
+                    "json_schema": {
+                        "name": "minecraft_request",
+                        "strict": False,
+                        "schema": schema
+                    }
+                }
+            )
+            return json.loads(response.choices[0].message.content)
 
     def close(self):
         """Cleanly close underlying HTTP client connections."""
