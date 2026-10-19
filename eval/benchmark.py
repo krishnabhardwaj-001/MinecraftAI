@@ -33,10 +33,6 @@ ROOT_DIR = Path(__file__).resolve().parent.parent
 if str(ROOT_DIR) not in sys.path:
     sys.path.insert(0, str(ROOT_DIR))
 
-# If evaluating locally and no Cloud API key is configured, fall back to local test daemon
-if not os.getenv("OLLAMA_API_KEY") and (os.getenv("OLLAMA_HOST") == "https://ollama.com" or not os.getenv("OLLAMA_HOST")):
-    os.environ["OLLAMA_HOST"] = "http://localhost:11434"
-
 from ai.clarification import DEFAULT_CLARIFICATION_ENGINE, ClarificationRequirement
 from ai.implementation_mapper import ImplementationMapper, MappedImplementation
 from ai.numeric_interpreter import NumericSemanticInterpreter

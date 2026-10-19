@@ -27,6 +27,7 @@ Tests verify:
 
 import json
 import unittest
+import pytest
 from typing import Any, Dict, List, Optional
 
 from ai.planner import MinecraftPlanner, create_plan, validate_plan_mechanisms
@@ -818,6 +819,7 @@ class TestStep16Planner(unittest.TestCase):
     # 18. EXISTING AMBIGUOUS "MAKE THE ZOMBIE STRONGER" REMAINS CLARIFICATION
     # =========================================================================
 
+    @pytest.mark.live
     def test_18_ambiguous_zombie_request_remains_clarification(self):
         """Verify 'Make the zombie stronger' halts at clarification."""
         res = run_minecraft_pipeline("Make the zombie stronger.")

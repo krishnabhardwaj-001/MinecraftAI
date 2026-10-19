@@ -37,7 +37,7 @@ jobs:
 
       - name: Run unit and integration tests
         run: |
-          python -m unittest discover -s . -p "test_*.py"
+          python -m pytest -W error
 
       - name: Run evaluation benchmark
         run: |
@@ -45,4 +45,4 @@ jobs:
 
       - name: Environment-aware headless Minecraft verification
         run: |
-          python -m unittest test_step20_golden.TestStep20HeadlessMinecraftServer
+          python -m pytest test_step20_golden.py::TestStep20HeadlessMinecraftServer -W error

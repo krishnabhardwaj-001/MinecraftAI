@@ -127,6 +127,7 @@ class TestWebInputValidation:
         assert resp.status_code == 400
 
 
+@pytest.mark.live
 class TestWebEndToEndPipeline:
     """
     Mandatory real end-to-end tests through the web interface and generator.

@@ -35,9 +35,7 @@ class AIRepairLoop:
         self.version = version
         self.max_attempts = max_attempts
         self.provider_name = provider
-
-        # Use existing AI provider abstraction
-        self.ai = ai_provider or AIProvider(provider=provider)
+        self._ai_provider = ai_provider
 
         # Connect generator and validator
         self.generator = generator or DatapackGenerator(version=version)
@@ -45,6 +43,16 @@ class AIRepairLoop:
 
         # Minecraft knowledge retriever for enriching repair context
         self.retriever = MinecraftKnowledgeRetriever(version=version)
+
+    @property
+    def ai(self) -> AIProvider:
+        if self._ai_provider is None:
+            self._ai_provider = AIProvider(provider=self.provider_name)
+        return self._ai_provider
+
+    @ai.setter
+    def ai(self, val: AIProvider):
+        self._ai_provider = val
 
     def _system_prompt(self) -> str:
         return f"""You are the AI REPAIR ENGINE of an automatic Minecraft Java Edition datapack generator.

@@ -1,5 +1,6 @@
 import hashlib
 import json
+import pytest
 import shutil
 import tempfile
 from pathlib import Path
@@ -504,6 +505,7 @@ def test_9_existing_loot_table_compatibility():
     shutil.rmtree(test_dir)
 
 
+@pytest.mark.live
 def test_10_dynamic_clarification_preservation():
     print("=" * 70)
     print("TEST 10: DYNAMIC CLARIFICATION PRESERVATION")
@@ -558,6 +560,7 @@ def test_11_arbitrary_entity_item_generality():
     shutil.rmtree(test_dir)
 
 
+@pytest.mark.live
 def test_12_full_pipeline_integration():
     print("=" * 70)
     print("TEST 12: FULL PIPELINE INTEGRATION")

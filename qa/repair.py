@@ -32,7 +32,17 @@ class QARepairEngine:
             self.version_context = VersionContext.from_version(version)
         self.version = self.version_context.version_id
         self.provider_name = provider
-        self.ai = ai_provider or AIProvider(provider=provider)
+        self._ai_provider = ai_provider
+
+    @property
+    def ai(self) -> AIProvider:
+        if self._ai_provider is None:
+            self._ai_provider = AIProvider(provider=self.provider_name)
+        return self._ai_provider
+
+    @ai.setter
+    def ai(self, val: AIProvider):
+        self._ai_provider = val
 
     def diagnose_and_repair(
         self,

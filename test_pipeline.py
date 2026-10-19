@@ -3,6 +3,7 @@ import shutil
 import subprocess
 import sys
 import unittest
+import pytest
 from pathlib import Path
 from typing import Any, Dict, List, Optional
 
@@ -54,6 +55,7 @@ class PermanentlyCorruptGenerator(DatapackGenerator):
         return res
 
 
+@pytest.mark.live
 class TestMinecraftPipeline(unittest.TestCase):
     """
     Step 8 Comprehensive Test Suite for MinecraftAI Pipeline.

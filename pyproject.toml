@@ -57,3 +57,7 @@ filterwarnings = [
     "ignore:Exception ignored in.*socket:pytest.PytestUnraisableExceptionWarning",
     "ignore::pytest.PytestUnraisableExceptionWarning",
 ]
+markers = [
+    "live: tests that require a live LLM endpoint or active network connection",
+]
+addopts = "-m 'not live'"
