@@ -2,8 +2,10 @@ import asyncio
 import os
 import re
 import shutil
+import subprocess
 import sys
 import time
+import urllib.request
 import uuid
 from contextlib import asynccontextmanager
 from pathlib import Path
@@ -329,31 +331,151 @@ class JobManager:
 
 DEFAULT_JOB_MANAGER = JobManager()
 
+_OLLAMA_HEALTH_CACHE: Dict[str, Any] = {"timestamp": 0.0, "status": False, "message": "untested"}
+
+
+def _check_output_dir_writable() -> bool:
+    try:
+        gen_dir = Path("generated")
+        gen_dir.mkdir(parents=True, exist_ok=True)
+        test_file = gen_dir / f".health_test_{uuid.uuid4().hex[:8]}"
+        test_file.write_text("ok", encoding="utf-8")
+        test_file.unlink(missing_ok=True)
+        return True
+    except Exception:
+        return False
+
+
+def _check_java_runtime() -> Dict[str, Any]:
+    java_bin = shutil.which("java")
+    if not java_bin:
+        return {"available": False, "message": "Java runtime not found on PATH"}
+    try:
+        proc = subprocess.run(
+            ["java", "-version"],
+            capture_output=True,
+            text=True,
+            timeout=2.0
+        )
+        ver_lines = (proc.stderr or proc.stdout or "").splitlines()
+        first_line = ver_lines[0] if ver_lines else "Java detected"
+        return {"available": True, "version": first_line.strip()}
+    except Exception:
+        return {"available": True, "message": f"Java binary detected at {java_bin}"}
+
+
+def _check_provider_config() -> Dict[str, Any]:
+    provider = os.getenv("LLM_PROVIDER", "ollama").lower()
+    if provider == "openai":
+        key = os.getenv("OPENAI_API_KEY", "").strip()
+        if not key:
+            return {"provider": "openai", "configured": False, "error": "OPENAI_API_KEY is not set"}
+        return {"provider": "openai", "configured": True}
+    else:
+        host = os.getenv("OLLAMA_HOST", "http://127.0.0.1:11434").strip()
+        is_cloud = "ollama.com" in host.lower()
+        key = os.getenv("OLLAMA_API_KEY", "").strip()
+        if is_cloud and not key:
+            return {
+                "provider": "ollama",
+                "host": host,
+                "is_cloud": True,
+                "configured": False,
+                "error": "OLLAMA_API_KEY is required for Ollama Cloud"
+            }
+        return {
+            "provider": "ollama",
+            "host": host,
+            "is_cloud": is_cloud,
+            "configured": True
+        }
+
+
+async def _check_ollama_reachability(host: str) -> Dict[str, Any]:
+    now = time.time()
+    if now - _OLLAMA_HEALTH_CACHE["timestamp"] < 30.0 and _OLLAMA_HEALTH_CACHE["message"] != "untested":
+        return {
+            "reachable": _OLLAMA_HEALTH_CACHE["status"],
+            "cached": True,
+            "details": _OLLAMA_HEALTH_CACHE["message"]
+        }
+
+    def _probe() -> bool:
+        url = host.rstrip("/") + "/api/tags"
+        req = urllib.request.Request(url, headers={"User-Agent": "MinecraftAI-HealthCheck"})
+        with urllib.request.urlopen(req, timeout=1.5) as resp:
+            return resp.status == 200
+
+    try:
+        ok = await asyncio.wait_for(asyncio.to_thread(_probe), timeout=2.0)
+        _OLLAMA_HEALTH_CACHE["timestamp"] = now
+        _OLLAMA_HEALTH_CACHE["status"] = ok
+        _OLLAMA_HEALTH_CACHE["message"] = "Connected successfully"
+        return {"reachable": True, "cached": False, "details": "Connected successfully"}
+    except Exception as e:
+        _OLLAMA_HEALTH_CACHE["timestamp"] = now
+        _OLLAMA_HEALTH_CACHE["status"] = False
+        _OLLAMA_HEALTH_CACHE["message"] = f"Unreachable: {str(e)}"
+        return {"reachable": False, "cached": False, "details": f"Unreachable: {str(e)}"}
 
 
 @app.get("/api/health")
-async def health_check():
+async def health_check(deep: bool = False):
     """
     Health check endpoint returning system, security, and Minecraft version status.
-    Never exposes internal tokens, passwords, or credentials.
+    Executes real diagnostic checks for:
+    - Provider configuration (API key presence when Cloud or OpenAI)
+    - Version registry and knowledge availability
+    - generated/ output directory writability
+    - Java runtime availability (informational)
+    - Optional deep Ollama reachability probe (cached, non-blocking)
     """
     registry = get_version_registry()
     default_meta = registry.get_default()
-    provider = os.getenv("LLM_PROVIDER", "ollama")
+    supported = registry.get_supported_versions()
+
+    provider_check = _check_provider_config()
+    writable = _check_output_dir_writable()
+    java_info = _check_java_runtime()
+
+    checks: Dict[str, Any] = {
+        "version_registry": {
+            "status": "ready" if len(supported) >= 2 else "error",
+            "supported_versions": supported
+        },
+        "output_directory": {
+            "status": "ready" if writable else "error",
+            "writable": writable
+        },
+        "provider": provider_check,
+        "java": java_info
+    }
+
+    if deep and provider_check.get("provider") == "ollama":
+        host = provider_check.get("host", "http://127.0.0.1:11434")
+        checks["ollama_reachability"] = await _check_ollama_reachability(host)
+
+    is_healthy = (
+        len(supported) >= 2
+        and writable
+        and provider_check.get("configured", False)
+    )
+
     return {
-        "status": "ok",
-        "health": "healthy",
+        "status": "ok" if is_healthy else "degraded",
+        "health": "healthy" if is_healthy else "degraded",
         "edition": "Java Edition",
         "minecraft_version": default_meta.version_id,
-        "minecraft_versions": registry.get_supported_versions(),
+        "minecraft_versions": supported,
         "data_pack_version": default_meta.data_pack_version or str(default_meta.pack_format),
-        "supported_versions": registry.get_supported_versions(),
-        "generator": "ready",
-        "validator": "ready",
-        "pipeline": "ready",
+        "supported_versions": supported,
+        "generator": "ready" if writable else "error",
+        "validator": "ready" if len(supported) >= 2 else "error",
+        "pipeline": "ready" if is_healthy else "degraded",
         "security": "enforced",
         "rate_limiting": "active",
-        "provider": provider
+        "provider": provider_check.get("provider", "ollama"),
+        "checks": checks
     }
 
 
