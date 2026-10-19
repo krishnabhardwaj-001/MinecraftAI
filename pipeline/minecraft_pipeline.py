@@ -122,6 +122,7 @@ class MinecraftPipeline:
         if not request_clean:
             return PipelineResult(
                 status="failed",
+                failed_stage="understanding",
                 minecraft_version=self.version,
                 original_request=request,
                 errors=["Request string cannot be empty."],
@@ -139,6 +140,7 @@ class MinecraftPipeline:
                 _log("1/8", f"ERROR: {err_msg}", self.verbose)
                 return PipelineResult(
                     status="failed",
+                    failed_stage="understanding",
                     minecraft_version=self.version,
                     original_request=request_clean,
                     errors=[err_msg],
@@ -177,6 +179,7 @@ class MinecraftPipeline:
             _log("1/8", f"Unsupported request rejected: {reason}", self.verbose)
             return PipelineResult(
                 status="unsupported",
+                failed_stage="understanding",
                 minecraft_version=self.version,
                 original_request=request_clean,
                 understanding=understanding,
@@ -218,6 +221,7 @@ class MinecraftPipeline:
             _log("1/8", f"FAILED: {err_msg}", self.verbose)
             return PipelineResult(
                 status="failed",
+                failed_stage="understanding",
                 minecraft_version=self.version,
                 original_request=request_clean,
                 understanding=understanding,
@@ -381,6 +385,7 @@ class MinecraftPipeline:
                 _log("5/8", f"FAILED: Structural repair loop could not resolve errors after {repair_result.total_attempts} attempt(s).", self.verbose)
                 return PipelineResult(
                     status="failed",
+                    failed_stage="repair",
                     verification_status="verification_failed",
                     minecraft_version=self.version,
                     original_request=request_clean,
@@ -539,6 +544,7 @@ class MinecraftPipeline:
             _log("6/8", f"VERIFICATION FAILED: Unresolved QA findings after {qa_attempt} repair attempt(s).", self.verbose)
             return PipelineResult(
                 status="verification_failed",
+                failed_stage="qa_review",
                 verification_status="qa_failed",
                 minecraft_version=self.version,
                 original_request=request_clean,
@@ -565,6 +571,7 @@ class MinecraftPipeline:
             _log("7/8", f"VERIFICATION FAILED: Intent mismatch: {intent_res.reasoning}", self.verbose)
             return PipelineResult(
                 status="verification_failed",
+                failed_stage="intent_verification",
                 verification_status="verification_failed",
                 minecraft_version=self.version,
                 original_request=request_clean,
@@ -594,6 +601,7 @@ class MinecraftPipeline:
             _log("8/8", f"VERIFICATION FAILED: Runtime simulation failed: {runtime_res.details}", self.verbose)
             return PipelineResult(
                 status="verification_failed",
+                failed_stage="final_verification",
                 verification_status="verification_failed",
                 minecraft_version=self.version,
                 original_request=request_clean,
@@ -615,6 +623,7 @@ class MinecraftPipeline:
             if not zip_check.is_valid:
                 return PipelineResult(
                     status="verification_failed",
+                    failed_stage="final_verification",
                     verification_status="verification_failed",
                     minecraft_version=self.version,
                     original_request=request_clean,

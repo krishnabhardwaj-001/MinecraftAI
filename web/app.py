@@ -379,6 +379,121 @@ async def list_versions():
     }
 
 
+def _compute_pipeline_stages(pipeline_result: Any) -> List[Dict[str, str]]:
+    """
+    Computes authentic status and message for each of the 8 pipeline stages
+    based on actual execution and artifacts.
+    Status values map to CSS classes: 'done', 'failed', 'active', 'skipped', 'idle'.
+    """
+    failed_stage = getattr(pipeline_result, "failed_stage", None)
+    status = getattr(pipeline_result, "status", None)
+
+    stages: List[Dict[str, str]] = []
+
+    # 0: Understanding
+    und = getattr(pipeline_result, "understanding", None)
+    if und:
+        if status == "needs_clarification":
+            stages.append({"name": "Understanding", "status": "skipped", "message": "Clarification Required"})
+        else:
+            stages.append({"name": "Understanding", "status": "done", "message": "Passed"})
+    elif failed_stage == "understanding" or status in ("failed", "error", "unsupported"):
+        stages.append({"name": "Understanding", "status": "failed", "message": "Failed"})
+    else:
+        stages.append({"name": "Understanding", "status": "idle", "message": "Idle"})
+
+    # 1: RAG Retrieval
+    ctx = getattr(pipeline_result, "context", None)
+    if ctx is not None:
+        stages.append({"name": "RAG Retrieval", "status": "done", "message": "Retrieved"})
+    elif failed_stage == "retrieval":
+        stages.append({"name": "RAG Retrieval", "status": "failed", "message": "Failed"})
+    elif stages[0]["status"] in ("failed", "skipped"):
+        stages.append({"name": "RAG Retrieval", "status": "skipped", "message": "Aborted"})
+    else:
+        stages.append({"name": "RAG Retrieval", "status": "idle", "message": "Idle"})
+
+    # 2: Planning
+    plan = getattr(pipeline_result, "plan", None)
+    if plan is not None:
+        stages.append({"name": "Planning", "status": "done", "message": "Planned"})
+    elif failed_stage == "planning":
+        stages.append({"name": "Planning", "status": "failed", "message": "Failed"})
+    elif stages[1]["status"] in ("failed", "skipped") or stages[0]["status"] in ("failed", "skipped"):
+        stages.append({"name": "Planning", "status": "skipped", "message": "Aborted"})
+    else:
+        stages.append({"name": "Planning", "status": "idle", "message": "Idle"})
+
+    # 3: Generator
+    gen = getattr(pipeline_result, "generation", None)
+    files = getattr(gen, "files_generated", []) if gen else []
+    if files:
+        stages.append({"name": "Generator", "status": "done", "message": f"Generated ({len(files)} files)"})
+    elif failed_stage == "generation":
+        stages.append({"name": "Generator", "status": "failed", "message": "Failed"})
+    elif any(s["status"] in ("failed", "skipped") for s in stages):
+        stages.append({"name": "Generator", "status": "skipped", "message": "Aborted"})
+    else:
+        stages.append({"name": "Generator", "status": "idle", "message": "Idle"})
+
+    # 4: Validation & Repair
+    val = getattr(pipeline_result, "validation", None)
+    rep = getattr(pipeline_result, "repair", None)
+    if rep and getattr(rep, "total_attempts", 0) > 0:
+        if getattr(rep, "is_success", False):
+            stages.append({"name": "Validation & Repair", "status": "done", "message": f"Healed ({rep.total_attempts} att)"})
+        else:
+            stages.append({"name": "Validation & Repair", "status": "failed", "message": f"Failed ({rep.total_attempts} att)"})
+    elif val and getattr(val, "is_valid", False):
+        stages.append({"name": "Validation & Repair", "status": "done", "message": "Passed (0 errors)"})
+    elif failed_stage in ("validation", "repair"):
+        stages.append({"name": "Validation & Repair", "status": "failed", "message": "Failed"})
+    elif val and not getattr(val, "is_valid", True):
+        stages.append({"name": "Validation & Repair", "status": "failed", "message": "Validation Failed"})
+    elif any(s["status"] in ("failed", "skipped") for s in stages):
+        stages.append({"name": "Validation & Repair", "status": "skipped", "message": "Aborted"})
+    else:
+        stages.append({"name": "Validation & Repair", "status": "idle", "message": "Idle"})
+
+    # 5: Autonomous QA
+    qa = getattr(pipeline_result, "qa_result", None)
+    if qa and getattr(qa, "is_pass", False):
+        stages.append({"name": "Autonomous QA", "status": "done", "message": "Passed Cleanly"})
+    elif failed_stage in ("qa_review", "qa_repair"):
+        stages.append({"name": "Autonomous QA", "status": "failed", "message": "QA Failed"})
+    elif qa and not getattr(qa, "is_pass", True):
+        stages.append({"name": "Autonomous QA", "status": "failed", "message": "QA Failed"})
+    elif any(s["status"] in ("failed", "skipped") for s in stages):
+        stages.append({"name": "Autonomous QA", "status": "skipped", "message": "Aborted"})
+    else:
+        stages.append({"name": "Autonomous QA", "status": "idle", "message": "Idle"})
+
+    # 6: Intent Verification
+    intent = getattr(pipeline_result, "intent_verification", None)
+    if intent and getattr(intent, "matches_intent", False):
+        stages.append({"name": "Intent Verification", "status": "done", "message": "Verified 100%"})
+    elif failed_stage == "intent_verification":
+        stages.append({"name": "Intent Verification", "status": "failed", "message": "Intent Mismatch"})
+    elif intent and not getattr(intent, "matches_intent", True):
+        stages.append({"name": "Intent Verification", "status": "failed", "message": "Intent Mismatch"})
+    elif any(s["status"] in ("failed", "skipped") for s in stages):
+        stages.append({"name": "Intent Verification", "status": "skipped", "message": "Aborted"})
+    else:
+        stages.append({"name": "Intent Verification", "status": "idle", "message": "Idle"})
+
+    # 7: READY Gate
+    if status in ("verified", "success") and (getattr(pipeline_result, "final_zip_path", None) or getattr(pipeline_result, "final_datapack_path", None)):
+        stages.append({"name": "READY Gate", "status": "done", "message": "READY & Zipped"})
+    elif failed_stage == "final_verification":
+        stages.append({"name": "READY Gate", "status": "failed", "message": "Gate Failed"})
+    elif any(s["status"] in ("failed", "skipped") for s in stages) or status in ("failed", "error", "verification_failed", "qa_failed"):
+        stages.append({"name": "READY Gate", "status": "skipped", "message": "Aborted"})
+    else:
+        stages.append({"name": "READY Gate", "status": "idle", "message": "Idle"})
+
+    return stages
+
+
 def _format_pipeline_result(pipeline_result: Any) -> Dict[str, Any]:
     """
     Extracts, validates, and serializes pipeline output into a safe API contract.
@@ -443,6 +558,7 @@ def _format_pipeline_result(pipeline_result: Any) -> Dict[str, Any]:
         "error_code": pipeline_result.error_code,
         "failed_stage": pipeline_result.failed_stage,
         "diagnostic": pipeline_result.diagnostic,
+        "stages": _compute_pipeline_stages(pipeline_result),
         "is_success": pipeline_result.is_success,
         "minecraft_version": pipeline_result.minecraft_version,
         "original_request": pipeline_result.original_request,

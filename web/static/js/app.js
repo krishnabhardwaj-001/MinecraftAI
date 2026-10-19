@@ -87,7 +87,10 @@ document.addEventListener("DOMContentLoaded", () => {
 
   // Reset Pipeline Stages to Idle
   function resetStages() {
-    if (stageTimer) clearInterval(stageTimer);
+    if (stageTimer) {
+      clearInterval(stageTimer);
+      stageTimer = null;
+    }
     stages.forEach((s) => {
       s.el.className = "stage-item";
       s.statusEl.textContent = "Idle";
@@ -99,20 +102,37 @@ document.addEventListener("DOMContentLoaded", () => {
   function setStage(index, state, message) {
     if (index < 0 || index >= stages.length) return;
     const stage = stages[index];
-    stage.el.className = `stage-item stage-${state}`;
-    stage.statusEl.textContent = message;
+    if (state === "idle" || !state) {
+      stage.el.className = "stage-item";
+    } else {
+      stage.el.className = `stage-item stage-${state}`;
+    }
+    stage.statusEl.textContent = message || "Idle";
   }
 
-  // Animate stages while waiting for the API
+  // Apply authoritative stages received from API
+  function applyPipelineStages(stagesData) {
+    if (stageTimer) {
+      clearInterval(stageTimer);
+      stageTimer = null;
+    }
+    if (!Array.isArray(stagesData)) return;
+    stagesData.forEach((s, index) => {
+      if (index < stages.length) {
+        setStage(index, s.status, s.message);
+      }
+    });
+  }
+
+  // Animate pipeline pulse while waiting for the API (never fake completion)
   function startSimulatedProgress() {
     resetStages();
     let current = 0;
     setStage(current, "active", "Running...");
 
     stageTimer = setInterval(() => {
-      if (current < 4) { // Only animate up to generation while waiting
-        setStage(current, "done", "Done");
-        current++;
+      // Show that execution is progressing without faking completion of stages
+      if (current < stages.length) {
         setStage(current, "active", "Processing...");
       }
     }, 1800);
@@ -474,22 +494,34 @@ document.addEventListener("DOMContentLoaded", () => {
       submitBtn.classList.remove("loading");
 
       if (!response.ok) {
-        showErrorState(data.detail || "Server error occurred during execution.");
+        if (data && data.stages) {
+          applyPipelineStages(data.stages);
+        } else {
+          setStage(0, "failed", "Failed");
+          for (let i = 1; i < stages.length; i++) setStage(i, "skipped", "Aborted");
+        }
+        showErrorState(data.detail || data.errors || "Server error occurred during execution.");
         return;
       }
 
       handlePipelineSuccess(data);
     } catch (err) {
-      clearInterval(stageTimer);
+      if (stageTimer) clearInterval(stageTimer);
       hideAllCards();
       submitBtn.disabled = false;
       submitBtn.classList.remove("loading");
+      setStage(0, "failed", "Network Error");
+      for (let i = 1; i < stages.length; i++) setStage(i, "skipped", "Aborted");
       showErrorState(`Network or unexpected error: ${err.message}`);
     }
   }
 
   // Handle Response Logic
   function handlePipelineSuccess(data) {
+    if (data.stages) {
+      applyPipelineStages(data.stages);
+    }
+
     // Populate Technical Inspector safely
     ragContextPreview.textContent = JSON.stringify(data.context_summary || {}, null, 2);
     executionSummaryPreview.textContent = data.execution_summary || "Execution complete.";
@@ -505,11 +537,10 @@ document.addEventListener("DOMContentLoaded", () => {
       // Track refined prompt returned by server so consecutive clarification rounds accumulate
       activeRefinedRequest = data.refined_request || data.original_request || activeRefinedRequest;
 
-      // Stage 1/3 indicated clarification needed
-      setStage(0, "done", "Understood");
-      setStage(1, "skipped", "Paused");
-      setStage(2, "failed", "Needs Input");
-      for (let i = 3; i < 8; i++) setStage(i, "skipped", "Skipped");
+      if (!data.stages) {
+        setStage(0, "skipped", "Needs Input");
+        for (let i = 1; i < 8; i++) setStage(i, "skipped", "Paused");
+      }
 
       clarificationQuestion.textContent = data.clarification || "Please provide more details on ambiguous parameters.";
 
@@ -552,22 +583,12 @@ document.addEventListener("DOMContentLoaded", () => {
       return;
     }
 
-    if (data.status === "failed" || data.status === "error" || data.status === "verification_failed") {
-      setStage(0, "done", "Done");
-      setStage(1, "done", "Done");
-      setStage(2, "done", "Done");
-      setStage(3, "done", "Generated");
-
-      if (data.verification_status === "qa_failed") {
-        setStage(4, "done", "Passed");
-        setStage(5, "failed", "QA Failed");
-        setStage(6, "failed", "Aborted");
-        setStage(7, "failed", "Aborted");
-      } else {
-        setStage(4, "failed", "Failed");
-        setStage(5, "failed", "Unresolved");
-        setStage(6, "failed", "Aborted");
-        setStage(7, "failed", "Aborted");
+    if (data.status === "failed" || data.status === "error" || data.status === "verification_failed" || data.status === "unsupported") {
+      if (!data.stages) {
+        setStage(0, "failed", "Failed");
+        for (let i = 1; i < stages.length; i++) {
+          setStage(i, "skipped", "Aborted");
+        }
       }
 
       showErrorState(data.errors, data.repair);
@@ -576,30 +597,25 @@ document.addEventListener("DOMContentLoaded", () => {
     }
 
     // Success State across all 8 stages
-    setStage(0, "done", "Passed");
-    setStage(1, "done", "Passed");
-    setStage(2, "done", "Passed");
-    setStage(3, "done", "Generated");
+    if (!data.stages) {
+      setStage(0, "done", "Passed");
+      setStage(1, "done", "Passed");
+      setStage(2, "done", "Passed");
+      setStage(3, "done", "Generated");
+      setStage(4, "done", "Passed (0 errors)");
+      setStage(5, "done", "Passed Cleanly");
+      setStage(6, "done", "Verified 100%");
+      setStage(7, "done", "READY & Zipped");
+    }
 
     // Stage 5: Validation & Repair
     if (data.repair && data.repair.total_attempts > 0) {
-      setStage(4, "done", `Healed (${data.repair.total_attempts} att)`);
       repairStatusBadge.textContent = `Repaired (${data.repair.total_attempts} attempt${data.repair.total_attempts > 1 ? "s" : ""})`;
       repairStatusBadge.className = "metric-value text-emerald";
     } else {
-      setStage(4, "done", "Passed (0 errors)");
       repairStatusBadge.textContent = "Skipped (0 errors)";
       repairStatusBadge.className = "metric-value text-dim";
     }
-
-    // Stage 6: Autonomous QA
-    setStage(5, "done", "Passed Cleanly");
-
-    // Stage 7: Intent Verification
-    setStage(6, "done", "Verified 100%");
-
-    // Stage 8: READY Gate
-    setStage(7, "done", "READY & Zipped");
 
     // Fill Success Card
     datapackNameDisplay.textContent = data.zip_filename ? data.zip_filename.replace(".zip", "") : "minecraft_datapack";
