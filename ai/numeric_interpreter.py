@@ -109,6 +109,30 @@ KNOWN_PROPERTY_SYNONYMS: Dict[str, str] = {
     "defense": "defense",
 }
 
+COMBAT_OR_EVENT_DAMAGE_PATTERNS = [
+    r"\b(?:take|takes|taking|took|deal|deals|dealing|dealt|receive|receives|receiving|received|cause|causes|causing|caused|inflict|inflicts|inflicting|shares?)\s+(?:the\s+)?(?:same\s+)?damage\b",
+    r"\bdamage\s+(?:taken|dealt|received|caused|inflicted|for\s+everyone|for\s+all)\b",
+    r"\b(?:fall|drowning|fire|lava|poison|freeze|lightning|magic|explosion|void|starvation)\s+damage\b",
+    r"\bimmune\s+to\b",
+]
+
+DESCRIPTIVE_OR_RELATIONAL_PATTERNS = [
+    r"\b(?:shares?|sharing|shared|sync|synchronize|synchronizing|link|linked|linking)\b",
+    r"\b(?:whenever|when\s+a\b|when\s+one\b|if\s+one\b|if\s+a\b|every\s+time|each\s+time)\b",
+    r"\b(?:scoreboard|display|show|track)\b",
+    r"\b(?:immune|immunity|resist|resistant)\s+to\b",
+]
+
+
+def is_combat_or_event_damage_context(text: str) -> bool:
+    norm = text.lower()
+    return any(re.search(pat, norm) for pat in COMBAT_OR_EVENT_DAMAGE_PATTERNS)
+
+
+def is_descriptive_or_relational_context(text: str) -> bool:
+    norm = text.lower()
+    return any(re.search(pat, norm) for pat in DESCRIPTIVE_OR_RELATIONAL_PATTERNS)
+
 
 def _load_known_entity_names() -> set:
     try:
@@ -303,9 +327,23 @@ class NumericSemanticInterpreter:
                         extracted_target = ent
                         break
 
-        # Check explicit property names in text first
-        for syn, canon in KNOWN_PROPERTY_SYNONYMS.items():
+        # Check explicit property names in text first (sort longer multi-word keys first)
+        for syn, canon in sorted(KNOWN_PROPERTY_SYNONYMS.items(), key=lambda x: len(x[0]), reverse=True):
             if re.search(rf"\b{re.escape(syn)}\b", norm_text):
+                # Disambiguate 'damage': do not map to attack_damage if referring to combat/event/hazard damage
+                if syn == "damage":
+                    if is_combat_or_event_damage_context(norm_text):
+                        continue
+                    # 'damage' without 'attack' is only an entity attribute if accompanied by an arithmetic/modification indicator
+                    has_mod_indicator = bool(
+                        re.search(r"\b(increase|boost|gain|raise|add|reduce|decrease|lower|drop|subtract|set|make|change|modify|adjust|alter|double|twice|triple)\b", norm_text)
+                        or re.search(r"\bby\s+[+-]?\d+", norm_text)
+                        or re.search(r"\bto\s+[+-]?\d+", norm_text)
+                        or re.search(r"[+-]\d+", norm_text)
+                        or re.search(r"\b(?:\d+\s*[xX]|\d+\s+times|\d+\s*%|\d+\s+percent)\b", norm_text)
+                    )
+                    if not has_mod_indicator:
+                        continue
                 extracted_property = canon
                 property_missing = False
                 break
@@ -697,28 +735,57 @@ class NumericSemanticInterpreter:
             norm_c = clause.lower()
             # Determine if this clause looks like a property modification
             is_property_clause = False
-            for adj in ADJECTIVE_TO_PROPERTY:
-                if re.search(rf"\b{adj}\b", norm_c):
-                    is_property_clause = True
-                    break
-            if not is_property_clause:
-                for prop in KNOWN_PROPERTY_SYNONYMS:
-                    if re.search(rf"\b{re.escape(prop)}\b", norm_c):
+
+            # Check if this clause is relational or descriptive gameplay (e.g. "players share health")
+            # without an explicit numeric assignment
+            has_explicit_number = bool(
+                re.search(r"\b(?:by|to|=)\s*[+-]?\d+(?:\.\d+)?\b", norm_c)
+                or re.search(r"[+-]\d+(?:\.\d+)?\b", norm_c)
+                or re.search(r"\b(?:\d+\s*[xX]|\d+\s+times|\d+\s*%|\d+\s+percent)\b", norm_c)
+            )
+            has_multiplier = any(re.search(rf"\b{m}\b", norm_c) for m in STANDALONE_MULTIPLIERS)
+            has_qualitative = any(re.search(rf"\b{adj}\b", norm_c) for adj in ADJECTIVE_TO_PROPERTY)
+            has_concrete_mod = has_explicit_number or has_multiplier or has_qualitative
+
+            if not has_concrete_mod and is_descriptive_or_relational_context(norm_c):
+                # Pure relational, conditional event, or descriptive clause without numbers
+                is_property_clause = False
+            else:
+                for adj in ADJECTIVE_TO_PROPERTY:
+                    if re.search(rf"\b{adj}\b", norm_c):
                         is_property_clause = True
                         break
-            if not is_property_clause:
-                for mult in STANDALONE_MULTIPLIERS:
-                    if re.search(rf"\b{mult}\b", norm_c):
+                if not is_property_clause:
+                    for mult in STANDALONE_MULTIPLIERS:
+                        if re.search(rf"\b{mult}\b", norm_c):
+                            is_property_clause = True
+                            break
+                if not is_property_clause:
+                    if re.search(r"\b(?:\d+\s*[xX]|\d+\s+times|\d+\s*%|\d+\s+percent)\b", norm_c):
                         is_property_clause = True
-                        break
-            if not is_property_clause:
-                if re.search(r"\b(?:\d+\s*[xX]|\d+\s+times|\d+\s*%|\d+\s+percent)\b", norm_c):
-                    is_property_clause = True
+                if not is_property_clause:
+                    # Require an arithmetic or modification verb/indicator to treat a property mention as a modification
+                    has_arithmetic_indicator = bool(
+                        re.search(r"\b(increase|boost|gain|raise|add|reduce|decrease|lower|drop|subtract|set|make|change|modify|adjust|alter)\b", norm_c)
+                        or has_explicit_number
+                    )
+                    if has_arithmetic_indicator:
+                        for prop in sorted(KNOWN_PROPERTY_SYNONYMS.keys(), key=len, reverse=True):
+                            if re.search(rf"\b{re.escape(prop)}\b", norm_c):
+                                if prop == "damage" and is_combat_or_event_damage_context(norm_c):
+                                    continue
+                                is_property_clause = True
+                                break
 
             if is_property_clause:
                 try:
                     mod = self.interpret(clause)
-                    modifications.append(mod)
+                    # A genuine property modification must have an operation, a value, or an explicit ambiguous modifier.
+                    # If BOTH operation is None and value is None, it is a descriptive or relational statement, NOT a property modification.
+                    if mod.operation is None and mod.value is None and not mod.extra_metadata.get("ambiguous"):
+                        other_requirements.append(clause)
+                    else:
+                        modifications.append(mod)
                 except Exception:
                     other_requirements.append(clause)
             else:

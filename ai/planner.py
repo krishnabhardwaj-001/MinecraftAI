@@ -1215,8 +1215,27 @@ Return only JSON matching the required schema.
                 if req_text:
                     try:
                         extracted = extract_property_modifications(req_text)
-                        if extracted:
-                            mods.extend(extracted)
+                        # Filter out any incomplete heuristic extractions that have no operation and no value
+                        valid_extracted = [
+                            m for m in extracted
+                            if m.operation is not None or m.value is not None or m.extra_metadata.get("ambiguous")
+                        ]
+                        if valid_extracted:
+                            # Check if existing requirements already define broader gameplay
+                            has_structured_reqs = any(
+                                isinstance(r, dict) and r.get("intent") and r.get("intent") not in ("modify_property", "property_modification")
+                                for r in understanding.get("requirements", [])
+                            )
+                            # If existing structured requirements exist, only adopt complete modifications
+                            if has_structured_reqs:
+                                complete_extracted = [
+                                    m for m in valid_extracted
+                                    if not m.missing and m.operation is not None and m.value is not None
+                                ]
+                                if complete_extracted:
+                                    mods.extend(complete_extracted)
+                            else:
+                                mods.extend(valid_extracted)
                     except Exception:
                         pass
 
